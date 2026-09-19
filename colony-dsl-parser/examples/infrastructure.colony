@@ -1,0 +1,33 @@
+behavior HeatingNodeControl for HeatingNode {
+    state demand: Power = 0kW;
+
+    every 1s as supply {
+        if view.broken || !view.power_connected {
+            power.request(0W);
+        } else {
+            heat.request(demand);
+        }
+    }
+}
+
+behavior WaterNodeControl for WaterNode {
+    state demand: Volume = 0L;
+
+    every 1s as supply {
+        if view.broken {
+            water.request(0L);
+        } else {
+            water.request(demand);
+        }
+    }
+}
+
+behavior InternetNodeControl for InternetNode {
+    every 1s as route {
+        if view.broken || !view.connected {
+            network.request(0);
+        } else {
+            network.request(view.target_bandwidth);
+        }
+    }
+}

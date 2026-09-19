@@ -1,0 +1,19 @@
+behavior ReactorControl for AtomicReactor {
+    state requested: Power = 0MW;
+    state enabled: Bool = true;
+    state limit: Real64 = 0.85;
+
+    every 1s as regulate {
+        if enabled && view.coolant_available {
+            requested = 500MW * limit;
+            reactor.set_power(requested);
+        } else {
+            requested = 0MW;
+            reactor.scram();
+        }
+
+        if view.temperature >= 90degC {
+            reactor.scram();
+        }
+    }
+}

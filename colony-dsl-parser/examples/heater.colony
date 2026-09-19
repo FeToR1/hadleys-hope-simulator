@@ -1,0 +1,42 @@
+event HeatingDemand {
+    enabled: Bool;
+}
+
+behavior HouseControl for House {
+    param heater: Ref<Heater>;
+    state demand: Bool = false;
+    state sent: Option<Bool> = none;
+
+    every 1s as regulate {
+        if view.occupants == 0 {
+            demand = false;
+        } else if view.temperature < 18degC {
+            demand = true;
+        } else if view.temperature >= 21degC {
+            demand = false;
+        }
+
+        if sent != some(demand) {
+            send HeatingDemand { enabled: demand } to heater;
+            sent = some(demand);
+        }
+    }
+}
+
+behavior HeaterControl for Heater {
+    state demand: Bool = false;
+
+    on HeatingDemand(message) as remember {
+        demand = message.enabled;
+    }
+
+    every 1s as apply {
+        if view.home_occupants == 0 || view.broken || !view.power_connected {
+            power.request(0W);
+        } else if demand {
+            power.request(2kW);
+        } else {
+            power.request(0W);
+        }
+    }
+}

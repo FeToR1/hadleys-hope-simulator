@@ -1,0 +1,21 @@
+behavior Xenomorph for Alien {
+    enum Mode { Patrol, Chase, Attack }
+    state mode: Mode = Patrol;
+
+    every 1s as decide {
+        if let target = nearest(view.visible_infrastructure) {
+            if target.distance > 2m {
+                mode = Chase;
+                motion.request(target.position, 5mps);
+            } else {
+                mode = Attack;
+                if hazard(0.4per_s, "strike") {
+                    damage.request(target.id, 35hp, XenomorphAttack);
+                }
+            }
+        } else {
+            mode = Patrol;
+            motion.request(view.patrol_waypoint, 2mps);
+        }
+    }
+}

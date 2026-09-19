@@ -1,0 +1,41 @@
+event HeatingDemand {
+    enabled: Bool;
+}
+
+event PowerLost {
+    source: Ref<Computer>;
+}
+
+event WaterDemand {
+    volume: Volume;
+}
+
+behavior HouseControl for House {
+    param heater: Ref<Heater>;
+    state demand: Bool = false;
+
+    on PowerLost(message) as outage {
+        demand = false;
+    }
+
+    every 1s as regulate {
+        demand = view.occupants > 0 && view.temperature < 19degC;
+        send HeatingDemand { enabled: demand } to heater;
+    }
+}
+
+behavior WaterNodeControl for WaterNode {
+    state available: Volume = 1000L;
+
+    on WaterDemand(message) as provide {
+        available = available - message.volume;
+    }
+
+    every 1s as monitor {
+        if available < 100L {
+            water.request(0L);
+        } else {
+            water.request(available);
+        }
+    }
+}

@@ -1,0 +1,19 @@
+event SetDemand {
+    enabled: Bool;
+}
+
+behavior MinimalHeater for Heater {
+    state demand: Bool = false;
+
+    on SetDemand(message) as remember {
+        demand = message.enabled;
+    }
+
+    every 1s as apply {
+        if demand {
+            power.request(2kW);
+        } else {
+            power.request(0W);
+        }
+    }
+}

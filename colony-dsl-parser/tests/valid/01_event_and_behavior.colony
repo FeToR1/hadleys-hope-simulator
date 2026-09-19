@@ -1,0 +1,23 @@
+event HeatingDemand {
+    enabled: Bool;
+    requested_power: Power;
+}
+
+behavior HeaterControl for Heater {
+    param home: Ref<House>;
+    state demand: Bool = false;
+    state power_level: Power = 0kW;
+
+    on HeatingDemand(message) as remember {
+        demand = message.enabled;
+        power_level = message.requested_power;
+    }
+
+    every 1s as apply {
+        if demand {
+            power.request(power_level);
+        } else {
+            power.request(0W);
+        }
+    }
+}
