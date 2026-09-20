@@ -1,3 +1,5 @@
+Первый промт
+
 Задача: Разработать фронтенд-модуль «Интерактивная 2D-карта поселения и Топология сетей» для системы мониторинга симуляции LV-426.
 Окружение и Технологический стек:
 
@@ -45,3 +47,100 @@ interface TickBatch {
 Пиши чистый, строго типизированный код, готовый к интеграции. Сделай упор на правильную стыковку жизненного цикла React-компонентов с императивными движками PixiJS v8 и AntV G6.
 
 ВАЖНО: Так как бэкенд и брокер еще не реализованы, напиши внутри React-приложения автономный Mock Data Generator. При старте он должен генерировать статическую сетку из 300 домов (с фейковыми PID) и связывать их в графы для AntV G6. Затем по таймеру setInterval (каждые 200–500 мс) генератор должен имитировать шаги симуляции: плавно двигать координаты агентов (жителей и ксеноморфов), случайно менять температуры в домах и раз в несколько секунд запускать цепочку аварии (отключение узла питания -> падение температуры дома -> прорыв труб), чтобы мы могли полностью протестировать интерфейс headless.
+
+Задача: Исправить ошибку коллапса графа в компоненте AntV G6 (Топология сетей) и добавить навигационные кнопки управления для PixiJS v8 и AntV G6.
+Анализ текущей ошибки:
+В текущей реализации мок-данных граф содержит 1200+ сущностей. Узлы электросети имеют перекрестные/циклические ссылки с домами (дом ссылается на сеть, сеть на все 300 домов), а приборы и жители ссылаются на дома. Из-за этого алгоритм раскладки AntV G6 сжимает все вершины в одну точку, превращая текст в кашу. Также пользователю неудобно управлять масштабом только мышью.
+Что необходимо исправить и дописать в коде фронтенда:
+
+Промежуточный промт с исправлениями ошибок
+
+При демонстрации увидел только темно синий экран и все. react-dom_client.js?v=cb6fdff9:22165 Download the React DevTools for a better development experience: https://react.dev/link/react-devtools
+chunk-TXPGOZXY.js?v=82598e6a:6361 Uncaught TypeError: this._cancelResize is not a function
+    at _Application2.destroy (chunk-TXPGOZXY.js?v=82598e6a:6361:10)
+    at chunk-TXPGOZXY.js?v=82598e6a:6606:22
+    at Array.forEach (<anonymous>)
+    at _Application2.destroy (chunk-TXPGOZXY.js?v=82598e6a:6605:13)
+    at SettlementMap.tsx:74:19
+    at Object.react_stack_bottom_frame (react-dom_client.js?v=cb6fdff9:20323:13)
+    at runWithFiberInDEV (react-dom_client.js?v=cb6fdff9:1133:72)
+    at commitHookEffectListUnmount (react-dom_client.js?v=cb6fdff9:9811:160)
+    at commitHookPassiveUnmountEffects (react-dom_client.js?v=cb6fdff9:9830:60)
+    at disconnectPassiveEffect (react-dom_client.js?v=cb6fdff9:12580:13)
+react-dom_client.js?v=cb6fdff9:7241 An error occurred in the <SettlementMap> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+defaultOnUncaughtError @ react-dom_client.js?v=cb6fdff9:7241
+chunk-TXPGOZXY.js?v=82598e6a:6361 Uncaught TypeError: this._cancelResize is not a function
+    at _Application2.destroy (chunk-TXPGOZXY.js?v=82598e6a:6361:10)
+    at chunk-TXPGOZXY.js?v=82598e6a:6606:22
+    at Array.forEach (<anonymous>)
+    at _Application2.destroy (chunk-TXPGOZXY.js?v=82598e6a:6605:13)
+    at SettlementMap.tsx:74:19
+    at Object.react_stack_bottom_frame (react-dom_client.js?v=cb6fdff9:20323:13)
+    at runWithFiberInDEV (react-dom_client.js?v=cb6fdff9:1133:72)
+    at commitHookEffectListUnmount (react-dom_client.js?v=cb6fdff9:9811:160)
+    at commitHookPassiveUnmountEffects (react-dom_client.js?v=cb6fdff9:9830:60)
+    at commitPassiveUnmountEffectsInsideOfDeletedTree_begin (react-dom_client.js?v=cb6fdff9:12613:15)
+react-dom_client.js?v=cb6fdff9:7241 An error occurred in the <SettlementMap> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+defaultOnUncaughtError @ react-dom_client.js?v=cb6fdff9:7241
+:5173/favicon.ico:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:5173/favicon.ico:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+
+
+Второй промт
+
+## 1. Исправление компонента AntV G6 (Топология сетей)
+
+* Фильтрация данных: Перед передачей массива entities в граф G6, жестко отфильтруй их. На экране топологии сетей должны отображаться ТОЛЬКО объекты с типом power_node и house. Исключи из графа приборы (heater, kettle), жителей (civilian) и ксеноморфов (xenomorph), чтобы разгрузить сцену.
+* Трансформация в формат G6: Напиши корректный маппинг данных. Поле connectedTo нужно преобразовать в явный массив ребер edges. При этом исключи дубликаты и обратные петли, чтобы связи были направленными (например, только от power_node к house).
+
+// Пример правильного маппинга для G6:const nodes = filteredEntities.map(e => ({ id: e.id, label: e.id, style: { fill: getColorByStatus(e.status) } }));// Создаем направленные связи от источников к потребителямconst edges = filteredEntities.flatMap(e =>
+  e.type === 'house' ? [] : e.connectedTo.map(targetId => ({ source: e.id, target: targetId }))
+);
+
+* Настройка Layout (Раскладки): Настрой конфигурацию графа G6 для работы со структурами типа «Звезда / Дерево». Используй производительный алгоритм gForce или radial с достаточным расстоянием между узлами (linkDistance: 150, nodeStrength: -30), чтобы 300 домов красиво и равномерно распределялись вокруг узлов питания, а не слипались. Отключай анимацию раскладки при обновлении тиков, используй graph.changeData().
+* Стилизация текста: Сделай шрифты лейблов адаптивными, либо скрывай текст узлов (домов) при сильном отдалении камеры, чтобы он не перекрывал соседние элементы.
+
+## 2. Кнопки управления UI (Zoom & Pan) для двух экранов
+Добавь в верхний или нижний угол графических зон (как на стандартных картах) плавающую панель с кнопками управления: [ + ] (Приблизить), [ - ] (Отдалить), [ ⌖ ] (Сбросить камеру / Центрировать).
+
+* Для карты PixiJS v8: При клике на кнопки вызывай методы плагина @pixi/viewport: viewport.zoomIn(), viewport.zoomOut() и viewport.fit() / viewport.moveCenter().
+* Для графа AntV G6: Используй встроенные методы экземпляра графа: graph.zoom(1.2), graph.zoom(0.8) и graph.zoomTo(1); graph.fitView();.
+
+## 3. Боковая панель (React Sidebar)
+Убедись, что при клике на узел дома внутри графа AntV G6, так же как и в PixiJS, срабатывает событие выбора объекта, и React-панель справа корректно обновляет данные (metrics, pid, приборы) для выбранного ID.
+Выдай обновленный код компонентов React, инициализации PixiJS v8 с кнопками и конфигурации AntV G6 с правильной раскладкой и фильтрацией.
+
+Третий промт
+
+Задача: Добавить в интерактивную карту (PixiJS v8) и топологию сетей (AntV G6) тултипы при наведении, интерактивную подсветку связей и React-компонент для трекинга каскада физических аварий (Causal Chain).
+Новые требования к функционалу:
+## 1. Тултипы (Tooltip) при наведении
+
+* В AntV G6: Настрой плагин/компонент всплывающих подсказок (tooltip). При наведении мыши на узел (дом или энергоузел) должно появляться аккуратное HTML-окно с текущими метриками сущности: тип, PID процесса, температура, уровень воды/канализации, потребляемая мощность. Текст лейблов на самих узлах сделай минимальным (только ID), чтобы избежать каши.
+* В PixiJS v8: Реализуй аналогичное всплывающее окно при наведении курсора на графический объект дома (pointerover / pointerout), считывая актуальные метрики из менеджера состояния.
+
+## 2. Интерактивная трассировка связей (Context Highlighting)
+
+* Реализуй фокус-режим при клике на узел в AntV G6 или PixiJS.
+* При выборе конкретного дома или узла инфраструктуры, все не связанные с ним элементы графа/карты должны снижать свою прозрачность (opacity / alpha до 0.15), а ребра (edges) и узлы, по которым к этому дому поступает электричество или вода, должны ярко подсвечиваться (становиться толще и менять цвет). Это позволит наглядно отслеживать физическую связность моделей.
+
+## 3. Компонент каскадного трекера событий (Causal Chain Tracker)
+
+* Расширь контракт данных. Добавь в систему имитацию сквозных физических и экономических логов.
+* Создай в React Sidebar вкладку «Логика каскада событий». Когда происходит авария (например, узел питания меняет статус на dead), этот компонент должен отображать пошаговый интерактивный таймлайн развития катастрофы в рамках наших физических моделей.
+* Пример цепочки для вывода:
+1. [Сеть] Авария на узле power-1 (PID: 90001)
+   2. [Тепло] Прекращение подачи энергии -> Падение температуры в house-5 (Текущая: 2°C)
+   3. [Гидравлика] Температура ниже критической -> Повреждение водопровода house-5
+   4. [Экономика] Сформирован расход на ремонт для владельца house-5: -$500
+* Сделай элементы этой цепочки кликабельными: при клике на пункт аварии сети камера графа G6 должна автоматически фокусироваться (graph.focusItem()) на сломанном источнике питания, а при клике на пункт прорыва труб — камера PixiJS должна центрироваться на пострадавшем доме.
+
+Выдай обновленный код, интегрирующий тултипы, логику изменения альфы/цветов смежных ребер в AntV G6 при клике, и React-компонент каскадного трекера событий.

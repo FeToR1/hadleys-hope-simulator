@@ -7,6 +7,8 @@ import { NavigationControls } from './NavigationControls';
 interface SettlementMapProps {
   entities: readonly EntityState[];
   onSelect: (entityId: string) => void;
+  selectedId?: string;
+  onRegisterFocus?: (focus: (entityId: string) => void) => void;
 }
 
 const colorForStatus = (status: EntityState['status']): number => ({
@@ -16,15 +18,19 @@ const colorForStatus = (status: EntityState['status']): number => ({
   dead: 0xff4d67,
 }[status]);
 
-export function SettlementMap({ entities, onSelect }: SettlementMapProps): JSX.Element {
+export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus }: SettlementMapProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
   const entitiesRef = useRef(entities);
+  const selectedIdRef = useRef(selectedId);
   const onSelectRef = useRef(onSelect);
   const updateStageRef = useRef<((currentEntities: readonly EntityState[]) => void) | null>(null);
   const viewportRef = useRef<Viewport | null>(null);
   const objectsRef = useRef(new Map<string, Graphics>());
+  const entityRef = useRef(new Map<string, EntityState>());
   const [viewportReady, setViewportReady] = useState(false);
+  const [tooltip, setTooltip] = useState<{ entity: EntityState; x: number; y: number }>();
   entitiesRef.current = entities;
+  selectedIdRef.current = selectedId;
   onSelectRef.current = onSelect;
 
   useEffect(() => {
@@ -57,7 +63,9 @@ export function SettlementMap({ entities, onSelect }: SettlementMapProps): JSX.E
       viewport.addChild(scene);
 
       const updateStage = (currentEntities: readonly EntityState[]): void => {
+        entityRef.current.clear();
         for (const entity of currentEntities) {
+          entityRef.current.set(entity.id, entity);
           if (entity.type === 'heater' || entity.type === 'kettle') continue;
           let displayObject = objectsRef.current.get(entity.id);
           if (displayObject === undefined) {
@@ -65,6 +73,12 @@ export function SettlementMap({ entities, onSelect }: SettlementMapProps): JSX.E
             displayObject.eventMode = 'static';
             displayObject.cursor = 'pointer';
             displayObject.on('pointertap', () => onSelectRef.current(entity.id));
+            displayObject.on('pointerover', (event) => {
+              const point = event.global;
+              const current = entityRef.current.get(entity.id);
+              if (current !== undefined) setTooltip({ entity: current, x: point.x, y: point.y });
+            });
+            displayObject.on('pointerout', () => setTooltip(undefined));
             objectsRef.current.set(entity.id, displayObject);
             scene.addChild(displayObject);
             if (entity.type === 'house') {
@@ -76,11 +90,21 @@ export function SettlementMap({ entities, onSelect }: SettlementMapProps): JSX.E
           const radius = entity.type === 'house' ? 16 : entity.type === 'power_node' ? 10 : 5;
           displayObject.clear().circle(0, 0, radius).fill({ color: colorForStatus(entity.status), alpha: entity.type === 'house' ? 0.55 : 0.9 });
           displayObject.position.set(entity.coordinates.x, entity.coordinates.y);
-          displayObject.alpha = entity.status === 'dead' ? 0.45 : 1;
+          const focused = selectedIdRef.current === undefined || entity.id === selectedIdRef.current ||
+            entity.connectedTo.includes(selectedIdRef.current) ||
+            entityRef.current.get(selectedIdRef.current ?? '')?.connectedTo.includes(entity.id);
+          displayObject.alpha = entity.status === 'dead' ? 0.45 : focused ? 1 : 0.15;
         }
       };
       updateStage(entitiesRef.current);
       updateStageRef.current = updateStage;
+      onRegisterFocus?.((entityId) => {
+        const entity = entityRef.current.get(entityId);
+        if (entity !== undefined) {
+          viewport.moveCenter(entity.coordinates.x, entity.coordinates.y);
+          viewport.setZoom(1.5);
+        }
+      });
     }).catch(() => {
       if (!disposed) host.textContent = 'Не удалось инициализировать WebGL-сцену';
     });
@@ -90,6 +114,8 @@ export function SettlementMap({ entities, onSelect }: SettlementMapProps): JSX.E
       viewportRef.current = null;
       setViewportReady(false);
       objectsRef.current.clear();
+      entityRef.current.clear();
+      setTooltip(undefined);
       resizeObserver?.disconnect();
       if (initialized) application.destroy(true, { children: true });
       host.replaceChildren();
@@ -98,11 +124,12 @@ export function SettlementMap({ entities, onSelect }: SettlementMapProps): JSX.E
 
   useEffect(() => {
     updateStageRef.current?.(entities);
-  }, [entities]);
+  }, [entities, selectedId]);
 
   return (
     <div className="visualization-shell">
       <div ref={hostRef} className="map-host" aria-label="2D карта поселения" />
+      {tooltip !== undefined && <EntityTooltip tooltip={tooltip} />}
       <NavigationControls
         disabled={!viewportReady}
         onZoomIn={() => viewportRef.current?.zoom(1.2)}
@@ -116,4 +143,14 @@ export function SettlementMap({ entities, onSelect }: SettlementMapProps): JSX.E
       />
     </div>
   );
+}
+
+function EntityTooltip({ tooltip }: { tooltip: { entity: EntityState; x: number; y: number } }): JSX.Element {
+  const { entity } = tooltip;
+  return <div className="entity-tooltip" style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}>
+    <strong>{entity.id}</strong><span>{entity.type} · PID {entity.pid}</span>
+    <span>Температура: {entity.metrics.temperature?.toFixed(1) ?? '—'} °C</span>
+    <span>Вода: {entity.metrics.water_level?.toFixed(1) ?? '—'} %</span>
+    <span>Мощность: {entity.metrics.power_consumption?.toFixed(1) ?? '—'} W</span>
+  </div>;
 }

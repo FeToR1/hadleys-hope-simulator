@@ -13,6 +13,7 @@ export interface EntityMetrics {
   power_consumption?: number;
   water_level?: number;
   stress?: number;
+  repair_cost?: number;
 }
 
 export interface EntityState {
@@ -50,4 +51,15 @@ export interface StateSnapshot {
   timestamp: number;
   entities: ReadonlyMap<string, EntityState>;
   logs: readonly EntityLog[];
+}
+
+export type CausalChainStepKind = 'network' | 'thermal' | 'hydraulics' | 'economy';
+
+export interface CausalChainStep {
+  id: string;
+  kind: CausalChainStepKind;
+  title: string;
+  detail: string;
+  focus: 'graph' | 'map';
+  focusEntityId: string;
 }

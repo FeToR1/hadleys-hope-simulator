@@ -7,6 +7,8 @@ import { NavigationControls } from './NavigationControls';
 interface NetworkTopologyProps {
   entities: readonly EntityState[];
   onSelect: (entityId: string) => void;
+  selectedId?: string;
+  onRegisterFocus?: (focus: (entityId: string) => void) => void;
 }
 
 const statusColor = (status: EntityState['status']): string => ({
@@ -16,14 +18,16 @@ const statusColor = (status: EntityState['status']): string => ({
   dead: '#ff4d67',
 }[status]);
 
-export function NetworkTopology({ entities, onSelect }: NetworkTopologyProps): JSX.Element {
+export function NetworkTopology({ entities, onSelect, selectedId, onRegisterFocus }: NetworkTopologyProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
   const graphOperationRef = useRef<Promise<void>>(Promise.resolve());
   const graphReadyRef = useRef(false);
   const onSelectRef = useRef(onSelect);
+  const entitiesRef = useRef(entities);
   const [graphReady, setGraphReady] = useState(false);
   onSelectRef.current = onSelect;
+  entitiesRef.current = entities;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -44,6 +48,17 @@ export function NetworkTopology({ entities, onSelect }: NetworkTopologyProps): J
       edge: { type: 'line', style: { endArrow: true } },
       layout: { type: 'radial', unitRadius: 180, preventOverlap: true, nodeSize: 12, animation: false },
       behaviors: ['drag-canvas', 'zoom-canvas', 'drag-element'],
+      plugins: [{
+        type: 'tooltip',
+        trigger: 'hover',
+        getContent: (_event: unknown, items: Array<{ id?: string }>) => {
+          const item = items[0];
+          const entity = entitiesRef.current.find((candidate) => candidate.id === String(item?.id));
+          if (entity === undefined) return '';
+          return `<div class="g6-tooltip-content"><strong>${entity.id}</strong><span>${entity.type} · PID ${entity.pid}</span><span>Температура: ${entity.metrics.temperature?.toFixed(1) ?? '—'} °C</span><span>Вода: ${entity.metrics.water_level?.toFixed(1) ?? '—'} %</span><span>Мощность: ${entity.metrics.power_consumption?.toFixed(1) ?? '—'} W</span></div>`;
+        },
+        onOpenChange: () => undefined,
+      }],
     });
     graph.on('node:click', (event) => {
       const nodeId = String((event as { itemId?: string }).itemId ?? '');
@@ -57,6 +72,9 @@ export function NetworkTopology({ entities, onSelect }: NetworkTopologyProps): J
         graphRef.current = graph;
         graphReadyRef.current = true;
         setGraphReady(true);
+        onRegisterFocus?.((entityId) => {
+          void graph.focusElement(entityId, true);
+        });
       }
     }).catch((error: unknown) => {
       if (!disposed) console.error('Не удалось отрисовать топологию сети', error);
@@ -77,22 +95,33 @@ export function NetworkTopology({ entities, onSelect }: NetworkTopologyProps): J
     const graph = graphRef.current;
     if (graph === null) return;
     const topology = createTopologyData(entities);
+    const selectedEntity = topology.nodes.find((node) => node.id === selectedId);
+    const connectedIds = new Set<string>(selectedId === undefined ? topology.nodes.map((node) => node.id) : [selectedId]);
+    if (selectedEntity !== undefined) {
+      for (const edge of topology.edges) {
+        if (edge.source === selectedId || edge.target === selectedId) {
+          connectedIds.add(edge.source);
+          connectedIds.add(edge.target);
+        }
+      }
+    }
     graph.setData({
       nodes: topology.nodes.map((entity) => ({
       id: entity.id,
-      style: { fill: statusColor(entity.status), stroke: statusColor(entity.status), labelText: entity.type === 'power_node' ? entity.label : '', opacity: entity.status === 'dead' ? 0.45 : 1 },
+      style: { fill: statusColor(entity.status), stroke: connectedIds.has(entity.id) ? '#6fffc0' : statusColor(entity.status), labelText: entity.type === 'power_node' ? entity.label : '', opacity: connectedIds.has(entity.id) ? 1 : 0.15 },
     })),
       edges: topology.edges.map((edge) => {
         const source = topology.nodes.find((node) => node.id === edge.source);
         const isDead = source?.status === 'dead';
-        return { ...edge, style: { stroke: isDead ? '#ff4d67' : '#60718b', opacity: isDead ? 0.35 : 1 } };
+        const highlighted = selectedId === undefined || edge.source === selectedId || edge.target === selectedId;
+        return { ...edge, style: { stroke: isDead ? '#ff4d67' : highlighted ? '#6fffc0' : '#60718b', lineWidth: highlighted ? 3 : 1, opacity: isDead ? 0.35 : highlighted ? 1 : 0.15 } };
       }),
     });
     graphOperationRef.current = graphOperationRef.current.then(() => graph.draw());
     void graphOperationRef.current.catch((error: unknown) => {
       console.error('Не удалось обновить топологию сети', error);
     });
-  }, [entities]);
+  }, [entities, selectedId]);
 
   return (
     <div className="visualization-shell">

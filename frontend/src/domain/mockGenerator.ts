@@ -86,6 +86,7 @@ export class MockDataGenerator {
         entity.metrics.temperature = Math.max(-10, Math.min(24, temperature));
         entity.status = statusForTemperature(temperature);
         entity.metrics.water_level = Math.max(0, (entity.metrics.water_level ?? 100) - (powerFailed ? 2 : 0.05));
+        if (powerFailed && temperature < 4) entity.metrics.repair_cost = 500;
       }
     }
     if (shouldFail) this.entities.get('power-1')!.status = 'dead';
