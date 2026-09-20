@@ -1,0 +1,19 @@
+event NavigationOrder {
+    position: Position;
+    speed: Speed;
+}
+
+behavior RoverControl for Rover {
+    param controller: Ref<Computer>;
+    state destination: Option<Position> = none;
+
+    every 1s as navigate {
+        if let target = nearest(view.visible_infrastructure) {
+            destination = some(target.position);
+            send NavigationOrder {
+                position: target.position,
+                speed: 5mps
+            } to controller;
+        }
+    }
+}

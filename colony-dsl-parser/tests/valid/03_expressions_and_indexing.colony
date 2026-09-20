@@ -1,0 +1,18 @@
+behavior ComputerControl for Computer {
+    state load: Real64 = 0.0;
+    state values: List<Real64> = List { first: 0.0 };
+
+    every 1s as process {
+        let base = 10.0;
+        let adjusted: Real64 = (base + 5.0) * 2.0 / 3.0;
+
+        load = adjusted % 10.0;
+
+        if view.connected && !view.broken {
+            compute.request(adjusted);
+        }
+
+        view.status = adjusted;
+        values[0] = adjusted;
+    }
+}

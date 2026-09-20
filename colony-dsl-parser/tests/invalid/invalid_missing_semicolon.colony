@@ -1,0 +1,7 @@
+behavior HeaterControl for Heater {
+    state demand: Bool = false
+
+    every 1s as apply {
+        power.request(0W);
+    }
+}

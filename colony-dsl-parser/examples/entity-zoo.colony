@@ -1,0 +1,68 @@
+// Small reference programs for each requested entity category.
+
+behavior HouseControl for House {
+    param heater: Ref<Heater>;
+    state demand: Bool = false;
+    every 1s as regulate {
+        demand = view.occupants > 0 && view.temperature < 20degC;
+        send HeatingDemand { enabled: demand } to heater;
+    }
+}
+
+event HeatingDemand {
+    enabled: Bool;
+}
+
+behavior RefrigeratorControl for Refrigerator {
+    every 1s as cool {
+        if view.power_connected && !view.door_open && view.temperature > view.target_temperature {
+            power.request(0.8kW);
+        } else {
+            power.request(0W);
+        }
+    }
+}
+
+behavior RoverControl for Rover {
+    every 1s as drive {
+        if let target = nearest(view.visible_infrastructure) {
+            motion.request(target.position, 6mps);
+        }
+    }
+}
+
+behavior HumanControl for Human {
+    state stress: Real64 = 0.2;
+    every 1min as act {
+        if view.cold {
+            stress = clamp(stress + 0.05, 0.0, 1.0);
+        }
+        if stress > 0.8 && chance(0.1, "vandalism") {
+            if let target = nearest(view.reachable_breakables) {
+                damage.request(target.id, 10hp, Vandalism);
+            }
+        }
+    }
+}
+
+behavior MarineControl for Marine {
+    every 1s as combat {
+        if let target = nearest(view.visible_targets) {
+            motion.request(target.position, 4mps);
+            if hazard(0.3per_s, "fire") {
+                damage.request(target.id, 15hp, Collision);
+            }
+        }
+    }
+}
+
+behavior ComputerControl for Computer {
+    every 1s as service {
+        if view.power_connected && view.connected {
+            compute.request(view.bandwidth);
+            network.request(view.bandwidth);
+        } else {
+            power.request(0W);
+        }
+    }
+}

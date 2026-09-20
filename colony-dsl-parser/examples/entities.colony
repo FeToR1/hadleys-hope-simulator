@@ -1,0 +1,43 @@
+// A single source file can describe a behavior for any cataloged entity kind.
+
+behavior KettleControl for Kettle {
+    enum Mode { Idle, Heating, Boiling }
+    state mode: Mode = Idle;
+    state target: Temperature = 100degC;
+
+    every 1s as regulate {
+        if view.broken || !view.power_connected {
+            mode = Idle;
+            power.request(0W);
+        } else if view.water_temperature < target {
+            mode = Heating;
+            power.request(1.8kW);
+        } else {
+            mode = Boiling;
+            power.request(0W);
+        }
+    }
+}
+
+behavior ReactorControl for AtomicReactor {
+    state requested: Power = 0MW;
+
+    every 1s as regulate {
+        if view.scrammed || !view.coolant_available {
+            reactor.scram();
+        } else {
+            reactor.set_power(requested);
+        }
+    }
+}
+
+behavior TruckControl for GarbageTruck {
+    every 1s as collect {
+        if let dump = nearest(view.pickup_queue) {
+            motion.request(dump.position, 8mps);
+        }
+        if view.loaded_volume > 90L {
+            motion.request(view.nearest_dump.position, 10mps);
+        }
+    }
+}

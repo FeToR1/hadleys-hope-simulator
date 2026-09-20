@@ -1,0 +1,34 @@
+behavior Resident for Human {
+    enum Mood { Calm, Agitated }
+
+    state mood: Mood = Calm;
+    state stress: Real64 = 0.2;
+    state next_attempt: Duration = 0s;
+
+    on PowerLost(message) as react_to_outage {
+        stress = clamp(stress + 0.15, 0.0, 1.0);
+    }
+
+    every 1min as reconsider {
+        if view.cold {
+            stress = clamp(stress + 0.04, 0.0, 1.0);
+        } else {
+            stress = clamp(stress - 0.02, 0.0, 1.0);
+        }
+
+        if stress > 0.8 {
+            mood = Agitated;
+        } else if stress < 0.4 {
+            mood = Calm;
+        }
+
+        if mood == Agitated && time >= next_attempt {
+            if let target = nearest(view.reachable_breakables) {
+                if chance(0.15, "vandalism") {
+                    damage.request(target.id, 20hp, Vandalism);
+                    next_attempt = time + 10min;
+                }
+            }
+        }
+    }
+}
