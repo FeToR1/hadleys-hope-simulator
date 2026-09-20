@@ -1,7 +1,8 @@
-import { useEffect, useRef, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import { Application, Container, Graphics, Text } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import type { EntityState } from '../domain/types';
+import { NavigationControls } from './NavigationControls';
 
 interface SettlementMapProps {
   entities: readonly EntityState[];
@@ -20,7 +21,9 @@ export function SettlementMap({ entities, onSelect }: SettlementMapProps): JSX.E
   const entitiesRef = useRef(entities);
   const onSelectRef = useRef(onSelect);
   const updateStageRef = useRef<((currentEntities: readonly EntityState[]) => void) | null>(null);
+  const viewportRef = useRef<Viewport | null>(null);
   const objectsRef = useRef(new Map<string, Graphics>());
+  const [viewportReady, setViewportReady] = useState(false);
   entitiesRef.current = entities;
   onSelectRef.current = onSelect;
 
@@ -36,6 +39,8 @@ export function SettlementMap({ entities, onSelect }: SettlementMapProps): JSX.E
       if (disposed) return;
       initialized = true;
       const viewport = new Viewport({ events: application.renderer.events, screenWidth: 900, screenHeight: 650, worldWidth: 1_500, worldHeight: 1_200 });
+      viewportRef.current = viewport;
+      setViewportReady(true);
       viewport.drag().pinch().wheel().decelerate();
       host.appendChild(application.canvas);
       resizeObserver = new ResizeObserver(() => {
@@ -82,6 +87,8 @@ export function SettlementMap({ entities, onSelect }: SettlementMapProps): JSX.E
     return () => {
       disposed = true;
       updateStageRef.current = null;
+      viewportRef.current = null;
+      setViewportReady(false);
       objectsRef.current.clear();
       resizeObserver?.disconnect();
       if (initialized) application.destroy(true, { children: true });
@@ -93,5 +100,20 @@ export function SettlementMap({ entities, onSelect }: SettlementMapProps): JSX.E
     updateStageRef.current?.(entities);
   }, [entities]);
 
-  return <div ref={hostRef} className="map-host" aria-label="2D карта поселения" />;
+  return (
+    <div className="visualization-shell">
+      <div ref={hostRef} className="map-host" aria-label="2D карта поселения" />
+      <NavigationControls
+        disabled={!viewportReady}
+        onZoomIn={() => viewportRef.current?.zoom(1.2)}
+        onZoomOut={() => viewportRef.current?.zoom(0.8)}
+        onReset={() => {
+          const viewport = viewportRef.current;
+          if (viewport === null) return;
+          viewport.moveCenter(750, 600);
+          viewport.fit(true);
+        }}
+      />
+    </div>
+  );
 }

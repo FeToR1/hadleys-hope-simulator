@@ -1,6 +1,8 @@
-import { useEffect, useRef, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import { Graph } from '@antv/g6';
 import type { EntityState } from '../domain/types';
+import { createTopologyData } from '../domain/topology';
+import { NavigationControls } from './NavigationControls';
 
 interface NetworkTopologyProps {
   entities: readonly EntityState[];
@@ -18,31 +20,29 @@ export function NetworkTopology({ entities, onSelect }: NetworkTopologyProps): J
   const hostRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
   const graphOperationRef = useRef<Promise<void>>(Promise.resolve());
+  const graphReadyRef = useRef(false);
   const onSelectRef = useRef(onSelect);
+  const [graphReady, setGraphReady] = useState(false);
   onSelectRef.current = onSelect;
 
   useEffect(() => {
     const host = hostRef.current;
     if (host === null) return;
-    const nodeEntities = entities.filter((entity) => entity.type === 'house' || entity.type === 'power_node');
-    const edges = nodeEntities.flatMap((entity) =>
-      entity.connectedTo
-        .filter((target) => nodeEntities.some((candidate) => candidate.id === target))
-        .map((target) => ({ id: `${entity.id}-${target}`, source: entity.id, target })),
-    );
+    const topology = createTopologyData(entities);
     const graph = new Graph({
       container: host,
       autoFit: 'view',
       padding: 24,
       data: {
-        nodes: nodeEntities.map((entity) => ({
+        nodes: topology.nodes.map((entity) => ({
           id: entity.id,
-          style: { fill: statusColor(entity.status), stroke: statusColor(entity.status), labelText: entity.id },
+          style: { fill: statusColor(entity.status), stroke: statusColor(entity.status), labelText: entity.type === 'power_node' ? entity.label : '' },
         })),
-        edges: edges.map((edge) => ({ ...edge, style: { stroke: '#60718b', lineWidth: 1 } })),
+        edges: topology.edges.map((edge) => ({ ...edge, style: { stroke: '#60718b', lineWidth: 1 } })),
       },
       node: { type: 'circle', style: { size: 12, labelFill: '#d8e4f3', labelFontSize: 8 } },
       edge: { type: 'line', style: { endArrow: true } },
+      layout: { type: 'radial', unitRadius: 180, preventOverlap: true, nodeSize: 12, animation: false },
       behaviors: ['drag-canvas', 'zoom-canvas', 'drag-element'],
     });
     graph.on('node:click', (event) => {
@@ -53,13 +53,19 @@ export function NetworkTopology({ entities, onSelect }: NetworkTopologyProps): J
     const initialRender = graph.render();
     graphOperationRef.current = initialRender;
     void initialRender.then(() => {
-      if (!disposed) graphRef.current = graph;
+      if (!disposed) {
+        graphRef.current = graph;
+        graphReadyRef.current = true;
+        setGraphReady(true);
+      }
     }).catch((error: unknown) => {
       if (!disposed) console.error('Не удалось отрисовать топологию сети', error);
     });
     return () => {
       disposed = true;
       graphRef.current = null;
+      graphReadyRef.current = false;
+      setGraphReady(false);
       void graphOperationRef.current.then(() => graph.destroy()).catch((error: unknown) => {
         console.error('Не удалось корректно завершить топологию сети', error);
         graph.destroy();
@@ -70,23 +76,38 @@ export function NetworkTopology({ entities, onSelect }: NetworkTopologyProps): J
   useEffect(() => {
     const graph = graphRef.current;
     if (graph === null) return;
-    const nodeEntities = entities.filter((entity) => entity.type === 'house' || entity.type === 'power_node');
-    graph.updateNodeData(nodeEntities.map((entity) => ({
+    const topology = createTopologyData(entities);
+    graph.setData({
+      nodes: topology.nodes.map((entity) => ({
       id: entity.id,
-      style: { fill: statusColor(entity.status), stroke: statusColor(entity.status), opacity: entity.status === 'dead' ? 0.45 : 1 },
-    })));
-    const deadPowerNodes = new Set(nodeEntities.filter((entity) => entity.type === 'power_node' && entity.status === 'dead').map((entity) => entity.id));
-    graph.updateEdgeData(nodeEntities.flatMap((entity) =>
-      entity.connectedTo.filter((target) => nodeEntities.some((candidate) => candidate.id === target)).map((target) => ({
-        id: `${entity.id}-${target}`,
-        style: { stroke: deadPowerNodes.has(entity.id) ? '#ff4d67' : '#60718b', opacity: deadPowerNodes.has(entity.id) ? 0.35 : 1 },
-      })),
-    ));
+      style: { fill: statusColor(entity.status), stroke: statusColor(entity.status), labelText: entity.type === 'power_node' ? entity.label : '', opacity: entity.status === 'dead' ? 0.45 : 1 },
+    })),
+      edges: topology.edges.map((edge) => {
+        const source = topology.nodes.find((node) => node.id === edge.source);
+        const isDead = source?.status === 'dead';
+        return { ...edge, style: { stroke: isDead ? '#ff4d67' : '#60718b', opacity: isDead ? 0.35 : 1 } };
+      }),
+    });
     graphOperationRef.current = graphOperationRef.current.then(() => graph.draw());
     void graphOperationRef.current.catch((error: unknown) => {
       console.error('Не удалось обновить топологию сети', error);
     });
   }, [entities]);
 
-  return <div ref={hostRef} className="topology-host" aria-label="Топология сетей" />;
+  return (
+    <div className="visualization-shell">
+      <div ref={hostRef} className="topology-host" aria-label="Топология сетей" />
+      <NavigationControls
+        disabled={!graphReady}
+        onZoomIn={() => void graphRef.current?.zoomTo(1.2)}
+        onZoomOut={() => void graphRef.current?.zoomTo(0.8)}
+        onReset={() => {
+          const graph = graphRef.current;
+          if (graph === null) return;
+          graph.zoomTo(1);
+          graph.fitView();
+        }}
+      />
+    </div>
+  );
 }
