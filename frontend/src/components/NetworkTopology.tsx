@@ -23,6 +23,7 @@ export function NetworkTopology({ entities, onSelect, selectedId, onRegisterFocu
   const graphRef = useRef<Graph | null>(null);
   const graphOperationRef = useRef<Promise<void>>(Promise.resolve());
   const graphReadyRef = useRef(false);
+  const manifestReadyRef = useRef(false);
   const onSelectRef = useRef(onSelect);
   const entitiesRef = useRef(entities);
   const [graphReady, setGraphReady] = useState(false);
@@ -71,6 +72,7 @@ export function NetworkTopology({ entities, onSelect, selectedId, onRegisterFocu
       if (!disposed) {
         graphRef.current = graph;
         graphReadyRef.current = true;
+        manifestReadyRef.current = topology.nodes.length > 0;
         setGraphReady(true);
         onRegisterFocus?.((entityId) => {
           void graph.focusElement(entityId, true);
@@ -83,6 +85,7 @@ export function NetworkTopology({ entities, onSelect, selectedId, onRegisterFocu
       disposed = true;
       graphRef.current = null;
       graphReadyRef.current = false;
+      manifestReadyRef.current = false;
       setGraphReady(false);
       void graphOperationRef.current.then(() => graph.destroy()).catch((error: unknown) => {
         console.error('Не удалось корректно завершить топологию сети', error);
@@ -105,18 +108,23 @@ export function NetworkTopology({ entities, onSelect, selectedId, onRegisterFocu
         }
       }
     }
-    graph.setData({
-      nodes: topology.nodes.map((entity) => ({
+    if (!manifestReadyRef.current) {
+      graph.setData({
+        nodes: topology.nodes.map((entity) => ({ id: entity.id, style: { fill: statusColor(entity.status), stroke: statusColor(entity.status), labelText: entity.type === 'power_node' ? entity.label : '' } })),
+        edges: topology.edges.map((edge) => ({ ...edge, style: { stroke: '#60718b', lineWidth: 1 } })),
+      });
+      manifestReadyRef.current = topology.nodes.length > 0;
+    }
+    graph.updateNodeData(topology.nodes.map((entity) => ({
       id: entity.id,
       style: { fill: statusColor(entity.status), stroke: connectedIds.has(entity.id) ? '#6fffc0' : statusColor(entity.status), labelText: entity.type === 'power_node' ? entity.label : '', opacity: connectedIds.has(entity.id) ? 1 : 0.15 },
-    })),
-      edges: topology.edges.map((edge) => {
-        const source = topology.nodes.find((node) => node.id === edge.source);
-        const isDead = source?.status === 'dead';
-        const highlighted = selectedId === undefined || edge.source === selectedId || edge.target === selectedId;
-        return { ...edge, style: { stroke: isDead ? '#ff4d67' : highlighted ? '#6fffc0' : '#60718b', lineWidth: highlighted ? 3 : 1, opacity: isDead ? 0.35 : highlighted ? 1 : 0.15 } };
-      }),
-    });
+    })));
+    graph.updateEdgeData(topology.edges.map((edge) => {
+      const source = topology.nodes.find((node) => node.id === edge.source);
+      const isDead = source?.status === 'dead';
+      const highlighted = selectedId === undefined || edge.source === selectedId || edge.target === selectedId;
+      return { ...edge, style: { stroke: isDead ? '#ff4d67' : highlighted ? '#6fffc0' : '#60718b', lineWidth: highlighted ? 3 : 1, opacity: isDead ? 0.35 : highlighted ? 1 : 0.15 } };
+    }));
     graphOperationRef.current = graphOperationRef.current.then(() => graph.draw());
     void graphOperationRef.current.catch((error: unknown) => {
       console.error('Не удалось обновить топологию сети', error);
@@ -128,8 +136,14 @@ export function NetworkTopology({ entities, onSelect, selectedId, onRegisterFocu
       <div ref={hostRef} className="topology-host" aria-label="Топология сетей" />
       <NavigationControls
         disabled={!graphReady}
-        onZoomIn={() => void graphRef.current?.zoomTo(1.2)}
-        onZoomOut={() => void graphRef.current?.zoomTo(0.8)}
+        onZoomIn={() => {
+          const graph = graphRef.current;
+          if (graph !== null) void graph.zoomTo(graph.getZoom() * 1.4);
+        }}
+        onZoomOut={() => {
+          const graph = graphRef.current;
+          if (graph !== null) void graph.zoomTo(graph.getZoom() * 0.7);
+        }}
         onReset={() => {
           const graph = graphRef.current;
           if (graph === null) return;

@@ -10,17 +10,19 @@ interface SidebarProps {
   logs: readonly EntityLog[];
   causalChain: readonly CausalChainStep[];
   onFocusCausalStep: (step: CausalChainStep) => void;
+  onExportCsv: () => void;
 }
 
-export function Sidebar({ selected, devices, logs, causalChain, onFocusCausalStep }: SidebarProps): JSX.Element {
+export function Sidebar({ selected, devices, logs, causalChain, onFocusCausalStep, onExportCsv }: SidebarProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<'details' | 'causal'>('details');
   if (selected === undefined) {
-    return <aside className="sidebar"><CausalChainTracker steps={causalChain} onFocus={onFocusCausalStep} /><p className="muted">Выберите дом или узел на карте.</p></aside>;
+    return <aside className="sidebar"><button type="button" className="export-button" onClick={onExportCsv}>Экспорт отчета в CSV</button><CausalChainTracker steps={causalChain} onFocus={onFocusCausalStep} /><p className="muted">Выберите дом или узел на карте.</p></aside>;
   }
   return (
     <aside className="sidebar">
       <nav className="sidebar-tabs"><button type="button" className={activeTab === 'details' ? 'active' : ''} onClick={() => setActiveTab('details')}>Сущность</button><button type="button" className={activeTab === 'causal' ? 'active' : ''} onClick={() => setActiveTab('causal')}>Логика каскада событий</button></nav>
       {activeTab === 'causal' ? <CausalChainTracker steps={causalChain} onFocus={onFocusCausalStep} /> : <>
+      <button type="button" className="export-button" onClick={onExportCsv}>Экспорт отчета в CSV</button>
       <div className="sidebar-heading">
         <div><span className="eyebrow">{selected.type}</span><h2>{selected.id}</h2></div>
         <span className={`status status-${selected.status}`}>{selected.status}</span>

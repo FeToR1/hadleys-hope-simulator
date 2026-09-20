@@ -1,6 +1,18 @@
 import type { EntityDelta, EntityLog, EntityState, StateSnapshot, TickBatch } from './types';
 
 type StateListener = (snapshot: StateSnapshot, deltas: readonly EntityDelta[]) => void;
+export interface StateSubscriptionOptions {
+  throttleMs?: number;
+  animationFrame?: boolean;
+}
+
+interface ListenerRecord {
+  listener: StateListener;
+  options: StateSubscriptionOptions;
+  timer?: ReturnType<typeof setTimeout>;
+  frame?: number;
+  latest?: { snapshot: StateSnapshot; deltas: readonly EntityDelta[] };
+}
 
 const copyEntityInto = (target: EntityState, source: EntityState): boolean => {
   const connectionsChanged =
@@ -21,7 +33,7 @@ const copyEntityInto = (target: EntityState, source: EntityState): boolean => {
 
 export class StateManager {
   private readonly entities = new Map<string, EntityState>();
-  private readonly listeners = new Set<StateListener>();
+  private readonly listeners = new Set<ListenerRecord>();
   private readonly logs: EntityLog[] = [];
   private tickId = 0;
   private timestamp = 0;
@@ -55,21 +67,52 @@ export class StateManager {
     this.tickId = batch.tickId;
     this.timestamp = batch.timestamp;
     const snapshot = this.snapshot();
-    for (const listener of this.listeners) listener(snapshot, deltas);
+    for (const record of this.listeners) {
+      const payload = { snapshot, deltas };
+      if (record.options.animationFrame) {
+        record.latest = payload;
+        if (record.frame === undefined) {
+          const run = (): void => {
+            record.frame = undefined;
+            const latest = record.latest;
+            record.latest = undefined;
+            if (latest !== undefined && this.listeners.has(record)) record.listener(latest.snapshot, latest.deltas);
+          };
+          record.frame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame(run) : Number(setTimeout(run, 16));
+        }
+      } else if (record.options.throttleMs !== undefined) {
+        record.latest = payload;
+        if (record.timer === undefined) {
+          record.timer = setTimeout(() => {
+            record.timer = undefined;
+            const latest = record.latest;
+            record.latest = undefined;
+            if (latest !== undefined && this.listeners.has(record)) record.listener(latest.snapshot, latest.deltas);
+          }, record.options.throttleMs);
+        }
+      } else {
+        record.listener(snapshot, deltas);
+      }
+    }
   }
 
   public appendLog(log: Omit<EntityLog, 'id'>): void {
     this.logs.push({ ...log, id: this.nextLogId++ });
-    if (this.logs.length > 5_000) this.logs.splice(0, this.logs.length - 5_000);
+    if (this.logs.length > 200) this.logs.shift();
   }
 
   public getEntity(id: string): EntityState | undefined {
     return this.entities.get(id);
   }
 
-  public subscribe(listener: StateListener): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+  public subscribe(listener: StateListener, options: StateSubscriptionOptions = {}): () => void {
+    const record: ListenerRecord = { listener, options };
+    this.listeners.add(record);
+    return () => {
+      if (record.timer !== undefined) clearTimeout(record.timer);
+      if (record.frame !== undefined && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(record.frame);
+      this.listeners.delete(record);
+    };
   }
 
   public snapshot(): StateSnapshot {

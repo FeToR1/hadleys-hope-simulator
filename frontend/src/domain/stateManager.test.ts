@@ -18,7 +18,7 @@ describe('StateManager', () => {
     for (let index = 0; index < 5_100; index += 1) {
       manager.appendLog({ timestamp: index, entityId: 'house-1', level: 'info', message: String(index) });
     }
-    expect(manager.snapshot().logs).toHaveLength(5_000);
+    expect(manager.snapshot().logs).toHaveLength(200);
   });
 });
 

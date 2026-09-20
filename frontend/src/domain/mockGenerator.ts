@@ -6,14 +6,25 @@ const GRID_COLUMNS = 20;
 const statusForTemperature = (temperature: number): EntityState['status'] =>
   temperature < 4 ? 'critical' : temperature < 13 ? 'warning' : 'nominal';
 
+const seededRandom = (initial: number): (() => number) => {
+  let state = initial >>> 0;
+  return () => {
+    state = (state * 1_664_525 + 1_013_904_223) >>> 0;
+    return state / 4_294_967_296;
+  };
+};
+
 export class MockDataGenerator {
   private readonly entities = new Map<string, EntityState>();
   private tickId = 0;
   private failureTick = 0;
   private timer: ReturnType<typeof setInterval> | undefined;
   private readonly listeners = new Set<(batch: TickBatch) => void>();
+  public readonly simulationSeed = 'lv426-demo-2026';
 
-  public constructor(private readonly random: () => number = Math.random) {
+  private readonly random: () => number;
+  public constructor(random?: () => number) {
+    this.random = random ?? seededRandom(0x4262026);
     this.seed();
   }
 

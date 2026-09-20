@@ -27,6 +27,7 @@ export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus 
   const viewportRef = useRef<Viewport | null>(null);
   const objectsRef = useRef(new Map<string, Graphics>());
   const entityRef = useRef(new Map<string, EntityState>());
+  const agentBadgesRef = useRef(new Map<string, Text>());
   const [viewportReady, setViewportReady] = useState(false);
   const [tooltip, setTooltip] = useState<{ entity: EntityState; x: number; y: number }>();
   entitiesRef.current = entities;
@@ -48,6 +49,7 @@ export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus 
       viewportRef.current = viewport;
       setViewportReady(true);
       viewport.drag().pinch().wheel().decelerate();
+      viewport.on('zoomed', () => updateStageRef.current?.(entitiesRef.current));
       host.appendChild(application.canvas);
       resizeObserver = new ResizeObserver(() => {
         const width = Math.max(1, host.clientWidth);
@@ -64,8 +66,15 @@ export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus 
 
       const updateStage = (currentEntities: readonly EntityState[]): void => {
         entityRef.current.clear();
+        const agentCounts = new Map<string, number>();
         for (const entity of currentEntities) {
           entityRef.current.set(entity.id, entity);
+          if ((entity.type === 'civilian' || entity.type === 'xenomorph') && entity.parentId !== undefined) {
+            agentCounts.set(entity.parentId, (agentCounts.get(entity.parentId) ?? 0) + 1);
+          }
+        }
+        const clustered = viewport.scale.x < 0.8;
+        for (const entity of currentEntities) {
           if (entity.type === 'heater' || entity.type === 'kettle') continue;
           let displayObject = objectsRef.current.get(entity.id);
           if (displayObject === undefined) {
@@ -85,6 +94,10 @@ export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus 
               const label = new Text({ text: entity.id.replace('house-', '#'), style: { fill: 0xb8c7dc, fontSize: 8 } });
               label.position.set(8, -5);
               displayObject.addChild(label);
+              const badge = new Text({ text: '', style: { fill: 0xffffff, fontSize: 10, fontWeight: 'bold' } });
+              badge.position.set(-8, 18);
+              displayObject.addChild(badge);
+              agentBadgesRef.current.set(entity.id, badge);
             }
           }
           const radius = entity.type === 'house' ? 16 : entity.type === 'power_node' ? 10 : 5;
@@ -94,6 +107,15 @@ export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus 
             entity.connectedTo.includes(selectedIdRef.current) ||
             entityRef.current.get(selectedIdRef.current ?? '')?.connectedTo.includes(entity.id);
           displayObject.alpha = entity.status === 'dead' ? 0.45 : focused ? 1 : 0.15;
+          displayObject.visible = entity.type !== 'civilian' && entity.type !== 'xenomorph' || !clustered;
+          if (entity.type === 'house') {
+            const badge = agentBadgesRef.current.get(entity.id);
+            if (badge !== undefined) {
+              const count = agentCounts.get(entity.id) ?? 0;
+              badge.text = clustered && count > 0 ? `👥 ${count}` : '';
+              badge.visible = clustered;
+            }
+          }
         }
       };
       updateStage(entitiesRef.current);
@@ -115,6 +137,7 @@ export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus 
       setViewportReady(false);
       objectsRef.current.clear();
       entityRef.current.clear();
+      agentBadgesRef.current.clear();
       setTooltip(undefined);
       resizeObserver?.disconnect();
       if (initialized) application.destroy(true, { children: true });
@@ -132,8 +155,8 @@ export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus 
       {tooltip !== undefined && <EntityTooltip tooltip={tooltip} />}
       <NavigationControls
         disabled={!viewportReady}
-        onZoomIn={() => viewportRef.current?.zoom(1.2)}
-        onZoomOut={() => viewportRef.current?.zoom(0.8)}
+        onZoomIn={() => viewportRef.current?.zoom(1.4)}
+        onZoomOut={() => viewportRef.current?.zoom(0.7)}
         onReset={() => {
           const viewport = viewportRef.current;
           if (viewport === null) return;
