@@ -1,0 +1,227 @@
+{
+    "contractVersion": 2,
+    "units": {
+        "degC": {
+            "quantity": "Temperature",
+            "toCanonical": "1"
+        },
+        "W": {
+            "quantity": "Power",
+            "toCanonical": "1"
+        },
+        "kW": {
+            "quantity": "Power",
+            "toCanonical": "1000"
+        },
+        "J": {
+            "quantity": "Energy",
+            "toCanonical": "1"
+        },
+        "kJ": {
+            "quantity": "Energy",
+            "toCanonical": "1000"
+        },
+        "L": {
+            "quantity": "Volume",
+            "toCanonical": "1"
+        },
+        "mL": {
+            "quantity": "Volume",
+            "toCanonical": "0.001"
+        },
+        "m3": {
+            "quantity": "Volume",
+            "toCanonical": "1000"
+        },
+        "m": {
+            "quantity": "Distance",
+            "toCanonical": "1"
+        },
+        "km": {
+            "quantity": "Distance",
+            "toCanonical": "1000"
+        },
+        "mps": {
+            "quantity": "Speed",
+            "toCanonical": "1"
+        },
+        "kmh": {
+            "quantity": "Speed",
+            "toCanonical": "0.2777777777777777777777777778"
+        },
+        "hp": {
+            "quantity": "Health",
+            "toCanonical": "1"
+        },
+        "ms": {
+            "quantity": "Duration",
+            "toCanonical": "0.001"
+        },
+        "s": {
+            "quantity": "Duration",
+            "toCanonical": "1"
+        },
+        "min": {
+            "quantity": "Duration",
+            "toCanonical": "60"
+        },
+        "h": {
+            "quantity": "Duration",
+            "toCanonical": "3600"
+        },
+        "per_s": {
+            "quantity": "Rate",
+            "toCanonical": "1"
+        }
+    },
+    "records": {
+        "Position": {
+            "x": "Distance",
+            "y": "Distance"
+        },
+        "Target": {
+            "id": "String",
+            "kind": "String",
+            "position": "Position",
+            "distance": "Distance",
+            "health": "Health"
+        },
+        "Device": {
+            "id": "String",
+            "kind": "String",
+            "broken": "Bool"
+        }
+    },
+    "kinds": {
+        "Heater": {
+            "view": {
+                "home_occupants": "Int64",
+                "broken": "Bool",
+                "power_connected": "Bool",
+                "power_granted": "Power"
+            },
+            "capabilities": [
+                "POWER_REQUEST"
+            ]
+        },
+        "House": {
+            "view": {
+                "temperature": "Temperature",
+                "occupants": "Int64",
+                "power_connected": "Bool",
+                "water_available": "Bool",
+                "devices": "List<Device>"
+            },
+            "capabilities": []
+        },
+        "Human": {
+            "view": {
+                "cold": "Bool",
+                "position": "Position",
+                "health": "Health",
+                "reachable_breakables": "List<Target>"
+            },
+            "capabilities": [
+                "DAMAGE_REQUEST",
+                "MOTION_REQUEST"
+            ]
+        },
+        "Kettle": {
+            "view": {
+                "home_occupants": "Int64",
+                "water_temperature": "Temperature",
+                "broken": "Bool",
+                "power_connected": "Bool",
+                "power_granted": "Power"
+            },
+            "capabilities": [
+                "POWER_REQUEST"
+            ]
+        },
+        "Xenomorph": {
+            "view": {
+                "position": "Position",
+                "visible_infrastructure": "List<Target>",
+                "visible_humans": "List<Target>",
+                "patrol_waypoint": "Position"
+            },
+            "capabilities": [
+                "DAMAGE_REQUEST",
+                "MOTION_REQUEST"
+            ]
+        }
+    },
+    "intrinsics": {
+        "chance": {
+            "signature": "chance(Probability | constant Real64, String site) -> Bool",
+            "effect": "RANDOM"
+        },
+        "clamp": {
+            "signature": "clamp(T, T, T) -> T",
+            "effect": "PURE"
+        },
+        "damage.request": {
+            "signature": "damage.request(Ref<T> or String target, Health amount, enum value or String reason)",
+            "effect": "EXTERNAL",
+            "capability": "DAMAGE_REQUEST"
+        },
+        "hazard": {
+            "signature": "hazard(Rate, String site) -> Bool",
+            "effect": "RANDOM"
+        },
+        "motion.request": {
+            "signature": "motion.request(Position, Speed)",
+            "effect": "EXTERNAL",
+            "capability": "MOTION_REQUEST"
+        },
+        "nearest": {
+            "signature": "nearest(List<Target>) -> Option<Target>",
+            "effect": "PURE"
+        },
+        "power.request": {
+            "signature": "power.request(Power)",
+            "effect": "EXTERNAL",
+            "capability": "POWER_REQUEST"
+        },
+        "repair.request": {
+            "signature": "repair.request(Ref<T> or String target)",
+            "effect": "EXTERNAL",
+            "capability": "REPAIR_REQUEST"
+        },
+        "some": {
+            "signature": "some(T) -> Option<T>",
+            "effect": "PURE"
+        }
+    },
+    "kernelEvents": {
+        "ActionSucceeded": {
+            "action": "String"
+        },
+        "ActionRejected": {
+            "action": "String",
+            "reason": "String"
+        },
+        "DamageApplied": {
+            "target": "String",
+            "amount": "Health",
+            "reason": "String"
+        },
+        "ObjectBroken": {
+            "object": "String",
+            "reason": "String"
+        },
+        "PowerLost": {},
+        "PowerRestored": {},
+        "WaterLost": {},
+        "WaterRestored": {},
+        "RepairCompleted": {
+            "object": "String"
+        },
+        "RepairRejected": {
+            "reason": "String"
+        },
+        "ArrivalConfirmed": {
+            "point": "Position"
+        }
+    }
+}

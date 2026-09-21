@@ -65,6 +65,17 @@ class SemanticAnalyzer(
                         }
                     }
                     events[decl.name] = Type.Event(decl.name, fields)
+                    // A name the world kernel sends is a subscription; its payload is fixed by the contract.
+                    KernelEvents.catalog[decl.name]?.let { expected ->
+                        if (fields != expected) {
+                            fun describe(schema: Map<String, Type>) = schema.entries.joinToString(", ", "{", "}") { "${it.key}: ${it.value.render()}" }
+                            diagnostics.error(
+                                "SEM_KERNEL_EVENT_SCHEMA", decl.span,
+                                "Событие ядра '${decl.name}' должно иметь поля ${describe(expected)}, объявлено ${describe(fields)}",
+                                "Kernel event '${decl.name}' must have fields ${describe(expected)}, declared ${describe(fields)}",
+                            )
+                        }
+                    }
                 }
                 is BehaviorDecl -> {
                     // Behavior names share one global namespace.

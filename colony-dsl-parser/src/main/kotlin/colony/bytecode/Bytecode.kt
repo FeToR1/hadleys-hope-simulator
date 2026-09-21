@@ -13,6 +13,8 @@ data class BytecodeProgram(
     val stepSeconds: String,
     val events: List<EventSchema>,
     val behaviors: List<BehaviorCode>,
+    /** Version of the kind, observation and kernel-event contract the program was compiled against; 0 = not recorded. */
+    val contract: Int = 0,
 )
 
 @Serializable data class Slot(val name: String, val type: String)
@@ -27,6 +29,8 @@ data class BytecodeProgram(
     val initialize: Int,
     val handlers: List<Handler>,
     val code: List<Instruction>,
+    /** View fields the program reads, so a kernel can build frames with only what is needed. */
+    val observes: List<String> = emptyList(),
 )
 
 @Serializable enum class Op {
@@ -55,6 +59,7 @@ class BytecodeCompiler {
         stepSeconds = ir.deltaTimeSeconds.stripTrailingZeros().toPlainString(),
         events = ir.events.map { EventSchema(it.id, it.name, it.fields.map { f -> Slot(f.name, f.type.render()) }) },
         behaviors = ir.behaviors.map(::compileBehavior),
+        contract = CONTRACT_VERSION,
     ).also(BytecodeVerifier::verify)
 
     private fun compileBehavior(behavior: IRBehavior): BehaviorCode {
@@ -137,9 +142,14 @@ class BytecodeCompiler {
         }
         return BehaviorCode(behavior.name, behavior.targetKind, behavior.params.map { Slot(it.name, it.type.render()) },
             behavior.state.slots.map { Slot(it.name, it.type.render()) }, temporaryCount,
-            labels.getValue(behavior.initializationEntry), handlers, code)
+            labels.getValue(behavior.initializationEntry), handlers, code, observedFields(behavior.targetKind, code))
     }
 }
+
+/** View fields a program reads; a bare use of the whole view means every field of its kind. */
+private fun observedFields(kind: String, code: List<Instruction>): List<String> =
+    if (code.any { it.op == Op.LOAD_OBSERVATIONS }) SemanticEnvironment().kindContract(kind)?.viewFields?.keys?.toList().orEmpty()
+    else code.filter { it.op == Op.LOAD_VIEW }.map { it.text }.distinct()
 
 private fun constantJson(value: ConstantValue): JsonElement = when (value) {
     is ConstantValue.Bool -> JsonPrimitive(value.value)

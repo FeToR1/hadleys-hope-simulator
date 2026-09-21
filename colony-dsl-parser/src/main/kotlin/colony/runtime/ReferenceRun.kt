@@ -36,6 +36,48 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     private var pending = emptyList<OutgoingEvent>()
     private var tick = 0L
     private var failed = false
+    private val contracts = SemanticEnvironment().kindContracts
+    /** A frame carries only what the entity's program reads (docs: the frame is a projection, not a copy of the world). */
+    private val observed = objects.mapValues { (_, instance) -> prepared.program.behaviors.single { it.name == instance.behavior }.observes.toSet() }
+    private val devicesOf = objects.values.filter { it.kind == "Heater" || it.kind == "Kettle" }.filter { it.parent != null }.groupBy { it.parent!! }
+    /** Power granted in the previous step: what a device sees as power_granted. */
+    private var granted = emptyMap<String, Double>()
+
+    private fun effectivelyBroken(id: String): Boolean =
+        views.getValue(id)["broken"]?.jsonPrimitive?.boolean == true || health.getValue(id) <= 0
+
+    /**
+     * The observation of one entity at the start of a step: scenario inputs, plus what the run computes from its own
+     * state (docs/simulation/trigger-conditions.md, section 6). Lists are sorted by (distance, id) and drop destroyed objects.
+     */
+    private fun observe(id: String, instance: Instance): JsonObject {
+        val fields = contracts.getValue(instance.kind).viewFields
+        val view = views.getValue(id).toMutableMap()
+        if ("position" in fields) view["position"] = positionJson(positions.getValue(id))
+        if ("health" in fields) view["health"] = JsonPrimitive(health.getValue(id))
+        if ("broken" in fields) view["broken"] = JsonPrimitive(effectivelyBroken(id))
+        if ("power_granted" in fields) view["power_granted"] = JsonPrimitive(granted[id] ?: 0.0)
+        if ("home_occupants" in fields && instance.parent != null) view["home_occupants"] = views.getValue(instance.parent).getValue("occupants")
+        if ("devices" in fields) {
+            view["devices"] = JsonArray(devicesOf[id].orEmpty().sortedBy { it.id }.map { device ->
+                buildJsonObject { put("id", device.id); put("kind", device.kind); put("broken", effectivelyBroken(device.id)) }
+            })
+        }
+        val origin = positions.getValue(id)
+        for (field in listOf("reachable_breakables", "visible_infrastructure", "visible_humans")) {
+            if (field !in view) continue
+            view[field] = JsonArray(view.getValue(field).jsonArray.mapNotNull { candidate ->
+                val target = candidate.jsonObject.getValue("id").jsonPrimitive.content
+                if (health.getValue(target) <= 0) return@mapNotNull null
+                val destination = positions.getValue(target)
+                buildJsonObject {
+                    put("id", target); put("kind", objects.getValue(target).kind); put("position", positionJson(destination))
+                    put("distance", hypot(origin.x - destination.x, origin.y - destination.y)); put("health", health.getValue(target))
+                }
+            }.sortedWith(compareBy({ it.jsonObject.getValue("distance").jsonPrimitive.double }, { it.jsonObject.getValue("id").jsonPrimitive.content })))
+        }
+        return JsonObject(view.filterKeys { it in observed.getValue(id) })
+    }
 
     fun step(): TickSnapshot {
         check(!failed) { "Run failed; create a fresh run before continuing" }
@@ -45,27 +87,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                 views[change.target] = JsonObject(views.getValue(change.target) + change.view)
             }
             // Materialize all observations before executing any VM (snapshot isolation).
-            val snapshot = objects.mapValues { (id, instance) ->
-                val view = views.getValue(id).toMutableMap()
-                if ("position" in view) view["position"] = positionJson(positions.getValue(id))
-                if ("broken" in view) view["broken"] = JsonPrimitive(view.getValue("broken").jsonPrimitive.boolean || health.getValue(id) <= 0)
-                if (instance.kind == "Heater" && instance.parent != null) {
-                    view["home_occupants"] = views.getValue(instance.parent).getValue("occupants")
-                }
-                for (field in listOf("reachable_breakables", "visible_infrastructure")) {
-                    if (field !in view) continue
-                    view[field] = JsonArray(view.getValue(field).jsonArray.mapNotNull { candidate ->
-                        val target = candidate.jsonObject.getValue("id").jsonPrimitive.content
-                        if (health.getValue(target) <= 0) return@mapNotNull null
-                        val origin = positions.getValue(id); val destination = positions.getValue(target)
-                        buildJsonObject {
-                            put("id", target); put("position", positionJson(destination))
-                            put("distance", hypot(origin.x - destination.x, origin.y - destination.y))
-                        }
-                    })
-                }
-                JsonObject(view)
-            }
+            val snapshot = objects.mapValues { (id, instance) -> observe(id, instance) }
             val inboxes = pending.groupBy { it.target }
             val results = vms.mapValues { (id, vm) ->
                 vm.step(VmFrame(tick, snapshot.getValue(id), inboxes[id].orEmpty().map { DeliveredEvent(it.eventId, it.fields, it.sender, it.sequence) }))
@@ -109,6 +131,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                     else -> Unit
                 }
             }
+            granted = HashMap(power)
             val delivered = pending.size
             pending = outgoing
             val entities = objects.map { (id, instance) ->

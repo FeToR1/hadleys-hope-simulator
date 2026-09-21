@@ -1,6 +1,7 @@
 package colony.runtime
 
 import colony.bytecode.*
+import colony.semantics.CONTRACT_VERSION
 import colony.semantics.SemanticEnvironment
 import colony.semantics.render
 import kotlinx.serialization.Serializable
@@ -45,6 +46,9 @@ fun prepareScenario(path: Path): PreparedRun {
 }
 
 fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgram): PreparedRun {
+    require(program.contract == CONTRACT_VERSION) {
+        "The program was compiled against contract ${program.contract}; this runtime implements contract $CONTRACT_VERSION"
+    }
     val instances = mutableListOf<Instance>()
     val identifier = Regex("[A-Za-z][A-Za-z0-9_-]*")
     require(scenario.populations.map { it.prefix }.distinct().size == scenario.populations.size) { "Duplicate population prefix" }
@@ -74,15 +78,21 @@ fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgra
         }
     }
     require(instances.isNotEmpty()) { "Scenario contains no objects" }
-    val byId = instances.associateBy { it.id }
-    require(byId.size == instances.size) { "Duplicate entity ID" }
-    for (instance in instances) {
+    val completed = instances.map { it.copy(view = JsonObject(HarnessObservations.defaults(it.kind) + it.view)) }
+    val byId = completed.associateBy { it.id }
+    require(byId.size == completed.size) { "Duplicate entity ID" }
+    for (instance in completed) {
         val behavior = program.behaviors.single { it.name == instance.behavior }
         require(instance.params.keys == behavior.params.map { it.name }.toSet()) { "${instance.id}: parameter names mismatch" }
         behavior.params.forEach { validateValue(instance.params.getValue(it.name), it.type, byId, "${instance.id}.${it.name}") }
         val fields = SemanticEnvironment().kindContract(instance.kind)!!.viewFields
-        require(instance.view.keys == fields.keys) { "${instance.id}: expected observations ${fields.keys}, got ${instance.view.keys}" }
-        fields.forEach { (name, type) -> validateValue(instance.view.getValue(name), type.render(), byId, "${instance.id}.view.$name") }
+        val computed = HarnessObservations.computed(instance.kind)
+        val required = fields.keys - computed - HarnessObservations.derived(instance)
+        require(instance.view.keys.none { it in computed }) { "${instance.id}: ${instance.view.keys.filter { it in computed }} are computed by the run and cannot be given" }
+        require(fields.keys.containsAll(instance.view.keys) && instance.view.keys.containsAll(required)) {
+            "${instance.id}: expected observations $required, got ${instance.view.keys}"
+        }
+        instance.view.forEach { (name, value) -> validateValue(value, fields.getValue(name).render(), byId, "${instance.id}.view.$name") }
         instance.parent?.let { require(it != instance.id && byId[it]?.kind == "House") { "${instance.id}: parent must reference another House" } }
     }
     for (change in scenario.changes) {
@@ -90,10 +100,38 @@ fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgra
         val instance = byId[change.target] ?: error("Unknown change target ${change.target}")
         val fields = SemanticEnvironment().kindContract(instance.kind)!!.viewFields
         change.view.forEach { (name, value) ->
+            require(name !in HarnessObservations.computed(instance.kind)) { "${change.target}.$name is computed by the run and cannot be changed" }
             validateValue(value, fields[name]?.render() ?: error("Unknown observation $name"), byId, "${change.target}.$name")
         }
     }
-    return PreparedRun(scenario, program, RunManifest(seed = scenario.seed, stepSeconds = program.stepSeconds, instances = instances.sortedBy { it.id }))
+    return PreparedRun(scenario, program, RunManifest(seed = scenario.seed, stepSeconds = program.stepSeconds, instances = completed.sortedBy { it.id }))
+}
+
+/**
+ * The reference run stands in for the world kernel. It computes some observations itself every step
+ * (computed), overwrites others from state it owns (derived: position from motion, occupants from the house)
+ * and takes the rest as scenario inputs, some of which may be omitted (defaults).
+ */
+internal object HarnessObservations {
+    private val computed = mapOf(
+        "House" to setOf("devices"), "Heater" to setOf("power_granted"), "Kettle" to setOf("power_granted"), "Human" to setOf("health"),
+    )
+    private val defaults: Map<String, Map<String, JsonElement>> = mapOf(
+        "House" to mapOf("power_connected" to JsonPrimitive(true), "water_available" to JsonPrimitive(true)),
+        "Heater" to mapOf("broken" to JsonPrimitive(false), "power_connected" to JsonPrimitive(true)),
+        "Kettle" to mapOf("broken" to JsonPrimitive(false), "power_connected" to JsonPrimitive(true)),
+        "Xenomorph" to mapOf("visible_humans" to JsonArray(emptyList())),
+    )
+
+    fun computed(kind: String): Set<String> = computed[kind].orEmpty()
+    fun defaults(kind: String): Map<String, JsonElement> = defaults[kind].orEmpty()
+
+    /** Observations a catalog may omit: the run overwrites them every step or supplies a default. */
+    fun derived(instance: Instance): Set<String> = buildSet {
+        if (instance.kind == "Human" || instance.kind == "Xenomorph") add("position")
+        if ((instance.kind == "Heater" || instance.kind == "Kettle") && instance.parent != null) add("home_occupants")
+        addAll(defaults(instance.kind).keys)
+    }
 }
 
 /** Config values use canonical units (W, seconds, metres, litres, degC), never unit strings. */
@@ -113,14 +151,19 @@ internal fun validateValue(value: JsonElement, type: String, instances: Map<Stri
             if (value !is JsonObject || value.keys != setOf("some")) fail()
             validateValue(value.getValue("some"), type.removePrefix("Option<").dropLast(1), instances, location)
         }
-        type == "Position" || type == "Target" -> {
+        type == "Position" -> {
             val fields = SemanticEnvironment().recordFields(type)!!
             if (value !is JsonObject || value.keys != fields.keys) fail()
-            // Coordinates are signed metres; only Target.distance is a non-negative magnitude.
-            fields.forEach { (name, fieldType) ->
-                validateValue(value.getValue(name), if (type == "Position") "Coordinate" else fieldType.render(), instances, location)
-            }
-            if (type == "Target" && value.getValue("id").jsonPrimitive.content !in instances) fail()
+            // Coordinates are signed metres.
+            fields.keys.forEach { validateValue(value.getValue(it), "Coordinate", instances, location) }
+        }
+        type == "Target" -> {
+            // In a scenario a target is a reference to an object; the run recomputes kind, position, distance
+            // and health from its own state. Any of them may be given and is then checked.
+            val fields = SemanticEnvironment().recordFields(type)!!
+            if (value !is JsonObject || "id" !in value.keys || !fields.keys.containsAll(value.keys)) fail()
+            if (value.getValue("id").jsonPrimitive.contentOrNull !in instances) fail()
+            value.forEach { (name, part) -> if (name != "id") validateValue(part, fields.getValue(name).render(), instances, location) }
         }
         type in setOf("Real64", "Probability", "Rate", "Duration", "Temperature", "TemperatureDelta", "Power", "Energy", "Volume", "Distance", "Speed", "Health", "Coordinate") -> {
             val number = primitive?.takeUnless { it.isString }?.doubleOrNull ?: fail()
