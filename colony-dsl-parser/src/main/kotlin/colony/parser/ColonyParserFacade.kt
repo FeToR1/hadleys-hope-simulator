@@ -24,6 +24,6 @@ class ColonyParserFacade {
         if (diagnostics.isNotEmpty()) {
             throw ColonySyntaxException(diagnostics.sortedWith(compareBy({ it.line }, { it.column })))
         }
-        return AstBuilder().visit(tree)
+        return AstBuilder().visitProgram(tree)
     }
 }

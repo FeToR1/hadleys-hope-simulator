@@ -1,3 +1,6 @@
 .obsidian
 frontend/node_modules
 frontend/dist
+.gradle/
+.kotlin/
+**/build/

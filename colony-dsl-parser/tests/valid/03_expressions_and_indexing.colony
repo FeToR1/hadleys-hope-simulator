@@ -13,6 +13,6 @@ behavior ComputerControl for Computer {
         }
 
         view.status = adjusted;
-        values[0] = adjusted;
+        let first = values[0];
     }
 }

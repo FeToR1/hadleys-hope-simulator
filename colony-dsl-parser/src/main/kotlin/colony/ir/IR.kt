@@ -18,6 +18,7 @@ enum class IRIntrinsicId {
 data class IRProgram(
     val events: List<IREventSchema>,
     val behaviors: List<IRBehavior>,
+    val deltaTimeSeconds: BigDecimal = BigDecimal.ONE,
 )
 
 data class IREventSchema(
@@ -41,6 +42,7 @@ data class IRBehavior(
     val localSlotsByHandlerId: Map<Int, List<IRLocalSlot>>,
     val blocks: List<IRBlock>,
     val entryByHandlerId: Map<Int, IRLabel>,
+    val initializationEntry: IRLabel,
 )
 
 data class IRStateLayout(
@@ -151,8 +153,9 @@ sealed interface IRInstruction {
         override val span: SourceSpan,
     ) : IRInstruction
 
-    data class LoadMessageField(
+    data class LoadField(
         override val result: IRTemp,
+        val receiver: IRTemp,
         val field: IRField,
         override val span: SourceSpan,
     ) : IRInstruction
@@ -174,6 +177,13 @@ sealed interface IRInstruction {
         override val result: IRTemp,
         val op: String,
         val operand: IRTemp,
+        override val span: SourceSpan,
+    ) : IRInstruction
+
+    /** A branch-local assignment to the result slot at a short-circuit join. */
+    data class Copy(
+        override val result: IRTemp,
+        val value: IRTemp,
         override val span: SourceSpan,
     ) : IRInstruction
 
@@ -274,7 +284,7 @@ private fun Type.renderForIr(): String = when (this) {
 }
 
 fun IRProgram.prettyPrint(): String = buildString {
-    appendLine("IRProgram")
+    appendLine("IRProgram dt=${deltaTimeSeconds.toPlainString()}s")
     for (event in events) {
         appendLine("  event #${event.id} ${event.name}(${event.fields.joinToString { "${it.name}: ${it.type.render()}" }})")
     }
@@ -285,6 +295,7 @@ fun IRProgram.prettyPrint(): String = buildString {
         appendLine("    subscriptions: ${behavior.subscriptions}")
         appendLine("    timers: ${behavior.timers}")
         appendLine("    localsByHandler: ${behavior.localSlotsByHandlerId}")
+        appendLine("    initialize: ${behavior.initializationEntry}")
         for (block in behavior.blocks) {
             appendLine("    ${block.label}:")
             block.instructions.forEachIndexed { index, ins -> appendLine("      $index  $ins") }

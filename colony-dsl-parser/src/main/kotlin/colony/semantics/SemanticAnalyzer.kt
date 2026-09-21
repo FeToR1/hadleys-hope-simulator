@@ -13,13 +13,17 @@ class SemanticAnalyzer(
     private val options: SemanticOptions = SemanticOptions(),
 ) {
     private val diagnostics = DiagnosticSink()
-    private val model = SemanticModel()
+    private val model by lazy { SemanticModel(deltaTimeSeconds) }
     private val symbols = SymbolTable()
     private val events = linkedMapOf<String, Type.Event>()
 
     private val deltaTimeSeconds: BigDecimal = parseDuration(options.deltaTime)
 
     fun analyze(program: Program): SemanticResult {
+        if (deltaTimeSeconds <= BigDecimal.ZERO) {
+            diagnostics.error("SEM_BAD_DT", program.span, "Δt должен быть положительным", "Δt must be positive")
+            return SemanticResult(model, diagnostics.items)
+        }
         collectTopLevel(program)
         program.declarations.filterIsInstance<BehaviorDecl>().forEach(::analyzeBehavior)
         if (deltaTimeSeconds <= BigDecimal.ZERO) {
@@ -77,6 +81,9 @@ class SemanticAnalyzer(
     }
 
     private fun analyzeBehavior(behavior: BehaviorDecl) {
+        if (options.environment.kindContract(behavior.targetType) == null) {
+            diagnostics.error("SEM_UNKNOWN_KIND", behavior.span, "Неизвестный вид '${behavior.targetType}'", "Unknown entity kind '${behavior.targetType}'")
+        }
         val enums = linkedMapOf<String, Type.Enum>()
         for (member in behavior.members) {
             if (member is EnumDecl) {
@@ -100,6 +107,7 @@ class SemanticAnalyzer(
         scope.declare(Symbol.Implicit("time", Type.Duration), diagnostics)
         scope.declare(Symbol.Implicit("view", Type.View(behavior.targetType)), diagnostics)
         scope.declare(Symbol.Implicit("this", Type.Ref(behavior.targetType)), diagnostics)
+        scope.declare(Symbol.Implicit("self", Type.Ref(behavior.targetType)), diagnostics)
         // Intrinsic namespace is recognized semantically; these symbols are only placeholders for name lookup.
         listOf("chance", "hazard", "some", "nearest", "clamp", "power", "damage", "motion", "repair")
             .forEach { scope.declare(Symbol.Implicit(it, Type.IntrinsicNamespace), diagnostics) }
@@ -118,6 +126,9 @@ class SemanticAnalyzer(
                     val type = resolveType(member.type, behavior.name, enums, member.span)
                     val checker = checker(scope, behavior, null, null, enums)
                     val actual = checker.checkExpression(member.initializer)
+                    if (containsUnsafeInitializer(member.initializer)) {
+                        diagnostics.error("SEM_STATE_INITIALIZER", member.initializer.span, "Инициализатор state не может читать view/time или выполнять эффекты", "State initializer cannot read view/time or perform effects")
+                    }
                     val symbol = Symbol.State(member.name, type, nextStateSlot++, member.span)
                     scope.declare(symbol, diagnostics)
                     if (!type.isAssignableFrom(actual)) {
@@ -128,9 +139,22 @@ class SemanticAnalyzer(
                         )
                     }
                 }
-                is RuleDecl -> analyzeRule(behavior, member, scope, enums)
+                is RuleDecl -> Unit
             }
         }
+        behavior.members.filterIsInstance<RuleDecl>().forEach { analyzeRule(behavior, it, scope, enums) }
+    }
+
+    private fun containsUnsafeInitializer(expr: Expr): Boolean = when (expr) {
+        is NameExpr -> expr.name == "view" || expr.name == "time"
+        is CallExpr -> Intrinsics.resolve(intrinsicPath(expr.callee) ?: "")?.effect != EffectClass.PURE || expr.arguments.any(::containsUnsafeInitializer)
+        is MemberExpr -> containsUnsafeInitializer(expr.receiver)
+        is IndexExpr -> containsUnsafeInitializer(expr.receiver) || containsUnsafeInitializer(expr.index)
+        is UnaryExpr -> containsUnsafeInitializer(expr.operand)
+        is BinaryExpr -> containsUnsafeInitializer(expr.left) || containsUnsafeInitializer(expr.right)
+        is ParenExpr -> containsUnsafeInitializer(expr.expression)
+        is RecordExpr -> expr.fields.any { containsUnsafeInitializer(it.value) }
+        else -> false
     }
 
     private fun analyzeRule(

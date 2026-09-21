@@ -1,6 +1,6 @@
 package colony.parser
 
-import org.antlr.v4.runtime.ANTLRErrorListener
+import org.antlr.v4.runtime.BaseErrorListener
 import org.antlr.v4.runtime.Recognizer
 import org.antlr.v4.runtime.RecognitionException
 import org.antlr.v4.runtime.Token
@@ -23,7 +23,7 @@ class ColonySyntaxException(
     },
 )
 
-class CollectingErrorListener : ANTLRErrorListener {
+class CollectingErrorListener : BaseErrorListener() {
     val diagnostics: MutableList<SyntaxDiagnostic> = mutableListOf()
 
     override fun syntaxError(
@@ -47,7 +47,7 @@ class CollectingErrorListener : ANTLRErrorListener {
 /**
  * Optional fast-fail listener for command-line tools where the first error is enough.
  */
-class FirstErrorThrowingListener : ANTLRErrorListener {
+class FirstErrorThrowingListener : BaseErrorListener() {
     override fun syntaxError(
         recognizer: Recognizer<*, *>?,
         offendingSymbol: Any?,

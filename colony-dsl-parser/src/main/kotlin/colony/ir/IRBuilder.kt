@@ -20,11 +20,12 @@ class IRBuilder(
         val behavior: BehaviorDecl,
         val stateSlots: Map<String, IRStateSlot>,
         val params: Map<String, IRSlot>,
+        val blocks: MutableList<IRBlock>,
         val messageFields: MutableMap<String, IRField> = linkedMapOf(),
         val locals: MutableMap<Symbol.Local, IRLocalSlot> = linkedMapOf(),
     )
 
-    private class BlockBuilder(val label: IRLabel) {
+    private class BlockBuilder(var label: IRLabel) {
         val instructions = mutableListOf<IRInstruction>()
         var terminator: IRTerminator? = null
     }
@@ -35,11 +36,11 @@ class IRBuilder(
         val events = eventTypes.entries.map { (name, type) ->
             IREventSchema(eventIds.getValue(name), name, type.fields.map { IRField(it.key, it.value) })
         }
-        return IRProgram(events, behaviors)
+        return IRProgram(events, behaviors, model.deltaTimeSeconds)
     }
 
     private fun collectEvents(program: Program) {
-        for (decl in program.declarations.filterIsInstance<EventDecl>()) {
+        for (decl in program.declarations.filterIsInstance<EventDecl>().sortedBy { it.name }) {
             val id = eventIds.getOrPut(decl.name) { nextEvent++ }
             val fields = linkedMapOf<String, Type>()
             for (field in decl.fields) fields[field.name] = resolveTypeRef(field.type, "<event>", emptyMap())
@@ -61,7 +62,16 @@ class IRBuilder(
         val timers = mutableListOf<IRTimer>()
         val localsByHandler = linkedMapOf<Int, List<IRLocalSlot>>()
         val entries = linkedMapOf<Int, IRLabel>()
-        val state = BuildState(behavior, stateSlots, paramSlots)
+        val state = BuildState(behavior, stateSlots, paramSlots, blocks)
+        val initialization = newBlock()
+        val initializationEntry = initialization.label
+        for (declaration in behavior.members.filterIsInstance<StateDecl>()) {
+            val slot = stateSlots.getValue(declaration.name)
+            val value = emitExpr(declaration.initializer, state, initialization)
+            initialization.instructions += IRInstruction.StoreState(slot, coerce(value, slot.type, declaration.span, initialization), declaration.span)
+        }
+        initialization.terminator = IRTerminator.Return(behavior.span)
+        blocks += freeze(initialization)
 
         for (rule in behavior.members.filterIsInstance<RuleDecl>()) {
             val handlerId = nextHandler++
@@ -99,6 +109,7 @@ class IRBuilder(
             localSlotsByHandlerId = localsByHandler,
             blocks = blocks,
             entryByHandlerId = entries,
+            initializationEntry = initializationEntry,
         )
     }
 
@@ -221,35 +232,13 @@ class IRBuilder(
                 if (elseEnd.terminator == null) elseEnd.terminator = IRTerminator.Jump(join.label, elseBranch.block.span)
                 blocks += freeze(elseEnd)
             }
-            is ElseIfBranch -> emitElseIf(elseBranch.condition, elseBranch.block, state, elseEntry, join, blocks, elseBranch.span)
+            is ElseIfBranch -> {
+                val nestedEnd = emitIf(IfStmt(elseBranch.condition, elseBranch.block, null, elseBranch.span), state, elseEntry, blocks)
+                nestedEnd.terminator = IRTerminator.Jump(join.label, elseBranch.span)
+                blocks += freeze(nestedEnd)
+            }
         }
         return join
-    }
-
-    private fun emitElseIf(
-        condition: Condition,
-        block: Block,
-        state: BuildState,
-        entry: BlockBuilder,
-        outerJoin: BlockBuilder,
-        blocks: MutableList<IRBlock>,
-        span: SourceSpan,
-    ) {
-        val value = when (condition) {
-            is ExprCondition -> emitExpr(condition.expression, state, entry)
-            is LetCondition -> emitExpr(condition.value, state, entry)
-        }
-        val bool = if (condition is LetCondition) temp(Type.Bool).also { entry.instructions += IRInstruction.OptionIsSome(it, value, condition.span) } else value
-        val thenEntry = newBlock()
-        val nestedElse = newBlock()
-        entry.terminator = IRTerminator.Branch(bool, thenEntry.label, nestedElse.label, span)
-        blocks += freeze(entry)
-
-        val thenEnd = emitStatements(block.statements, state, thenEntry, blocks)
-        if (thenEnd.terminator == null) thenEnd.terminator = IRTerminator.Jump(outerJoin.label, block.span)
-        blocks += freeze(thenEnd)
-        nestedElse.terminator = IRTerminator.Jump(outerJoin.label, span)
-        blocks += freeze(nestedElse)
     }
 
     private fun emitExpr(expr: Expr, state: BuildState, current: BlockBuilder): IRTemp = when (expr) {
@@ -266,7 +255,9 @@ class IRBuilder(
             val operand = emitExpr(expr.operand, state, current)
             temp(model.typeOf(expr)).also { current.instructions += IRInstruction.Unary(it, expr.operator.name, operand, expr.span) }
         }
-        is BinaryExpr -> {
+        is BinaryExpr -> if (expr.operator == BinaryOperator.AND || expr.operator == BinaryOperator.OR) {
+            emitShortCircuit(expr, state, current)
+        } else {
             var left = emitExpr(expr.left, state, current)
             var right = emitExpr(expr.right, state, current)
             val resultType = model.typeOf(expr)
@@ -284,7 +275,8 @@ class IRBuilder(
             temp(model.typeOf(expr)).also { current.instructions += IRInstruction.CallPure(it, IRIntrinsicId.INDEX, listOf(receiver, index), expr.span) }
         }
         is RecordExpr -> {
-            val fields = expr.fields.map { it.name to emitExpr(it.value, state, current) }
+            val recordType = model.typeOf(expr) as Type.Event
+            val fields = expr.fields.map { it.name to coerce(emitExpr(it.value, state, current), recordType.fields.getValue(it.name), it.span, current) }
             temp(model.typeOf(expr)).also { current.instructions += IRInstruction.MakeRecord(it, fields, expr.span) }
         }
     }
@@ -299,7 +291,7 @@ class IRBuilder(
                 temp(symbol.type).also { current.instructions += IRInstruction.LoadLocal(it, slot, expr.span) }
             }
             is Symbol.Message -> temp(symbol.type).also { current.instructions += IRInstruction.LoadMessage(it, eventIdOf(symbol.type.name), symbol.type, expr.span) }
-            is Symbol.EnumValueSymbol -> temp(symbol.type).also { current.instructions += IRInstruction.Const(it, ConstantValue.EnumValue(symbol.type.enumType, symbol.type.value), expr.span) }
+            is Symbol.EnumValueSymbol -> temp(model.typeOf(expr)).also { current.instructions += IRInstruction.Const(it, ConstantValue.EnumValue(symbol.type.enumType, symbol.type.value), expr.span) }
             is Symbol.Implicit -> when (val implicitType = symbol.type) {
                 Type.Duration -> temp(Type.Duration).also { current.instructions += IRInstruction.CallPure(it, IRIntrinsicId.LOAD_TIME, emptyList(), expr.span) }
                 is Type.View -> temp(implicitType).also { current.instructions += IRInstruction.CallPure(it, IRIntrinsicId.LOAD_VIEW, emptyList(), expr.span) }
@@ -317,9 +309,10 @@ class IRBuilder(
                 val fieldType = environment.kindContract(receiverType.kind)?.viewFields?.get(expr.member) ?: Type.Unknown
                 temp(fieldType).also { current.instructions += IRInstruction.LoadView(it, receiverType.kind, IRField(expr.member, fieldType), expr.span) }
             }
-            receiverType is Type.Event -> {
-                val fieldType = receiverType.fields[expr.member] ?: Type.Unknown
-                temp(fieldType).also { current.instructions += IRInstruction.LoadMessageField(it, IRField(expr.member, fieldType), expr.span) }
+            receiverType is Type.Event || receiverType is Type.Kind -> {
+                val receiver = emitExpr(expr.receiver, state, current)
+                val fieldType = model.typeOf(expr)
+                temp(fieldType).also { current.instructions += IRInstruction.LoadField(it, receiver, IRField(expr.member, fieldType), expr.span) }
             }
             receiverType is Type.Ref && expr.member == "id" -> {
                 val receiver = emitExpr(expr.receiver, state, current)
@@ -363,6 +356,30 @@ class IRBuilder(
         }
         val result = temp(expected)
         current.instructions += IRInstruction.Convert(result, value.type, expected, value, span)
+        return result
+    }
+
+    private fun emitShortCircuit(expr: BinaryExpr, state: BuildState, current: BlockBuilder): IRTemp {
+        val left = emitExpr(expr.left, state, current)
+        val evaluateRight = newBlock()
+        val skipRight = newBlock()
+        val join = newBlock()
+        val result = temp(Type.Bool)
+        val isAnd = expr.operator == BinaryOperator.AND
+        current.terminator = IRTerminator.Branch(left,
+            if (isAnd) evaluateRight.label else skipRight.label,
+            if (isAnd) skipRight.label else evaluateRight.label, expr.span)
+        state.blocks += freeze(current)
+        skipRight.instructions += IRInstruction.Const(result, ConstantValue.Bool(!isAnd), expr.span)
+        skipRight.terminator = IRTerminator.Jump(join.label, expr.span)
+        state.blocks += freeze(skipRight)
+        val right = emitExpr(expr.right, state, evaluateRight)
+        evaluateRight.instructions += IRInstruction.Copy(result, right, expr.span)
+        evaluateRight.terminator = IRTerminator.Jump(join.label, expr.span)
+        state.blocks += freeze(evaluateRight)
+        current.label = join.label
+        current.instructions.clear()
+        current.terminator = null
         return result
     }
 

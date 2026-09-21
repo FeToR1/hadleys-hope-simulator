@@ -9,7 +9,7 @@ import colony.ast.NameExpr
 import colony.ast.RuleDecl
 import java.util.IdentityHashMap
 
-class SemanticModel {
+class SemanticModel(val deltaTimeSeconds: java.math.BigDecimal = java.math.BigDecimal.ONE) {
     private val expressionTypes = IdentityHashMap<Expr, Type>()
     private val names = IdentityHashMap<NameExpr, Symbol>()
     private val lvalues = IdentityHashMap<LValue, Symbol>()

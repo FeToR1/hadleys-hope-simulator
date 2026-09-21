@@ -89,7 +89,7 @@ condition
     ;
 
 elsePart
-    : ELSE IF condition block
+    : ELSE ifStatement
     | ELSE block
     ;
 
@@ -102,7 +102,7 @@ sendStatement
     ;
 
 recordLiteralTail
-    : LBRACE recordFieldInit (COMMA recordFieldInit)* COMMA? RBRACE
+    : LBRACE (recordFieldInit (COMMA recordFieldInit)* COMMA?)? RBRACE
     ;
 
 expressionStatement
@@ -164,7 +164,7 @@ primaryExpression
     ;
 
 recordLiteral
-    : typeName LBRACE recordFieldInit (COMMA recordFieldInit)* COMMA? RBRACE
+    : typeName LBRACE (recordFieldInit (COMMA recordFieldInit)* COMMA?)? RBRACE
     ;
 
 recordFieldInit

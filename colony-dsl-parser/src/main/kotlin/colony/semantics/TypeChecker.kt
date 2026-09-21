@@ -69,8 +69,9 @@ class TypeChecker internal constructor(
             return Type.Unknown
         }
         model.record(expr, symbol)
-        model.record(expr, symbol.type)
-        return symbol.type
+        val valueType = (symbol.type as? Type.EnumValue)?.enumType ?: symbol.type
+        model.record(expr, valueType)
+        return valueType
     }
 
     private fun checkUnary(expr: UnaryExpr): Type {
@@ -167,7 +168,10 @@ class TypeChecker internal constructor(
             }
             receiverType is Type.Ref && expr.member == "id" -> Type.String
             receiverType == Type.IntrinsicNamespace -> Type.IntrinsicNamespace
-            receiverType is Type.Kind && expr.member == "id" -> Type.String
+            receiverType is Type.Kind -> environment.recordFields(receiverType.name)?.get(expr.member) ?: run {
+                diagnostics.error("SEM_NO_MEMBER", expr.span, "Неизвестное поле '${expr.member}' у ${receiverType.name}", "Unknown field '${expr.member}' on ${receiverType.name}")
+                Type.Unknown
+            }
             else -> {
                 diagnostics.error("SEM_NO_MEMBER", expr.span, "Тип ${receiverType.render()} не имеет члена '${expr.member}'", "Type ${receiverType.render()} has no member '${expr.member}'")
                 Type.Unknown
@@ -279,6 +283,9 @@ class TypeChecker internal constructor(
     }
 
     private fun validateRecordFields(expected: Type.Event, fields: List<RecordFieldInit>, span: SourceSpan) {
+        fields.groupBy { it.name }.filterValues { it.size > 1 }.forEach { (name, duplicates) ->
+            diagnostics.error("SEM_DUPLICATE_FIELD", duplicates.last().span, "Поле '$name' передано повторно", "Duplicate field '$name'")
+        }
         val provided = fields.map { it.name }.toSet()
         for (field in expected.fields) {
             if (field.key !in provided) {

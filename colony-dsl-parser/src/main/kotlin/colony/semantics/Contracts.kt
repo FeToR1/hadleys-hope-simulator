@@ -35,6 +35,12 @@ class SemanticEnvironment(
     val kindContracts: Map<String, KindContract> = defaultKindContracts(),
 ) {
     fun kindContract(kind: String): KindContract? = kindContracts[kind]
+
+    fun recordFields(name: String): Map<String, Type>? = when (name) {
+        "Position" -> mapOf("x" to Type.Physical(PhysicalKind.DISTANCE), "y" to Type.Physical(PhysicalKind.DISTANCE))
+        "Target" -> mapOf("id" to Type.String, "position" to Type.Kind("Position"), "distance" to Type.Physical(PhysicalKind.DISTANCE))
+        else -> null
+    }
 }
 
 /** Small default contract. Simulation/runtime can replace or extend it without touching the parser. */
@@ -69,6 +75,7 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
         viewFields = mapOf(
             "cold" to Type.Bool,
             "position" to Type.Kind("Position"),
+            "reachable_breakables" to Type.List(Type.Kind("Target")),
         ),
         capabilities = setOf(Capability.DAMAGE_REQUEST, Capability.MOTION_REQUEST),
     ),
@@ -76,7 +83,7 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
         kind = "Xenomorph",
         viewFields = mapOf(
             "position" to Type.Kind("Position"),
-            "visible_breakables" to Type.List(Type.Ref("Breakable")),
+            "visible_infrastructure" to Type.List(Type.Kind("Target")),
             "patrol_waypoint" to Type.Kind("Position"),
         ),
         capabilities = setOf(Capability.DAMAGE_REQUEST, Capability.MOTION_REQUEST),
@@ -120,7 +127,9 @@ object Intrinsics {
         "clamp" to IntrinsicContract(
             name = "clamp",
             resultType = { args -> if (args.size == 3 && args[0].sameNominal(args[1]) && args[0].sameNominal(args[2])) args[0] else Type.Unknown },
-            argumentCheck = { args -> if (args.size == 3 && args.distinctBy { it.render() }.size == 1) null else "clamp expects three values of the same scalar type" },
+            argumentCheck = { args -> if (args.size == 3 && args.distinctBy { it.render() }.size == 1 &&
+                (args[0].isNumericScalar() || args[0].isPhysical() || args[0] in setOf(Type.Duration, Type.Rate, Type.Probability, Type.Money))) null
+                else "clamp expects three values of the same numeric type" },
             effect = EffectClass.PURE,
         ),
         "nearest" to IntrinsicContract(
@@ -130,7 +139,7 @@ object Intrinsics {
                 if (list != null) Type.Option(list.element) else Type.Unknown
             },
             argumentCheck = { args ->
-                if (args.singleOrNull() is Type.List) null else "nearest expects List<T>"
+                if (args.singleOrNull() == Type.List(Type.Kind("Target"))) null else "nearest expects List<Target> with id, position and distance"
             },
             effect = EffectClass.PURE,
         ),
@@ -152,7 +161,7 @@ object Intrinsics {
                     args.size != 3 -> "damage.request expects (Ref<T> or String, Health, EnumValue)"
                     args[0] !is Type.Ref && args[0] != Type.String -> "damage target must be Ref<T> or ref id String"
                     args[1] != Type.Physical(PhysicalKind.HEALTH) -> "damage amount must be Health"
-                    args[2] !is Type.EnumValue && args[2] != Type.String -> "damage reason must be an enum value or String"
+                    args[2] !is Type.Enum && args[2] !is Type.EnumValue && args[2] != Type.String -> "damage reason must be an enum value or String"
                     else -> null
                 }
             },

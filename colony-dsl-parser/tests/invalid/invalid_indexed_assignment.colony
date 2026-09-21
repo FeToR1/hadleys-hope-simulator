@@ -1,0 +1,6 @@
+behavior InvalidAssignment for House {
+    param values: List<Real64>;
+    every 1s as update {
+        values[0] = 1.0;
+    }
+}

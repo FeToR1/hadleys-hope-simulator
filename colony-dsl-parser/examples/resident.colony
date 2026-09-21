@@ -1,5 +1,8 @@
+event PowerLost {}
+
 behavior Resident for Human {
     enum Mood { Calm, Agitated }
+    enum DamageCause { Vandalism }
 
     state mood: Mood = Calm;
     state stress: Real64 = 0.2;

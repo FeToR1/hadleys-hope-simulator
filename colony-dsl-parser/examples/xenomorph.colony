@@ -1,5 +1,6 @@
-behavior Xenomorph for Alien {
+behavior Xenomorph for Xenomorph {
     enum Mode { Patrol, Chase, Attack }
+    enum DamageCause { XenomorphAttack }
     state mode: Mode = Patrol;
 
     every 1s as decide {

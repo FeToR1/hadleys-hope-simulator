@@ -3,6 +3,7 @@ package colony.parser
 import colony.ast.*
 import org.antlr.v4.runtime.ParserRuleContext
 import org.antlr.v4.runtime.Token
+import org.antlr.v4.runtime.tree.TerminalNode
 
 /** Builds the project's domain AST; ANTLR parse contexts do not escape this layer. */
 class AstBuilder : ColonyBaseVisitor<AstNode>() {
@@ -85,7 +86,7 @@ class AstBuilder : ColonyBaseVisitor<AstNode>() {
 
     override fun visitEveryRule(ctx: ColonyParser.EveryRuleContext): EveryRule {
         return EveryRule(
-            period = unitLiteral(ctx.durationLiteral().numberLiteral()),
+            period = unitLiteral(ctx.durationLiteral()),
             ruleName = ctx.identifier().text,
             body = visit(ctx.block()) as Block,
             span = span(ctx),
@@ -140,10 +141,9 @@ class AstBuilder : ColonyBaseVisitor<AstNode>() {
     }
 
     private fun elseBranch(ctx: ColonyParser.ElsePartContext): ElseBranch {
-        return if (ctx.IF() != null) {
-            ElseIfBranch(
-                condition = condition(ctx.condition()),
-                block = visit(ctx.block()) as Block,
+        return if (ctx.ifStatement() != null) {
+            ElseBlock(
+                block = Block(listOf(visitIfStatement(ctx.ifStatement())), span(ctx)),
                 span = span(ctx),
             )
         } else {
@@ -195,8 +195,8 @@ class AstBuilder : ColonyBaseVisitor<AstNode>() {
 
     override fun visitEqualityExpression(ctx: ColonyParser.EqualityExpressionContext): Expr {
         val operands = ctx.comparisonExpression().map(::expr)
-        val ops = ctx.children.orEmpty().filter { it is Token }.mapNotNull {
-            when ((it as Token).type) {
+        val ops = ctx.children.orEmpty().filterIsInstance<TerminalNode>().mapNotNull {
+            when (it.symbol.type) {
                 ColonyParser.EQ -> BinaryOperator.EQ
                 ColonyParser.NEQ -> BinaryOperator.NEQ
                 else -> null
@@ -207,8 +207,8 @@ class AstBuilder : ColonyBaseVisitor<AstNode>() {
 
     override fun visitComparisonExpression(ctx: ColonyParser.ComparisonExpressionContext): Expr {
         val operands = ctx.additiveExpression().map(::expr)
-        val ops = ctx.children.orEmpty().filter { it is Token }.mapNotNull {
-            when ((it as Token).type) {
+        val ops = ctx.children.orEmpty().filterIsInstance<TerminalNode>().mapNotNull {
+            when (it.symbol.type) {
                 ColonyParser.LT -> BinaryOperator.LT
                 ColonyParser.LE -> BinaryOperator.LE
                 ColonyParser.GT -> BinaryOperator.GT
@@ -221,8 +221,8 @@ class AstBuilder : ColonyBaseVisitor<AstNode>() {
 
     override fun visitAdditiveExpression(ctx: ColonyParser.AdditiveExpressionContext): Expr {
         val operands = ctx.multiplicativeExpression().map(::expr)
-        val ops = ctx.children.orEmpty().filter { it is Token }.mapNotNull {
-            when ((it as Token).type) {
+        val ops = ctx.children.orEmpty().filterIsInstance<TerminalNode>().mapNotNull {
+            when (it.symbol.type) {
                 ColonyParser.PLUS -> BinaryOperator.ADD
                 ColonyParser.MINUS -> BinaryOperator.SUB
                 else -> null
@@ -233,8 +233,8 @@ class AstBuilder : ColonyBaseVisitor<AstNode>() {
 
     override fun visitMultiplicativeExpression(ctx: ColonyParser.MultiplicativeExpressionContext): Expr {
         val operands = ctx.unaryExpression().map(::expr)
-        val ops = ctx.children.orEmpty().filter { it is Token }.mapNotNull {
-            when ((it as Token).type) {
+        val ops = ctx.children.orEmpty().filterIsInstance<TerminalNode>().mapNotNull {
+            when (it.symbol.type) {
                 ColonyParser.STAR -> BinaryOperator.MUL
                 ColonyParser.SLASH -> BinaryOperator.DIV
                 ColonyParser.PERCENT -> BinaryOperator.MOD
@@ -318,12 +318,12 @@ class AstBuilder : ColonyBaseVisitor<AstNode>() {
 
     private fun numberLiteral(ctx: ColonyParser.NumberLiteralContext): NumberLiteral {
         val text = ctx.text
-        val match = Regex("^([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)([A-Za-z_µ][A-Za-z0-9_µ]*)?$").matchEntire(text)
+        val match = Regex("^((?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?)([A-Za-z_µ][A-Za-z0-9_µ]*)?$").matchEntire(text)
             ?: error("ANTLR NUMBER/NUMBER_UNIT invariant violated: $text")
         return NumberLiteral(match.groupValues[1], match.groupValues[2].ifEmpty { null }, span(ctx))
     }
 
-    private fun unitLiteral(ctx: ColonyParser.NumberLiteralContext): UnitLiteral {
+    private fun unitLiteral(ctx: ParserRuleContext): UnitLiteral {
         val text = ctx.text
         val match = Regex("^([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)([A-Za-z_µ][A-Za-z0-9_µ]*)$").matchEntire(text)
             ?: error("Duration literal must contain a unit: $text")
