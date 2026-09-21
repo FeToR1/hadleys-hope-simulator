@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "sources": [
+    "../../colony-dsl-parser/examples/heater.colony",
+    "../../colony-dsl-parser/examples/resident.colony",
+    "../../colony-dsl-parser/examples/xenomorph.colony",
+    "devices.colony"
+  ],
+  "templates": {
+    "household": {
+      "objects": {
+        "house": {
+          "kind": "House", "behavior": "HouseControl",
+          "params": {"heater": "$instance/heater"},
+          "view": {"occupants": 1, "temperature": 16}
+        },
+        "heater": {
+          "kind": "Heater", "behavior": "HeaterControl", "parent": "$instance/house",
+          "view": {"home_occupants": 1, "broken": false, "power_connected": true},
+          "x": 10, "y": 10
+        },
+        "kettle": {
+          "kind": "Kettle", "behavior": "KettleControl", "parent": "$instance/house",
+          "view": {"water_temperature": 20, "broken": false, "power_connected": true},
+          "x": 20, "y": 10
+        },
+        "resident": {
+          "kind": "Human", "behavior": "Resident", "parent": "$instance/house",
+          "view": {"cold": true, "position": {"x": 0, "y": 0}, "reachable_breakables": []},
+          "x": 25, "y": 25
+        }
+      }
+    },
+    "alien": {
+      "objects": {
+        "xenomorph": {
+          "kind": "Xenomorph", "behavior": "Xenomorph",
+          "view": {
+            "position": {"x": 0, "y": 0}, "patrol_waypoint": {"x": 400, "y": 300},
+            "visible_infrastructure": [
+              {"id": "home-1/heater", "position": {"x": 10, "y": 10}, "distance": 1}
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "version": 1, "catalog": "catalog.json", "seed": 426, "step": "1s", "ticks": 120,
+  "populations": [
+    {"template": "household", "count": 2, "prefix": "home"},
+    {"template": "alien", "count": 1, "prefix": "alien"}
+  ],
+  "changes": [
+    {"tick": 5, "target": "home-1/house", "view": {"occupants": 0}},
+    {"tick": 10, "target": "home-1/house", "view": {"occupants": 1}},
+    {"tick": 15, "target": "home-2/kettle", "view": {"water_temperature": 96}}
+  ]
+}

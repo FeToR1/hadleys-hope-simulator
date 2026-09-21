@@ -1,0 +1,9 @@
+behavior KettleControl for Kettle {
+    every 1s as heat {
+        if !view.broken && view.power_connected && view.water_temperature < 95degC {
+            power.request(1kW);
+        } else {
+            power.request(0W);
+        }
+    }
+}

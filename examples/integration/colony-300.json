@@ -1,0 +1,10 @@
+{
+  "version": 1, "catalog": "catalog.json", "seed": 426, "step": "1s", "ticks": 30,
+  "populations": [
+    {"template": "household", "count": 300, "prefix": "home"},
+    {"template": "alien", "count": 8, "prefix": "alien"}
+  ],
+  "changes": [
+    {"tick": 5, "target": "home-1/house", "view": {"occupants": 0}}
+  ]
+}
