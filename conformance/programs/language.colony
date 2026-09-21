@@ -1,0 +1,86 @@
+// Language feature coverage for the stack VM. Each behavior is small and its state records what it computed.
+event Value { n: Int64; }
+event Report { v: Option<Real64>; }
+
+behavior Numbers for House {
+    state a: Real64 = 1;
+    state b: Real64 = 0.0;
+    state c: Real64 = 0.0;
+    state d: Int64 = 0;
+    state e: Bool = false;
+    state f: Real64 = 0.0;
+    state g: Int64 = 0;
+    state h: Real64 = 0.0;
+    every 1s as go {
+        b = a + 2;
+        c = 3 / 2;
+        d = 10 % 3;
+        e = 1 == 1.0;
+        f = -a * 2.5;
+        g = g + view.occupants * 7 - 3;
+        h = clamp(f + view.occupants, 0.0, 3.0);
+    }
+}
+
+behavior ShortCircuit for House {
+    state left: Int64 = 0;
+    state right: Int64 = 0;
+    every 1s as go {
+        if view.occupants > 0 && chance(0.5, "left") { left = left + 1; }
+        if view.occupants == 0 || chance(0.5, "right") { right = right + 1; }
+    }
+}
+
+behavior Branches for Xenomorph {
+    state out: Int64 = 0;
+    state near_id: String = "";
+    every 1s as go {
+        if let t = nearest(view.visible_infrastructure) {
+            near_id = t.id;
+            if t.distance > 2m && (t.id == "a" || t.id == "b") { out = 1; }
+            else if t.distance <= 2m { out = 2; }
+            else { out = 3; }
+        } else if view.position.x > 5m { out = 4; near_id = ""; } else { out = 5; near_id = ""; }
+    }
+}
+
+behavior Sender for House {
+    param peer: Ref<House>;
+    every 1s as go {
+        send Report { v: some(1.5) } to peer;
+        send Report { v: none } to peer;
+        send Value { n: view.occupants } to peer;
+    }
+}
+
+behavior Receiver for House {
+    state total: Real64 = 0.0;
+    state nones: Int64 = 0;
+    state last: Int64 = -1;
+    on Report(m) as take { if let x = m.v { total = total + x; } else { nones = nones + 1; } }
+    on Value(m) as note { last = m.n; }
+}
+
+behavior Timers for House {
+    state fast: Int64 = 0;
+    state slow: Int64 = 0;
+    every 2s as a { fast = fast + 1; }
+    every 1min as b { slow = slow + 1; }
+}
+
+behavior Durations for Human {
+    state next: Duration = 0s;
+    state fired: Int64 = 0;
+    state now: Duration = 0s;
+    every 1s as go { now = time; if time >= next { fired = fired + 1; next = time + 10s; } }
+}
+
+behavior Rollback for House {
+    state count: Int64 = 0;
+    state coin: Int64 = 0;
+    every 1s as go {
+        count = count + 1;
+        if chance(0.5, "coin") { coin = coin + 1; }
+        let inverse = 10 / view.occupants;
+    }
+}

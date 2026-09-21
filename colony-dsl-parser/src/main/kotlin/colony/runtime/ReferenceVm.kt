@@ -151,23 +151,34 @@ class ReferenceVm(
         }
     }
 
-    /** SHA-256 counter stream; length-prefixed UTF-8 keys and big-endian integers are portable. */
+    /** The next number of the stream of one (rule, site) of this entity; every draw advances only its own counter. */
     private fun random(rule: String, site: String): Double {
         val key = rule to site
         val counter = counters.getOrDefault(key, 0L)
         counters[key] = counter + 1
-        val bytes = ByteArrayOutputStream()
-        DataOutputStream(bytes).use { output ->
-            output.writeLong(seed)
-            for (value in listOf(entityId, behavior.name, rule, site)) {
-                val encoded = value.toByteArray(Charsets.UTF_8); output.writeInt(encoded.size); output.write(encoded)
-            }
-            output.writeLong(counter)
-        }
-        val bits = ByteBuffer.wrap(MessageDigest.getInstance("SHA-256").digest(bytes.toByteArray())).long ushr 11
-        return bits.toDouble() / 9007199254740992.0
+        return randomUnit(seed, entityId, behavior.name, rule, site, counter)
     }
 }
+
+/** The bytes hashed for one draw: seed, four length-prefixed UTF-8 keys, counter; big-endian, as documented. */
+internal fun randomInput(seed: Long, entityId: String, behavior: String, rule: String, site: String, counter: Long): ByteArray {
+    val bytes = ByteArrayOutputStream()
+    DataOutputStream(bytes).use { output ->
+        output.writeLong(seed)
+        for (value in listOf(entityId, behavior, rule, site)) {
+            val encoded = value.toByteArray(Charsets.UTF_8); output.writeInt(encoded.size); output.write(encoded)
+        }
+        output.writeLong(counter)
+    }
+    return bytes.toByteArray()
+}
+
+/** The first eight bytes of the SHA-256 digest as a big-endian long. */
+internal fun randomDigestHead(input: ByteArray): Long = ByteBuffer.wrap(MessageDigest.getInstance("SHA-256").digest(input)).long
+
+/** SHA-256 counter stream: the top 53 bits of the digest head divided by 2^53, a number in [0, 1). */
+internal fun randomUnit(seed: Long, entityId: String, behavior: String, rule: String, site: String, counter: Long): Double =
+    (randomDigestHead(randomInput(seed, entityId, behavior, rule, site, counter)) ushr 11).toDouble() / 9007199254740992.0
 
 internal fun number(value: JsonElement): Double {
     val primitive = value.jsonPrimitive

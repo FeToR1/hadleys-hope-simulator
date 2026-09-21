@@ -10,7 +10,7 @@ import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
     try {
-        val usage = "Usage: check SOURCE | compile SOURCE OUTPUT | prepare SCENARIO OUTPUT_DIR | run SCENARIO [OUTPUT.jsonl] | serve SCENARIO [PORT] | contract [OUTPUT.json]"
+        val usage = "Usage: check SOURCE | compile SOURCE OUTPUT | prepare SCENARIO OUTPUT_DIR | run SCENARIO [OUTPUT.jsonl] | serve SCENARIO [PORT] | contract [OUTPUT.json] | conformance OUTPUT_DIR"
         if (args.firstOrNull() == "contract") {
             require(args.size in 1..2) { usage }
             val document = bytecodeJson.encodeToString(contractDocument())
@@ -22,6 +22,11 @@ fun main(args: Array<String>) {
         when (args[0]) {
             "check" -> { require(args.size == 2); val code = compileSources(listOf(SourceFile(input.fileName.toString(), input.readText()))); println("OK: ${code.behaviors.size} behaviors, ${code.events.size} events") }
             "compile" -> { require(args.size == 3); Path.of(args[2]).writeText(bytecodeJson.encodeToString(compileSources(listOf(SourceFile(input.fileName.toString(), input.readText()))))) }
+            "conformance" -> {
+                require(args.size == 2) { "Usage: conformance OUTPUT_DIR (run from the repository root)" }
+                writeConformance(Path.of("").toAbsolutePath(), input)
+                println("Wrote ${conformanceFileNames().size} vector files to $input")
+            }
             "prepare" -> {
                 require(args.size == 3)
                 val prepared = prepareScenario(input); val output = Path.of(args[2]); output.createDirectories()

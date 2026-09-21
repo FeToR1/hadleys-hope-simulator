@@ -1,0 +1,1554 @@
+{
+    "conformance": 1,
+    "contract": 2,
+    "name": "heater",
+    "source": "colony-dsl-parser/examples/heater.colony",
+    "program": {
+        "stepSeconds": "1",
+        "events": [
+            {
+                "id": 0,
+                "name": "HeatingDemand",
+                "fields": [
+                    {
+                        "name": "enabled",
+                        "type": "Bool"
+                    }
+                ]
+            }
+        ],
+        "behaviors": [
+            {
+                "name": "HouseControl",
+                "kind": "House",
+                "params": [
+                    {
+                        "name": "heater",
+                        "type": "Ref<Heater>"
+                    }
+                ],
+                "state": [
+                    {
+                        "name": "demand",
+                        "type": "Bool"
+                    },
+                    {
+                        "name": "sent",
+                        "type": "Option<Bool>"
+                    }
+                ],
+                "temporaryCount": 23,
+                "initialize": 0,
+                "handlers": [
+                    {
+                        "name": "regulate",
+                        "entry": 12,
+                        "localCount": 0,
+                        "periodTicks": 1
+                    }
+                ],
+                "code": [
+                    {
+                        "op": "CONST",
+                        "type": "Bool",
+                        "value": false,
+                        "line": 7,
+                        "column": 26
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "line": 7,
+                        "column": 26
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "line": 7,
+                        "column": 5
+                    },
+                    {
+                        "op": "STORE_STATE",
+                        "line": 7,
+                        "column": 5
+                    },
+                    {
+                        "op": "CONST",
+                        "type": "Option<<unknown>>",
+                        "line": 8,
+                        "column": 32
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 1,
+                        "line": 8,
+                        "column": 32
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 1,
+                        "line": 8,
+                        "column": 5
+                    },
+                    {
+                        "op": "CONVERT",
+                        "type": "Option<Bool>",
+                        "line": 8,
+                        "column": 5
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 2,
+                        "line": 8,
+                        "column": 5
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 2,
+                        "line": 8,
+                        "column": 5
+                    },
+                    {
+                        "op": "STORE_STATE",
+                        "arg": 1,
+                        "line": 8,
+                        "column": 5
+                    },
+                    {
+                        "op": "RETURN",
+                        "line": 5,
+                        "column": 1
+                    },
+                    {
+                        "op": "LOAD_VIEW",
+                        "text": "occupants",
+                        "line": 11,
+                        "column": 16
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 3,
+                        "line": 11,
+                        "column": 16
+                    },
+                    {
+                        "op": "CONST",
+                        "type": "Int64",
+                        "value": 0,
+                        "line": 11,
+                        "column": 30
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 4,
+                        "line": 11,
+                        "column": 30
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 3,
+                        "line": 11,
+                        "column": 12
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 4,
+                        "line": 11,
+                        "column": 12
+                    },
+                    {
+                        "op": "BINARY",
+                        "text": "EQ",
+                        "type": "Bool",
+                        "line": 11,
+                        "column": 12
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 5,
+                        "line": 11,
+                        "column": 12
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 5,
+                        "line": 11,
+                        "column": 9
+                    },
+                    {
+                        "op": "JUMP_IF_FALSE",
+                        "arg": 28,
+                        "line": 11,
+                        "column": 9
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 23,
+                        "line": 11,
+                        "column": 9
+                    },
+                    {
+                        "op": "CONST",
+                        "type": "Bool",
+                        "value": false,
+                        "line": 12,
+                        "column": 22
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 6,
+                        "line": 12,
+                        "column": 22
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 6,
+                        "line": 12,
+                        "column": 13
+                    },
+                    {
+                        "op": "STORE_STATE",
+                        "line": 12,
+                        "column": 13
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 63,
+                        "line": 11,
+                        "column": 32
+                    },
+                    {
+                        "op": "LOAD_VIEW",
+                        "text": "temperature",
+                        "line": 13,
+                        "column": 23
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 7,
+                        "line": 13,
+                        "column": 23
+                    },
+                    {
+                        "op": "CONST",
+                        "type": "Temperature",
+                        "value": 18,
+                        "line": 13,
+                        "column": 38
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 8,
+                        "line": 13,
+                        "column": 38
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 7,
+                        "line": 13,
+                        "column": 19
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 8,
+                        "line": 13,
+                        "column": 19
+                    },
+                    {
+                        "op": "BINARY",
+                        "text": "LT",
+                        "type": "Bool",
+                        "line": 13,
+                        "column": 19
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 9,
+                        "line": 13,
+                        "column": 19
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 9,
+                        "line": 13,
+                        "column": 16
+                    },
+                    {
+                        "op": "JUMP_IF_FALSE",
+                        "arg": 44,
+                        "line": 13,
+                        "column": 16
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 39,
+                        "line": 13,
+                        "column": 16
+                    },
+                    {
+                        "op": "CONST",
+                        "type": "Bool",
+                        "value": true,
+                        "line": 14,
+                        "column": 22
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 10,
+                        "line": 14,
+                        "column": 22
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 10,
+                        "line": 14,
+                        "column": 13
+                    },
+                    {
+                        "op": "STORE_STATE",
+                        "line": 14,
+                        "column": 13
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 62,
+                        "line": 13,
+                        "column": 45
+                    },
+                    {
+                        "op": "LOAD_VIEW",
+                        "text": "temperature",
+                        "line": 15,
+                        "column": 23
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 11,
+                        "line": 15,
+                        "column": 23
+                    },
+                    {
+                        "op": "CONST",
+                        "type": "Temperature",
+                        "value": 21,
+                        "line": 15,
+                        "column": 39
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 12,
+                        "line": 15,
+                        "column": 39
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 11,
+                        "line": 15,
+                        "column": 19
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 12,
+                        "line": 15,
+                        "column": 19
+                    },
+                    {
+                        "op": "BINARY",
+                        "text": "GE",
+                        "type": "Bool",
+                        "line": 15,
+                        "column": 19
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 13,
+                        "line": 15,
+                        "column": 19
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 13,
+                        "line": 15,
+                        "column": 16
+                    },
+                    {
+                        "op": "JUMP_IF_FALSE",
+                        "arg": 60,
+                        "line": 15,
+                        "column": 16
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 55,
+                        "line": 15,
+                        "column": 16
+                    },
+                    {
+                        "op": "CONST",
+                        "type": "Bool",
+                        "value": false,
+                        "line": 16,
+                        "column": 22
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 14,
+                        "line": 16,
+                        "column": 22
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 14,
+                        "line": 16,
+                        "column": 13
+                    },
+                    {
+                        "op": "STORE_STATE",
+                        "line": 16,
+                        "column": 13
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 61,
+                        "line": 15,
+                        "column": 46
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 61,
+                        "line": 15,
+                        "column": 16
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 62,
+                        "line": 15,
+                        "column": 11
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 63,
+                        "line": 13,
+                        "column": 11
+                    },
+                    {
+                        "op": "LOAD_STATE",
+                        "arg": 1,
+                        "line": 19,
+                        "column": 12
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 15,
+                        "line": 19,
+                        "column": 12
+                    },
+                    {
+                        "op": "LOAD_STATE",
+                        "line": 19,
+                        "column": 25
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 16,
+                        "line": 19,
+                        "column": 25
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 16,
+                        "line": 19,
+                        "column": 24
+                    },
+                    {
+                        "op": "SOME",
+                        "line": 19,
+                        "column": 24
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 17,
+                        "line": 19,
+                        "column": 24
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 15,
+                        "line": 19,
+                        "column": 12
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 17,
+                        "line": 19,
+                        "column": 12
+                    },
+                    {
+                        "op": "BINARY",
+                        "text": "NEQ",
+                        "type": "Bool",
+                        "line": 19,
+                        "column": 12
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 18,
+                        "line": 19,
+                        "column": 12
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 18,
+                        "line": 19,
+                        "column": 9
+                    },
+                    {
+                        "op": "JUMP_IF_FALSE",
+                        "arg": 92,
+                        "line": 19,
+                        "column": 9
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 77,
+                        "line": 19,
+                        "column": 9
+                    },
+                    {
+                        "op": "LOAD_PARAM",
+                        "line": 20,
+                        "column": 55
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 19,
+                        "line": 20,
+                        "column": 55
+                    },
+                    {
+                        "op": "LOAD_STATE",
+                        "line": 20,
+                        "column": 43
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 20,
+                        "line": 20,
+                        "column": 43
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 19,
+                        "line": 20,
+                        "column": 13
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 20,
+                        "line": 20,
+                        "column": 13
+                    },
+                    {
+                        "op": "SEND",
+                        "names": [
+                            "enabled"
+                        ],
+                        "line": 20,
+                        "column": 13
+                    },
+                    {
+                        "op": "LOAD_STATE",
+                        "line": 21,
+                        "column": 25
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 21,
+                        "line": 21,
+                        "column": 25
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 21,
+                        "line": 21,
+                        "column": 24
+                    },
+                    {
+                        "op": "SOME",
+                        "line": 21,
+                        "column": 24
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 22,
+                        "line": 21,
+                        "column": 24
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 22,
+                        "line": 21,
+                        "column": 13
+                    },
+                    {
+                        "op": "STORE_STATE",
+                        "arg": 1,
+                        "line": 21,
+                        "column": 13
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 93,
+                        "line": 19,
+                        "column": 33
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 93,
+                        "line": 19,
+                        "column": 9
+                    },
+                    {
+                        "op": "RETURN",
+                        "line": 10,
+                        "column": 26
+                    }
+                ],
+                "observes": [
+                    "occupants",
+                    "temperature"
+                ]
+            },
+            {
+                "name": "HeaterControl",
+                "kind": "Heater",
+                "params": [],
+                "state": [
+                    {
+                        "name": "demand",
+                        "type": "Bool"
+                    }
+                ],
+                "temporaryCount": 40,
+                "initialize": 0,
+                "handlers": [
+                    {
+                        "name": "remember",
+                        "entry": 5,
+                        "localCount": 0,
+                        "eventId": 0
+                    },
+                    {
+                        "name": "apply",
+                        "entry": 13,
+                        "localCount": 0,
+                        "periodTicks": 1
+                    }
+                ],
+                "code": [
+                    {
+                        "op": "CONST",
+                        "type": "Bool",
+                        "value": false,
+                        "line": 27,
+                        "column": 26
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 23,
+                        "line": 27,
+                        "column": 26
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 23,
+                        "line": 27,
+                        "column": 5
+                    },
+                    {
+                        "op": "STORE_STATE",
+                        "line": 27,
+                        "column": 5
+                    },
+                    {
+                        "op": "RETURN",
+                        "line": 26,
+                        "column": 1
+                    },
+                    {
+                        "op": "LOAD_MESSAGE",
+                        "line": 30,
+                        "column": 18
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 24,
+                        "line": 30,
+                        "column": 18
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 24,
+                        "line": 30,
+                        "column": 25
+                    },
+                    {
+                        "op": "GET_FIELD",
+                        "text": "enabled",
+                        "line": 30,
+                        "column": 25
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 25,
+                        "line": 30,
+                        "column": 25
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 25,
+                        "line": 30,
+                        "column": 9
+                    },
+                    {
+                        "op": "STORE_STATE",
+                        "line": 30,
+                        "column": 9
+                    },
+                    {
+                        "op": "RETURN",
+                        "line": 29,
+                        "column": 43
+                    },
+                    {
+                        "op": "LOAD_VIEW",
+                        "text": "home_occupants",
+                        "line": 34,
+                        "column": 16
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 26,
+                        "line": 34,
+                        "column": 16
+                    },
+                    {
+                        "op": "CONST",
+                        "type": "Int64",
+                        "value": 0,
+                        "line": 34,
+                        "column": 35
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 27,
+                        "line": 34,
+                        "column": 35
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 26,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 27,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "BINARY",
+                        "text": "EQ",
+                        "type": "Bool",
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 28,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 28,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "JUMP_IF_FALSE",
+                        "arg": 27,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 24,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "CONST",
+                        "type": "Bool",
+                        "value": true,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 29,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 32,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "LOAD_VIEW",
+                        "text": "broken",
+                        "line": 34,
+                        "column": 44
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 30,
+                        "line": 34,
+                        "column": 44
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 30,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 29,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 32,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 29,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "JUMP_IF_FALSE",
+                        "arg": 38,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 35,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "CONST",
+                        "type": "Bool",
+                        "value": true,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 31,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 46,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "LOAD_VIEW",
+                        "text": "power_connected",
+                        "line": 34,
+                        "column": 60
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 32,
+                        "line": 34,
+                        "column": 60
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 32,
+                        "line": 34,
+                        "column": 55
+                    },
+                    {
+                        "op": "UNARY",
+                        "text": "NOT",
+                        "type": "Bool",
+                        "line": 34,
+                        "column": 55
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 33,
+                        "line": 34,
+                        "column": 55
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 33,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 31,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 46,
+                        "line": 34,
+                        "column": 12
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 31,
+                        "line": 34,
+                        "column": 9
+                    },
+                    {
+                        "op": "JUMP_IF_FALSE",
+                        "arg": 54,
+                        "line": 34,
+                        "column": 9
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 49,
+                        "line": 34,
+                        "column": 9
+                    },
+                    {
+                        "op": "CONST",
+                        "type": "Power",
+                        "value": 0,
+                        "line": 35,
+                        "column": 27
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 34,
+                        "line": 35,
+                        "column": 27
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 34,
+                        "line": 35,
+                        "column": 26
+                    },
+                    {
+                        "op": "POWER_REQUEST",
+                        "line": 35,
+                        "column": 26
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 70,
+                        "line": 34,
+                        "column": 77
+                    },
+                    {
+                        "op": "LOAD_STATE",
+                        "line": 36,
+                        "column": 19
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 36,
+                        "line": 36,
+                        "column": 19
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 36,
+                        "line": 36,
+                        "column": 16
+                    },
+                    {
+                        "op": "JUMP_IF_FALSE",
+                        "arg": 64,
+                        "line": 36,
+                        "column": 16
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 59,
+                        "line": 36,
+                        "column": 16
+                    },
+                    {
+                        "op": "CONST",
+                        "type": "Power",
+                        "value": 2000,
+                        "line": 37,
+                        "column": 27
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 37,
+                        "line": 37,
+                        "column": 27
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 37,
+                        "line": 37,
+                        "column": 26
+                    },
+                    {
+                        "op": "POWER_REQUEST",
+                        "line": 37,
+                        "column": 26
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 69,
+                        "line": 36,
+                        "column": 26
+                    },
+                    {
+                        "op": "CONST",
+                        "type": "Power",
+                        "value": 0,
+                        "line": 39,
+                        "column": 27
+                    },
+                    {
+                        "op": "STORE_TEMP",
+                        "arg": 39,
+                        "line": 39,
+                        "column": 27
+                    },
+                    {
+                        "op": "LOAD_TEMP",
+                        "arg": 39,
+                        "line": 39,
+                        "column": 26
+                    },
+                    {
+                        "op": "POWER_REQUEST",
+                        "line": 39,
+                        "column": 26
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 69,
+                        "line": 38,
+                        "column": 16
+                    },
+                    {
+                        "op": "JUMP",
+                        "arg": 70,
+                        "line": 36,
+                        "column": 11
+                    },
+                    {
+                        "op": "RETURN",
+                        "line": 33,
+                        "column": 23
+                    }
+                ],
+                "observes": [
+                    "home_occupants",
+                    "broken",
+                    "power_connected"
+                ]
+            }
+        ],
+        "contract": 2
+    },
+    "cases": [
+        {
+            "name": "house-hysteresis",
+            "behavior": "HouseControl",
+            "entityId": "home-1/house",
+            "seed": 426,
+            "params": {
+                "heater": "home-1/heater"
+            },
+            "initialState": {
+                "demand": false,
+                "sent": null
+            },
+            "steps": [
+                {
+                    "tick": 0,
+                    "view": {
+                        "occupants": 1,
+                        "temperature": 16
+                    },
+                    "events": [],
+                    "expect": {
+                        "events": [
+                            {
+                                "target": "home-1/heater",
+                                "eventId": 0,
+                                "sequence": 0,
+                                "fields": {
+                                    "enabled": true
+                                }
+                            }
+                        ],
+                        "state": {
+                            "demand": true,
+                            "sent": {
+                                "some": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "tick": 1,
+                    "view": {
+                        "occupants": 1,
+                        "temperature": 17
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "demand": true,
+                            "sent": {
+                                "some": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "tick": 2,
+                    "view": {
+                        "occupants": 1,
+                        "temperature": 19
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "demand": true,
+                            "sent": {
+                                "some": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "tick": 3,
+                    "view": {
+                        "occupants": 1,
+                        "temperature": 22
+                    },
+                    "events": [],
+                    "expect": {
+                        "events": [
+                            {
+                                "target": "home-1/heater",
+                                "eventId": 0,
+                                "sequence": 1,
+                                "fields": {
+                                    "enabled": false
+                                }
+                            }
+                        ],
+                        "state": {
+                            "demand": false,
+                            "sent": {
+                                "some": false
+                            }
+                        }
+                    }
+                },
+                {
+                    "tick": 4,
+                    "view": {
+                        "occupants": 0,
+                        "temperature": 22
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "demand": false,
+                            "sent": {
+                                "some": false
+                            }
+                        }
+                    }
+                },
+                {
+                    "tick": 5,
+                    "view": {
+                        "occupants": 0,
+                        "temperature": 15
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "demand": false,
+                            "sent": {
+                                "some": false
+                            }
+                        }
+                    }
+                },
+                {
+                    "tick": 6,
+                    "view": {
+                        "occupants": 1,
+                        "temperature": 15
+                    },
+                    "events": [],
+                    "expect": {
+                        "events": [
+                            {
+                                "target": "home-1/heater",
+                                "eventId": 0,
+                                "sequence": 2,
+                                "fields": {
+                                    "enabled": true
+                                }
+                            }
+                        ],
+                        "state": {
+                            "demand": true,
+                            "sent": {
+                                "some": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "tick": 7,
+                    "view": {
+                        "occupants": 1,
+                        "temperature": 17.9
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "demand": true,
+                            "sent": {
+                                "some": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "tick": 8,
+                    "view": {
+                        "occupants": 1,
+                        "temperature": 18
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "demand": true,
+                            "sent": {
+                                "some": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "tick": 9,
+                    "view": {
+                        "occupants": 1,
+                        "temperature": 20.5
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "demand": true,
+                            "sent": {
+                                "some": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "tick": 10,
+                    "view": {
+                        "occupants": 1,
+                        "temperature": 21
+                    },
+                    "events": [],
+                    "expect": {
+                        "events": [
+                            {
+                                "target": "home-1/heater",
+                                "eventId": 0,
+                                "sequence": 3,
+                                "fields": {
+                                    "enabled": false
+                                }
+                            }
+                        ],
+                        "state": {
+                            "demand": false,
+                            "sent": {
+                                "some": false
+                            }
+                        }
+                    }
+                },
+                {
+                    "tick": 11,
+                    "view": {
+                        "occupants": 1,
+                        "temperature": 20
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "demand": false,
+                            "sent": {
+                                "some": false
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "heater-follows-demand",
+            "behavior": "HeaterControl",
+            "entityId": "home-1/heater",
+            "seed": 426,
+            "params": {},
+            "initialState": {
+                "demand": false
+            },
+            "steps": [
+                {
+                    "tick": 0,
+                    "view": {
+                        "home_occupants": 1,
+                        "broken": false,
+                        "power_connected": true
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "POWER_REQUEST",
+                                "arguments": [
+                                    0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "demand": false
+                        }
+                    }
+                },
+                {
+                    "tick": 1,
+                    "view": {
+                        "home_occupants": 1,
+                        "broken": false,
+                        "power_connected": true
+                    },
+                    "events": [
+                        {
+                            "eventId": 0,
+                            "sender": "home-1/house",
+                            "sequence": 0,
+                            "fields": {
+                                "enabled": true
+                            }
+                        }
+                    ],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "POWER_REQUEST",
+                                "arguments": [
+                                    2000
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "demand": true
+                        }
+                    }
+                },
+                {
+                    "tick": 2,
+                    "view": {
+                        "home_occupants": 1,
+                        "broken": false,
+                        "power_connected": true
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "POWER_REQUEST",
+                                "arguments": [
+                                    2000
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "demand": true
+                        }
+                    }
+                },
+                {
+                    "tick": 3,
+                    "view": {
+                        "home_occupants": 1,
+                        "broken": true,
+                        "power_connected": true
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "POWER_REQUEST",
+                                "arguments": [
+                                    0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "demand": true
+                        }
+                    }
+                },
+                {
+                    "tick": 4,
+                    "view": {
+                        "home_occupants": 1,
+                        "broken": false,
+                        "power_connected": false
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "POWER_REQUEST",
+                                "arguments": [
+                                    0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "demand": true
+                        }
+                    }
+                },
+                {
+                    "tick": 5,
+                    "view": {
+                        "home_occupants": 0,
+                        "broken": false,
+                        "power_connected": true
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "POWER_REQUEST",
+                                "arguments": [
+                                    0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "demand": true
+                        }
+                    }
+                },
+                {
+                    "tick": 6,
+                    "view": {
+                        "home_occupants": 1,
+                        "broken": false,
+                        "power_connected": true
+                    },
+                    "events": [
+                        {
+                            "eventId": 0,
+                            "sender": "home-1/house",
+                            "sequence": 1,
+                            "fields": {
+                                "enabled": false
+                            }
+                        }
+                    ],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "POWER_REQUEST",
+                                "arguments": [
+                                    0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "demand": false
+                        }
+                    }
+                },
+                {
+                    "tick": 7,
+                    "view": {
+                        "home_occupants": 1,
+                        "broken": false,
+                        "power_connected": true
+                    },
+                    "events": [
+                        {
+                            "eventId": 0,
+                            "sender": "home-1/house",
+                            "sequence": 2,
+                            "fields": {
+                                "enabled": true
+                            }
+                        },
+                        {
+                            "eventId": 0,
+                            "sender": "home-0/house",
+                            "sequence": 9,
+                            "fields": {
+                                "enabled": false
+                            }
+                        }
+                    ],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "POWER_REQUEST",
+                                "arguments": [
+                                    2000
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "demand": true
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}
