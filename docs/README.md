@@ -1,3 +1,5 @@
+> Рабочий запуск и текущие контракты: [интеграция v1](integration-v1.md). Здесь описана целевая архитектура; отдельные процессы ВМ и брокер ещё не реализованы.
+
 # LV-426 Settlement Simulation
 
 <img width="1461" height="828" alt="Screenshot 2026-09-20 at 16 35 59" src="https://github.com/user-attachments/assets/95fd76b1-cbce-4605-a3e6-7d548bb1309d" />

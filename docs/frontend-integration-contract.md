@@ -1,3 +1,5 @@
+> Integration update: [observer protocol v1 and working reference runtime](integration-v1.md) define the implemented contract. The requirements below describe the target system; they are not all implemented. Reference mode uses pid=null, model-time timestamps and full snapshots; causal events and the financial ledger remain future work.
+
 # LV-426 Settlement Simulation: FRONTEND INTEGRATION CONTRACT & TECHNICAL REQUIREMENTS
 Target Architecture: Node.js v24.14.0 | React | PixiJS v8 | AntV G6
 Authoritative Specification for Backend, Broker, and Simulation Developers
