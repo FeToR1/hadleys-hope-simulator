@@ -1,10 +1,6 @@
-export type EntityType =
-  | 'house'
-  | 'heater'
-  | 'kettle'
-  | 'civilian'
-  | 'xenomorph'
-  | 'power_node';
+export const KNOWN_ENTITY_TYPES = ['house', 'heater', 'kettle', 'civilian', 'xenomorph', 'power_node'] as const;
+/** Kinds the observer may add later are shown generically instead of invalidating the whole snapshot. */
+export type EntityType = (typeof KNOWN_ENTITY_TYPES)[number] | 'other';
 
 export type EntityStatus = 'nominal' | 'warning' | 'critical' | 'dead';
 
@@ -14,6 +10,7 @@ export interface EntityMetrics {
   water_level?: number;
   stress?: number;
   repair_cost?: number;
+  health?: number;
 }
 
 export interface EntityState {
@@ -25,6 +22,16 @@ export interface EntityState {
   connectedTo: string[];
   coordinates: { x: number; y: number };
   parentId?: string;
+  /** Private state of the entity's VM (behavior variables); absent in mock data. */
+  vmState?: Record<string, unknown>;
+}
+
+/** A request an entity's program made in one step; the world decides whether it takes effect. */
+export interface TraceEffect {
+  source: string;
+  operation: string;
+  arguments: unknown[];
+  accepted: boolean;
 }
 
 export interface TickBatch {
@@ -36,6 +43,8 @@ export interface TickBatch {
   tickId: number;
   timestamp: number;
   entities: EntityState[];
+  effects?: TraceEffect[];
+  deliveredEvents?: number;
 }
 
 export interface EntityLog {

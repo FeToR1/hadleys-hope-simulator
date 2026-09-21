@@ -1,3 +1,4 @@
+import { describeEffects, describeStatusChange, type LogDraft } from './effectLog';
 import type { EntityDelta, EntityLog, EntityState, StateSnapshot, TickBatch } from './types';
 
 type StateListener = (snapshot: StateSnapshot, deltas: readonly EntityDelta[]) => void;
@@ -25,6 +26,7 @@ const copyEntityInto = (target: EntityState, source: EntityState): boolean => {
   target.coordinates.x = source.coordinates.x;
   target.coordinates.y = source.coordinates.y;
   target.parentId = source.parentId;
+  target.vmState = source.vmState;
   if (connectionsChanged) {
     target.connectedTo.length = 0;
     target.connectedTo.push(...source.connectedTo);
@@ -83,6 +85,8 @@ export class StateManager {
       if (removed) topologyChanged = true;
     }
     const deltas: EntityDelta[] = [];
+    const drafts: LogDraft[] = [];
+    const now = Date.now();
     for (const incoming of batch.entities) {
       const existing = this.entities.get(incoming.id);
       if (existing === undefined) {
@@ -104,13 +108,21 @@ export class StateManager {
         existing.coordinates.x !== incoming.coordinates.x ||
         existing.coordinates.y !== incoming.coordinates.y ||
         existing.metrics !== incoming.metrics ||
+        existing.vmState !== incoming.vmState ||
         existing.parentId !== incoming.parentId;
       if (existing.type !== incoming.type) topologyChanged = true;
+      if (existing.status !== incoming.status && this.runtimeMode !== 'mock') {
+        drafts.push(describeStatusChange(existing.id, existing.status, incoming.status, batch.tickId, now));
+      }
       const connectionsChanged = copyEntityInto(existing, incoming);
       if (connectionsChanged) topologyChanged = true;
       if (changed || connectionsChanged) deltas.push({ entity: existing, connectionsChanged });
     }
     if (topologyChanged) this.revision += 1;
+    // The mock generator has no real events; only observed runs feed the log.
+    if (this.runtimeMode !== 'mock') {
+      for (const draft of [...describeEffects(batch, now), ...drafts]) this.appendLog(draft);
+    }
     this.tickId = batch.tickId;
     this.timestamp = batch.timestamp;
     const snapshot = this.snapshot();

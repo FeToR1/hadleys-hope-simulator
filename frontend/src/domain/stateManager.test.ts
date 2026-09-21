@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MockDataGenerator } from './mockGenerator';
 import { StateManager } from './stateManager';
+import type { TickBatch } from './types';
 
 describe('StateManager', () => {
   it('keeps entity references stable while ingesting updates', () => {
@@ -38,6 +39,40 @@ describe('StateManager', () => {
     manager.ingest({ ...live, runId: 'live-2', tickId: 0 });
     expect(manager.snapshot().entities.size).toBe(2);
     expect(manager.snapshot().tickId).toBe(0);
+  });
+});
+
+describe('observed run log', () => {
+  const entity = (status: 'nominal' | 'dead') => ({
+    id: 'home-1/heater', pid: null, type: 'heater' as const, status, metrics: { health: status === 'dead' ? 0 : 100 },
+    connectedTo: [], coordinates: { x: 0, y: 0 }, vmState: { demand: true },
+  });
+  const tick = (tickId: number, status: 'nominal' | 'dead', effects: NonNullable<TickBatch['effects']> = []): TickBatch => ({
+    version: 1, runId: 'r1', runtimeMode: 'reference', seed: '426', full: true, tickId, timestamp: (tickId + 1) * 1000,
+    entities: [entity(status)], effects,
+  });
+
+  it('logs attacks and status changes of a reference run, once per tick', () => {
+    const manager = new StateManager();
+    manager.ingest(tick(0, 'nominal'));
+    expect(manager.snapshot().logs).toHaveLength(0);
+    const attack = { source: 'alien-1/xenomorph', operation: 'DAMAGE_REQUEST', arguments: ['home-1/heater', 100, 'XenomorphAttack'], accepted: true };
+    manager.ingest(tick(1, 'dead', [attack]));
+    manager.ingest(tick(1, 'dead', [attack]));
+    const messages = manager.snapshot().logs.map((log) => log.message);
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toContain('урон home-1/heater');
+    expect(messages[1]).toContain('nominal → dead');
+  });
+
+  it('keeps the VM state of stored entities current and stays silent for mock data', () => {
+    const manager = new StateManager();
+    manager.ingest(tick(0, 'nominal'));
+    manager.ingest({ ...tick(1, 'nominal'), entities: [{ ...entity('nominal'), vmState: { demand: false } }] });
+    expect(manager.getEntity('home-1/heater')?.vmState).toEqual({ demand: false });
+    const mock = new StateManager();
+    mock.ingest(new MockDataGenerator().getInitialBatch());
+    expect(mock.snapshot().logs).toHaveLength(0);
   });
 });
 
