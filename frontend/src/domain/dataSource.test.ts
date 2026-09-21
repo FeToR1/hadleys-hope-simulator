@@ -25,6 +25,25 @@ describe('observer protocol v1', () => {
       { source: 'a', operation: 'POWER_REQUEST', arguments: [1], accepted: true },
     ]);
     expect(parseTickBatch(batch).effects).toEqual([]);
+    expect(parseTickBatch(batch).events).toEqual([]);
+  });
+  it('keeps world events with their causation and normalizes absent causes', () => {
+    const parsed = parseTickBatch({
+      ...batch,
+      events: [
+        { id: 'e1', type: 'DamageApplied', tick: 0, entityId: 'b', actorId: 'a', causationId: 'a@0#0', fields: { amount: 5 }, recipients: ['a'] },
+        { id: 'e2', type: 'PowerLost', tick: 1, entityId: 'h', actorId: null, causationId: null, fields: {}, recipients: [] },
+      ],
+    });
+    expect(parsed.events?.[0]).toMatchObject({ id: 'e1', actorId: 'a', causationId: 'a@0#0', recipients: ['a'] });
+    expect(parsed.events?.[1].actorId).toBeUndefined();
+    expect(parsed.events?.[1].causationId).toBeUndefined();
+  });
+  it('rejects malformed world events', () => {
+    expect(() => parseTickBatch({ ...batch, events: 'x' })).toThrow();
+    expect(() => parseTickBatch({ ...batch, events: [{ id: 'e', type: 'T', tick: 1.5, entityId: 'x', fields: {}, recipients: [] }] })).toThrow();
+    expect(() => parseTickBatch({ ...batch, events: [{ id: 'e', type: 'T', tick: 1, entityId: 'x', fields: [], recipients: [] }] })).toThrow();
+    expect(() => parseTickBatch({ ...batch, events: [{ id: 'e', type: 'T', tick: 1, entityId: 'x', fields: {}, recipients: [1] }] })).toThrow();
   });
   it('rejects malformed effects and VM state', () => {
     expect(() => parseTickBatch({ ...batch, effects: 'x' })).toThrow();

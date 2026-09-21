@@ -15,11 +15,13 @@ export type RunCommand = ControlAction | 'restart';
 
 interface RunControlsProps {
   health: BrokerHealth | undefined;
+  /** Last step of the stream; the health document is only polled and lags behind it. */
+  currentTick?: number;
   onControl: (command: RunCommand) => void;
 }
 
 /** Pause, single step, restart and pace of the observed run. Steps never change; only when they happen. */
-export function RunControls({ health, onControl }: RunControlsProps): JSX.Element {
+export function RunControls({ health, currentTick, onControl }: RunControlsProps): JSX.Element {
   const status = health?.status;
   const running = status === 'running';
   const speeds = health !== undefined && !SPEEDS.includes(health.stepsPerSecond)
@@ -34,12 +36,14 @@ export function RunControls({ health, onControl }: RunControlsProps): JSX.Elemen
       onChange={(event) => onControl({ speed: Number(event.target.value) })}>
       {speeds.map((speed) => <option key={speed} value={speed}>{speed} шаг/с</option>)}
     </select>
-    <span className={`run-status run-${status ?? 'unknown'}`} title={health?.error}>{describeRun(health)}</span>
+    <span className={`run-status run-${status ?? 'unknown'}`} title={health?.error}>{describeRun(health, currentTick)}</span>
   </div>;
 }
 
-export function describeRun(health: BrokerHealth | undefined): string {
+export function describeRun(health: BrokerHealth | undefined, currentTick?: number): string {
   if (health === undefined) return 'нет связи';
   if (health.status === 'failed') return `ошибка: ${health.error ?? 'неизвестна'}`;
-  return `${STATUS_LABEL[health.status]} · ${Math.max(0, health.tick + 1)} / ${health.ticks}`;
+  // The stream is the source of truth for progress; the polled document may be a couple of seconds old.
+  const done = Math.max(0, (currentTick ?? health.tick) + 1);
+  return `${STATUS_LABEL[health.status]} · ${Math.min(done, health.ticks)} / ${health.ticks}`;
 }

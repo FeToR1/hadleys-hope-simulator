@@ -25,6 +25,7 @@ export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus 
   const onSelectRef = useRef(onSelect);
   const updateStageRef = useRef<((currentEntities: readonly EntityState[]) => void) | null>(null);
   const viewportRef = useRef<Viewport | null>(null);
+  const fitRef = useRef<(() => void) | null>(null);
   const objectsRef = useRef(new Map<string, Graphics>());
   const entityRef = useRef(new Map<string, EntityState>());
   const agentBadgesRef = useRef(new Map<string, Text>());
@@ -120,6 +121,23 @@ export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus 
       };
       updateStage(entitiesRef.current);
       updateStageRef.current = updateStage;
+      // Show what there is: the fixed 1500x1200 world suits 300 houses but hides a handful of objects in a corner.
+      const fitToContent = (): void => {
+        const list = entitiesRef.current;
+        if (list.length === 0) return;
+        let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
+        for (const entity of list) {
+          minX = Math.min(minX, entity.coordinates.x); maxX = Math.max(maxX, entity.coordinates.x);
+          minY = Math.min(minY, entity.coordinates.y); maxY = Math.max(maxY, entity.coordinates.y);
+        }
+        const padding = 80;
+        viewport.fit(false, Math.max(maxX - minX + 2 * padding, 240), Math.max(maxY - minY + 2 * padding, 240));
+        viewport.moveCenter((minX + maxX) / 2, (minY + maxY) / 2);
+        if (viewport.scale.x > 2) viewport.setZoom(2, true);
+        updateStageRef.current?.(entitiesRef.current);
+      };
+      fitRef.current = fitToContent;
+      fitToContent();
       onRegisterFocus?.((entityId) => {
         const entity = entityRef.current.get(entityId);
         if (entity !== undefined) {
@@ -133,6 +151,7 @@ export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus 
     return () => {
       disposed = true;
       updateStageRef.current = null;
+      fitRef.current = null;
       viewportRef.current = null;
       setViewportReady(false);
       objectsRef.current.clear();
@@ -157,12 +176,7 @@ export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus 
         disabled={!viewportReady}
         onZoomIn={() => viewportRef.current?.zoom(1.4)}
         onZoomOut={() => viewportRef.current?.zoom(0.7)}
-        onReset={() => {
-          const viewport = viewportRef.current;
-          if (viewport === null) return;
-          viewport.moveCenter(750, 600);
-          viewport.fit(true);
-        }}
+        onReset={() => fitRef.current?.()}
       />
     </div>
   );

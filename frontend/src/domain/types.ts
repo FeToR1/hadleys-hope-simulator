@@ -34,6 +34,18 @@ export interface TraceEffect {
   accepted: boolean;
 }
 
+/** A fact the world established; causationId links it to the request or event that caused it. */
+export interface WorldEvent {
+  id: string;
+  type: string;
+  tick: number;
+  entityId: string;
+  actorId?: string;
+  causationId?: string;
+  fields: Record<string, unknown>;
+  recipients: string[];
+}
+
 export interface TickBatch {
   version?: 1;
   runId?: string;
@@ -44,6 +56,7 @@ export interface TickBatch {
   timestamp: number;
   entities: EntityState[];
   effects?: TraceEffect[];
+  events?: WorldEvent[];
   deliveredEvents?: number;
 }
 
@@ -69,9 +82,11 @@ export interface StateSnapshot {
   timestamp: number;
   entities: ReadonlyMap<string, EntityState>;
   logs: readonly EntityLog[];
+  /** Recent world events of an observed run, oldest first. */
+  events: readonly WorldEvent[];
 }
 
-export type CausalChainStepKind = 'network' | 'thermal' | 'hydraulics' | 'economy';
+export type CausalChainStepKind = 'network' | 'thermal' | 'hydraulics' | 'economy' | 'action' | 'failure';
 
 export interface CausalChainStep {
   id: string;

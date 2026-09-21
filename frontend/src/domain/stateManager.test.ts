@@ -47,22 +47,38 @@ describe('observed run log', () => {
     id: 'home-1/heater', pid: null, type: 'heater' as const, status, metrics: { health: status === 'dead' ? 0 : 100 },
     connectedTo: [], coordinates: { x: 0, y: 0 }, vmState: { demand: true },
   });
-  const tick = (tickId: number, status: 'nominal' | 'dead', effects: NonNullable<TickBatch['effects']> = []): TickBatch => ({
+  const tick = (tickId: number, status: 'nominal' | 'dead', events: NonNullable<TickBatch['events']> = []): TickBatch => ({
     version: 1, runId: 'r1', runtimeMode: 'reference', seed: '426', full: true, tickId, timestamp: (tickId + 1) * 1000,
-    entities: [entity(status)], effects,
+    entities: [entity(status)], events,
   });
+  const attack = { id: 'e1', type: 'DamageApplied', tick: 1, entityId: 'home-1/heater', actorId: 'alien-1/xenomorph', causationId: 'alien-1/xenomorph@1#0',
+    fields: { target: 'home-1/heater', amount: 100, reason: 'XenomorphAttack' }, recipients: [] };
+  const broken = { id: 'e2', type: 'ObjectBroken', tick: 1, entityId: 'home-1/heater', causationId: 'e1',
+    fields: { object: 'home-1/heater', reason: 'XenomorphAttack' }, recipients: [] };
 
-  it('logs attacks and status changes of a reference run, once per tick', () => {
+  it('logs the events of a reference run once per tick and keeps them as history', () => {
     const manager = new StateManager();
     manager.ingest(tick(0, 'nominal'));
     expect(manager.snapshot().logs).toHaveLength(0);
-    const attack = { source: 'alien-1/xenomorph', operation: 'DAMAGE_REQUEST', arguments: ['home-1/heater', 100, 'XenomorphAttack'], accepted: true };
-    manager.ingest(tick(1, 'dead', [attack]));
-    manager.ingest(tick(1, 'dead', [attack]));
+    manager.ingest(tick(1, 'dead', [attack, broken]));
+    manager.ingest(tick(1, 'dead', [attack, broken]));
     const messages = manager.snapshot().logs.map((log) => log.message);
     expect(messages).toHaveLength(2);
     expect(messages[0]).toContain('урон home-1/heater');
-    expect(messages[1]).toContain('nominal → dead');
+    expect(messages[1]).toContain('сломан home-1/heater');
+    expect(manager.snapshot().events.map((item) => item.id)).toEqual(['e1', 'e2']);
+  });
+
+  it('bounds the event history and forgets it when the run changes', () => {
+    const manager = new StateManager();
+    manager.ingest(tick(0, 'nominal'));
+    for (let index = 1; index <= 40; index += 1) {
+      manager.ingest(tick(index, 'nominal', Array.from({ length: 20 }, (_, n) => ({ ...attack, id: `e${index}-${n}` }))));
+    }
+    expect(manager.snapshot().events).toHaveLength(500);
+    expect(manager.snapshot().events.at(-1)?.id).toBe('e40-19');
+    manager.ingest({ ...tick(0, 'nominal'), runId: 'r2' });
+    expect(manager.snapshot().events).toHaveLength(0);
   });
 
   it('keeps the VM state of stored entities current and stays silent for mock data', () => {
@@ -73,6 +89,7 @@ describe('observed run log', () => {
     const mock = new StateManager();
     mock.ingest(new MockDataGenerator().getInitialBatch());
     expect(mock.snapshot().logs).toHaveLength(0);
+    expect(mock.snapshot().events).toHaveLength(0);
   });
 });
 

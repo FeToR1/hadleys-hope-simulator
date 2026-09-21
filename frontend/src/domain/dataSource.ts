@@ -1,4 +1,4 @@
-import { KNOWN_ENTITY_TYPES, type EntityType, type TickBatch, type TraceEffect } from './types';
+import { KNOWN_ENTITY_TYPES, type EntityType, type TickBatch, type TraceEffect, type WorldEvent } from './types';
 
 export type DataSourceMode = 'mock' | 'live';
 
@@ -131,17 +131,36 @@ export function parseTickBatch(value: unknown): TickBatch {
     ids.add(entity.id);
   }
   const effects = parseEffects(value.effects);
+  const events = parseEvents(value.events);
   // Kotlin JSON emits explicit nulls; the UI uses undefined for absent parents.
   // A kind this UI does not know yet is kept and drawn as a generic object.
   return {
     ...value,
     effects,
+    events,
     entities: value.entities.map((entity) => ({
       ...entity,
       type: (KNOWN_ENTITY_TYPES as readonly string[]).includes(String(entity.type)) ? entity.type : 'other' as EntityType,
       parentId: entity.parentId ?? undefined,
     })),
   } as unknown as TickBatch;
+}
+
+function parseEvents(value: unknown): WorldEvent[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error('Invalid events');
+  const optionalText = (v: unknown): boolean => v === undefined || v === null || typeof v === 'string';
+  return value.map((event: unknown) => {
+    if (typeof event !== 'object' || event === null || Array.isArray(event)) throw new Error('Invalid event');
+    const item = event as Record<string, unknown>;
+    const fields = item.fields ?? {};
+    if (typeof item.id !== 'string' || typeof item.type !== 'string' || !Number.isSafeInteger(item.tick) ||
+      typeof item.entityId !== 'string' || !optionalText(item.actorId) || !optionalText(item.causationId) ||
+      typeof fields !== 'object' || fields === null || Array.isArray(fields) ||
+      !Array.isArray(item.recipients) || !item.recipients.every((id) => typeof id === 'string')) throw new Error('Invalid event');
+    return { id: item.id, type: item.type, tick: Number(item.tick), entityId: item.entityId, actorId: (item.actorId as string | null) ?? undefined,
+      causationId: (item.causationId as string | null) ?? undefined, fields: fields as Record<string, unknown>, recipients: item.recipients as string[] };
+  });
 }
 
 function parseEffects(value: unknown): TraceEffect[] {

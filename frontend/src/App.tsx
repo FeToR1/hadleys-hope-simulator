@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { MockDataGenerator } from './domain/mockGenerator';
 import { StateManager } from './domain/stateManager';
-import type { EntityLog, EntityState } from './domain/types';
+import type { EntityLog, EntityState, WorldEvent } from './domain/types';
 import type { CausalChainStep } from './domain/types';
 import { createCausalChain } from './domain/causalChain';
+import { createLiveCausalChain } from './domain/liveCausalChain';
 import { LiveBrokerSource, type BrokerHealth, type DataSourceMode } from './domain/dataSource';
 import { SettlementMap } from './components/SettlementMap';
 import { NetworkTopology } from './components/NetworkTopology';
@@ -17,6 +18,7 @@ export function App(): JSX.Element {
   const [entities, setEntities] = useState<readonly EntityState[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
   const [logs, setLogs] = useState<readonly EntityLog[]>([]);
+  const [worldEvents, setWorldEvents] = useState<readonly WorldEvent[]>([]);
   const [tab, setTab] = useState<'map' | 'topology'>('map');
   const [sourceMode, setSourceMode] = useState<DataSourceMode>('mock');
   const [brokerHealth, setBrokerHealth] = useState<BrokerHealth>();
@@ -35,6 +37,8 @@ export function App(): JSX.Element {
       setEntities([...snapshot.entities.values()]);
       setTickId(snapshot.tickId);
       setRunMeta({ revision: snapshot.revision, seed: snapshot.seed, runtimeMode: snapshot.runtimeMode });
+      setWorldEvents((previous) => previous.length === snapshot.events.length && previous.at(-1)?.id === snapshot.events.at(-1)?.id
+        ? previous : [...snapshot.events]);
     }, { animationFrame: true });
     const unsubscribeSidebar = manager.subscribe((snapshot) => {
       setLogs([...snapshot.logs]);
@@ -105,7 +109,10 @@ export function App(): JSX.Element {
     () => entities.filter((entity) => entity.parentId === selected?.id && (entity.type === 'heater' || entity.type === 'kettle')),
     [entities, selected],
   );
-  const causalChain = useMemo(() => sourceMode === 'mock' ? createCausalChain(entities) : [], [entities, sourceMode]);
+  const causalChain = useMemo(
+    () => sourceMode === 'mock' ? createCausalChain(entities) : createLiveCausalChain(worldEvents),
+    [entities, sourceMode, worldEvents],
+  );
   const selectEntity = (entityId: string): void => {
     setSelectedId(entityId);
     const entity = managerRef.current.getEntity(entityId);
@@ -146,13 +153,13 @@ export function App(): JSX.Element {
 
   return (
     <main className="shell">
-      <header className="topbar"><div><span className="eyebrow">WORLD KERNEL / LV-426</span><h1>Settlement monitor</h1><div className="run-meta">seed: <strong>{runMeta.seed || '—'}</strong> · tick: <strong>{tickId}</strong></div></div><div className="topbar-right">{sourceMode === 'live' && <RunControls health={brokerHealth} onControl={(command) => void runControl(command)} />}<SourceSwitcher mode={sourceMode} brokerAvailable={brokerAvailable} warning={sourceWarning} onChange={switchSource} /><div className="live-indicator"><span /> {sourceMode === 'live' ? runMeta.runtimeMode.toUpperCase() : 'MOCK'} · {entities.length} entities</div></div></header>
+      <header className="topbar"><div><span className="eyebrow">WORLD KERNEL / LV-426</span><h1>Settlement monitor</h1><div className="run-meta">seed: <strong>{runMeta.seed || '—'}</strong> · tick: <strong>{tickId}</strong></div></div><div className="topbar-right">{sourceMode === 'live' && <RunControls health={brokerHealth} currentTick={tickId} onControl={(command) => void runControl(command)} />}<SourceSwitcher mode={sourceMode} brokerAvailable={brokerAvailable} warning={sourceWarning} onChange={switchSource} /><div className="live-indicator"><span /> {sourceMode === 'live' ? runMeta.runtimeMode.toUpperCase() : 'MOCK'} · {entities.length} entities</div></div></header>
       <div className="content">
         <section className="workspace">
           <nav className="tabs"><button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>2D карта</button><button className={tab === 'topology' ? 'active' : ''} onClick={() => setTab('topology')}>Топология сетей</button></nav>
           {tab === 'map' ? <SettlementMap key={runMeta.revision} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { mapFocusRef.current = focus; }} /> : <NetworkTopology key={runMeta.revision} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { graphFocusRef.current = focus; }} />}
         </section>
-        <Sidebar selected={selected} devices={devices} logs={logs} causalChain={causalChain} causalEmptyText={sourceMode === 'live' ? 'Ядро мира пока не передаёт причинные события. Атаки и смены состояния смотрите в журнале.' : undefined} onFocusCausalStep={focusCausalStep} onExportCsv={exportCsv} />
+        <Sidebar selected={selected} devices={devices} logs={logs} causalChain={causalChain} causalEmptyText={sourceMode === 'live' ? 'Поломок и гибели пока не было. Цепочка причин появится после первой.' : undefined} onFocusCausalStep={focusCausalStep} onExportCsv={exportCsv} />
       </div>
     </main>
   );

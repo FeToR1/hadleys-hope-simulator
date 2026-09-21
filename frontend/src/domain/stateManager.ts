@@ -1,5 +1,7 @@
-import { describeEffects, describeStatusChange, type LogDraft } from './effectLog';
-import type { EntityDelta, EntityLog, EntityState, StateSnapshot, TickBatch } from './types';
+import { describeEvents } from './effectLog';
+import type { EntityDelta, EntityLog, EntityState, StateSnapshot, TickBatch, WorldEvent } from './types';
+
+const MAX_EVENTS = 500;
 
 type StateListener = (snapshot: StateSnapshot, deltas: readonly EntityDelta[]) => void;
 export interface StateSubscriptionOptions {
@@ -38,6 +40,7 @@ export class StateManager {
   private readonly entities = new Map<string, EntityState>();
   private readonly listeners = new Set<ListenerRecord>();
   private readonly logs: EntityLog[] = [];
+  private readonly events: WorldEvent[] = [];
   private tickId = 0;
   private timestamp = 0;
   private nextLogId = 1;
@@ -49,6 +52,7 @@ export class StateManager {
   public reset(): void {
     this.entities.clear();
     this.logs.length = 0;
+    this.events.length = 0;
     this.tickId = -1;
     this.timestamp = 0;
     this.runId = '';
@@ -85,8 +89,6 @@ export class StateManager {
       if (removed) topologyChanged = true;
     }
     const deltas: EntityDelta[] = [];
-    const drafts: LogDraft[] = [];
-    const now = Date.now();
     for (const incoming of batch.entities) {
       const existing = this.entities.get(incoming.id);
       if (existing === undefined) {
@@ -111,17 +113,17 @@ export class StateManager {
         existing.vmState !== incoming.vmState ||
         existing.parentId !== incoming.parentId;
       if (existing.type !== incoming.type) topologyChanged = true;
-      if (existing.status !== incoming.status && this.runtimeMode !== 'mock') {
-        drafts.push(describeStatusChange(existing.id, existing.status, incoming.status, batch.tickId, now));
-      }
       const connectionsChanged = copyEntityInto(existing, incoming);
       if (connectionsChanged) topologyChanged = true;
       if (changed || connectionsChanged) deltas.push({ entity: existing, connectionsChanged });
     }
     if (topologyChanged) this.revision += 1;
-    // The mock generator has no real events; only observed runs feed the log.
+    // The mock generator has no real events; only observed runs feed the log and the event history.
     if (this.runtimeMode !== 'mock') {
-      for (const draft of [...describeEffects(batch, now), ...drafts]) this.appendLog(draft);
+      const now = Date.now();
+      for (const draft of describeEvents(batch, now)) this.appendLog(draft);
+      this.events.push(...(batch.events ?? []));
+      if (this.events.length > MAX_EVENTS) this.events.splice(0, this.events.length - MAX_EVENTS);
     }
     this.tickId = batch.tickId;
     this.timestamp = batch.timestamp;
@@ -177,6 +179,6 @@ export class StateManager {
 
   public snapshot(): StateSnapshot {
     return { runId: this.runId, revision: this.revision, seed: this.seed, runtimeMode: this.runtimeMode,
-      tickId: this.tickId, timestamp: this.timestamp, entities: this.entities, logs: this.logs };
+      tickId: this.tickId, timestamp: this.timestamp, entities: this.entities, logs: this.logs, events: this.events };
   }
 }

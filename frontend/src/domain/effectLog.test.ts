@@ -1,35 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { describeEffects, describeStatusChange } from './effectLog';
+import { describeEvent, describeEvents } from './effectLog';
 import { formatVmValue } from './format';
-import type { TickBatch } from './types';
+import type { TickBatch, WorldEvent } from './types';
 
-const batch = (effects: NonNullable<TickBatch['effects']>): TickBatch => ({ tickId: 7, timestamp: 8000, entities: [], effects });
+const event = (partial: Partial<WorldEvent> & Pick<WorldEvent, 'type' | 'entityId'>): WorldEvent =>
+  ({ id: 'e1', tick: 7, fields: {}, recipients: [], ...partial });
+const batch = (events: WorldEvent[]): TickBatch => ({ tickId: 7, timestamp: 8000, entities: [], events });
 
-describe('effect log', () => {
-  it('reports attacks and skips per-step power and motion requests', () => {
-    const drafts = describeEffects(batch([
-      { source: 'alien-1/xenomorph', operation: 'DAMAGE_REQUEST', arguments: ['home-1/heater', 35, 'XenomorphAttack'], accepted: true },
-      { source: 'home-1/heater', operation: 'POWER_REQUEST', arguments: [2000], accepted: true },
-      { source: 'alien-1/xenomorph', operation: 'MOTION_REQUEST', arguments: [{ x: 1, y: 2 }, 5], accepted: true },
+describe('world event log', () => {
+  it('reports attacks, breaks and deaths and skips the confirmation that only repeats the attack', () => {
+    const drafts = describeEvents(batch([
+      event({ type: 'ActionSucceeded', entityId: 'alien-1/xenomorph' }),
+      event({ type: 'DamageApplied', entityId: 'home-1/heater', actorId: 'alien-1/xenomorph',
+        fields: { target: 'home-1/heater', amount: 35, reason: 'XenomorphAttack' } }),
+      event({ type: 'ObjectBroken', entityId: 'home-1/heater', fields: { object: 'home-1/heater', reason: 'XenomorphAttack' } }),
+      event({ type: 'EntityDied', entityId: 'home-1/resident', fields: { entity: 'home-1/resident' } }),
     ]), 123);
-    expect(drafts).toHaveLength(1);
-    expect(drafts[0]).toMatchObject({ entityId: 'home-1/heater', level: 'warning', timestamp: 123 });
+    expect(drafts.map((draft) => draft.level)).toEqual(['warning', 'error', 'error']);
+    expect(drafts[0].timestamp).toBe(123);
     expect(drafts[0].message).toContain('[тик 7]');
-    expect(drafts[0].message).toContain('−35 hp (XenomorphAttack)');
+    expect(drafts[0].message).toContain('alien-1/xenomorph → урон home-1/heater: −35 hp (XenomorphAttack)');
+    expect(drafts[1].message).toContain('сломан home-1/heater');
+    expect(drafts[2].message).toContain('погиб home-1/resident');
   });
 
-  it('marks rejected requests instead of hiding them', () => {
-    const [draft] = describeEffects(batch([
-      { source: 'a', operation: 'DAMAGE_REQUEST', arguments: ['b', 5, 'x'], accepted: false },
-    ]), 0);
-    expect(draft.level).toBe('info');
-    expect(draft.message).toContain('отклонено');
+  it('marks rejected actions and reports losses and returns of power and water', () => {
+    const rejected = describeEvent(event({ type: 'ActionRejected', entityId: 'a', fields: { action: 'damage', reason: 'executor_unable' } }));
+    expect(rejected?.level).toBe('info');
+    expect(rejected?.message).toContain('отклонено (executor_unable)');
+    expect(describeEvent(event({ type: 'PowerLost', entityId: 'home-2/house' }))?.level).toBe('warning');
+    expect(describeEvent(event({ type: 'PowerRestored', entityId: 'home-2/house' }))?.message).toContain('питание восстановлено');
+    expect(describeEvent(event({ type: 'WaterLost', entityId: 'home-2/house' }))?.message).toContain('вода пропала');
   });
 
-  it('classifies status changes by severity', () => {
-    expect(describeStatusChange('e', 'nominal', 'dead', 3, 0).level).toBe('error');
-    expect(describeStatusChange('e', 'nominal', 'warning', 3, 0).level).toBe('warning');
-    expect(describeStatusChange('e', 'critical', 'nominal', 3, 0).level).toBe('info');
+  it('still shows an event type it has no wording for', () => {
+    expect(describeEvent(event({ type: 'RepairCompleted', entityId: 'pole-1' }))?.message).toContain('RepairCompleted pole-1');
   });
 });
 
