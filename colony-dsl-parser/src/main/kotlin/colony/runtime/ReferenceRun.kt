@@ -1,6 +1,8 @@
 package colony.runtime
 
 import colony.bytecode.Op
+import colony.semantics.Capability
+import colony.semantics.SemanticEnvironment
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.util.UUID
@@ -13,7 +15,7 @@ import kotlin.math.min
     val metrics: JsonObject, val connectedTo: List<String>, val coordinates: Coordinates, val parentId: String? = null,
     val vmState: JsonObject,
 )
-@Serializable data class TraceEvent(val source: String, val operation: String, val arguments: List<JsonElement>)
+@Serializable data class TraceEvent(val source: String, val operation: String, val arguments: List<JsonElement>, val accepted: Boolean = true)
 @Serializable data class TickSnapshot(
     val version: Int = 1, val runId: String, val runtimeMode: String = "reference",
     val seed: String, val tickId: Long, val timestamp: Long, val full: Boolean = true,
@@ -82,13 +84,20 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                 }
             }
             val dt = prepared.program.stepSeconds.toDouble()
-            for (intent in intents) {
+            // Spec (docs/simulation): a request from an entity that could not act in S_k is rejected.
+            val ableToAct = objects.keys.filterTo(HashSet()) { health.getValue(it) > 0 }
+            val accepted = intents.filter { it.source in ableToAct }
+            // Damage phase first: simultaneous attacks are summed in stable executor order and clamped at zero.
+            for (intent in accepted.filter { it.operation == Op.DAMAGE_REQUEST }) {
+                val target = intent.arguments[0].jsonPrimitive.content
+                health[target] = (health.getValue(target) - number(intent.arguments[1])).coerceAtLeast(0.0)
+            }
+            // Power and motion requests live for one step only; entities destroyed in this step no longer act.
+            power.clear()
+            for (intent in accepted) {
+                if (health.getValue(intent.source) <= 0) continue
                 when (intent.operation) {
                     Op.POWER_REQUEST -> power[intent.source] = number(intent.arguments.single())
-                    Op.DAMAGE_REQUEST -> {
-                        val target = intent.arguments[0].jsonPrimitive.content
-                        health[target] = (health.getValue(target) - number(intent.arguments[1])).coerceAtLeast(0.0)
-                    }
                     Op.MOTION_REQUEST -> {
                         val target = intent.arguments[0].jsonObject
                         val origin = positions.getValue(intent.source)
@@ -110,12 +119,15 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                         views.getValue(id)["temperature"]?.let { put("temperature", it) }
                         views.getValue(id)["water_temperature"]?.let { put("temperature", it) }
                         state["stress"]?.let { put("stress", it) }
-                        power[id]?.let { put("power_consumption", it) }
+                        put("health", health.getValue(id))
+                        if (Capability.POWER_REQUEST in SemanticEnvironment().kindContract(instance.kind)!!.capabilities) {
+                            put("power_consumption", power[id] ?: 0.0)
+                        }
                     }, connectedTo = listOfNotNull(instance.parent), coordinates = positions.getValue(id), parentId = instance.parent, vmState = state)
             }
             return TickSnapshot(runId = runId, seed = prepared.scenario.seed.toString(), tickId = tick,
                 timestamp = ((tick + 1) * dt * 1000).toLong(), entities = entities,
-                effects = intents.map { TraceEvent(it.source, it.operation.name, it.arguments) }, deliveredEvents = delivered).also { tick++ }
+                effects = intents.map { TraceEvent(it.source, it.operation.name, it.arguments, it.source in ableToAct) }, deliveredEvents = delivered).also { tick++ }
         } catch (failure: Exception) { failed = true; throw failure }
     }
 

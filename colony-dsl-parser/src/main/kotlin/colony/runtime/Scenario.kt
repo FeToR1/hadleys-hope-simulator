@@ -39,9 +39,8 @@ fun prepareScenario(path: Path): PreparedRun {
     require(scenario.version == 1 && catalog.version == 1) { "Unsupported scenario/catalog version" }
     require(scenario.ticks in 1..1_000_000) { "ticks must be in 1..1000000" }
     require(catalog.sources.isNotEmpty() && catalog.sources.distinct().size == catalog.sources.size) { "Sources must be nonempty and unique" }
-    // Concatenation is one compilation package; a separating newline also terminates // comments.
-    val source = catalog.sources.joinToString("\n") { catalogPath.parent.resolve(it).readText() }
-    val program = compileSource(source, scenario.step)
+    // The sources form one compilation package; diagnostics are mapped back to the individual file names.
+    val program = compileSources(catalog.sources.map { SourceFile(it, catalogPath.parent.resolve(it).readText()) }, scenario.step)
     return expandScenario(scenario, catalog, program)
 }
 
@@ -117,10 +116,13 @@ internal fun validateValue(value: JsonElement, type: String, instances: Map<Stri
         type == "Position" || type == "Target" -> {
             val fields = SemanticEnvironment().recordFields(type)!!
             if (value !is JsonObject || value.keys != fields.keys) fail()
-            fields.forEach { (name, fieldType) -> validateValue(value.getValue(name), fieldType.render(), instances, location) }
+            // Coordinates are signed metres; only Target.distance is a non-negative magnitude.
+            fields.forEach { (name, fieldType) ->
+                validateValue(value.getValue(name), if (type == "Position") "Coordinate" else fieldType.render(), instances, location)
+            }
             if (type == "Target" && value.getValue("id").jsonPrimitive.content !in instances) fail()
         }
-        type in setOf("Real64", "Probability", "Rate", "Duration", "Temperature", "TemperatureDelta", "Power", "Energy", "Volume", "Distance", "Speed", "Health") -> {
+        type in setOf("Real64", "Probability", "Rate", "Duration", "Temperature", "TemperatureDelta", "Power", "Energy", "Volume", "Distance", "Speed", "Health", "Coordinate") -> {
             val number = primitive?.takeUnless { it.isString }?.doubleOrNull ?: fail()
             if (!number.isFinite()) fail()
             if (type == "Probability" && number !in 0.0..1.0) fail()

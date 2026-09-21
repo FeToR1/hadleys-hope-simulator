@@ -12,8 +12,8 @@ fun main(args: Array<String>) {
         require(args.size in 2..3) { "Usage: check SOURCE | compile SOURCE OUTPUT | prepare SCENARIO OUTPUT_DIR | run SCENARIO [OUTPUT.jsonl] | serve SCENARIO [PORT]" }
         val input = Path.of(args[1])
         when (args[0]) {
-            "check" -> { require(args.size == 2); val code = compileSource(input.readText()); println("OK: ${code.behaviors.size} behaviors, ${code.events.size} events") }
-            "compile" -> { require(args.size == 3); Path.of(args[2]).writeText(bytecodeJson.encodeToString(compileSource(input.readText()))) }
+            "check" -> { require(args.size == 2); val code = compileSources(listOf(SourceFile(input.fileName.toString(), input.readText()))); println("OK: ${code.behaviors.size} behaviors, ${code.events.size} events") }
+            "compile" -> { require(args.size == 3); Path.of(args[2]).writeText(bytecodeJson.encodeToString(compileSources(listOf(SourceFile(input.fileName.toString(), input.readText()))))) }
             "prepare" -> {
                 require(args.size == 3)
                 val prepared = prepareScenario(input); val output = Path.of(args[2]); output.createDirectories()

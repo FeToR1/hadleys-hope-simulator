@@ -37,7 +37,10 @@ class SemanticAnalyzer(
         return result.requireValid()
     }
 
+    private val declaredEventNames = mutableSetOf<String>()
+
     private fun collectTopLevel(program: Program) {
+        program.declarations.filterIsInstance<EventDecl>().forEach { declaredEventNames += it.name }
         for (decl in program.declarations) {
             when (decl) {
                 is EventDecl -> {
@@ -186,13 +189,15 @@ class SemanticAnalyzer(
                 ruleName = rule.ruleName
                 if (periodSeconds <= BigDecimal.ZERO) {
                     diagnostics.error("SEM_BAD_PERIOD", rule.period.span, "Период every должен быть положительным", "every period must be positive")
-                } else if (periodSeconds.remainder(deltaTimeSeconds) != BigDecimal.ZERO) {
+                } else if (periodSeconds.remainder(deltaTimeSeconds).signum() != 0) {
                     diagnostics.error(
                         "SEM_PERIOD_GRID",
                         rule.period.span,
                         "Период ${periodSeconds.stripTrailingZeros().toPlainString()}s должен быть кратен Δt=${deltaTimeSeconds.stripTrailingZeros().toPlainString()}s",
                         "Period ${periodSeconds.stripTrailingZeros().toPlainString()}s must be a multiple of Δt=${deltaTimeSeconds.stripTrailingZeros().toPlainString()}s",
                     )
+                } else if (runCatching { periodSeconds.divide(deltaTimeSeconds).longValueExact() }.isFailure) {
+                    diagnostics.error("SEM_BAD_PERIOD", rule.period.span, "Период every слишком велик для 64-битного числа тиков", "every period is too large for a 64-bit tick count")
                 }
             }
         }
@@ -207,8 +212,9 @@ class SemanticAnalyzer(
                 targetKind = behavior.targetType,
                 ruleName = ruleName,
                 periodSeconds = periodSeconds,
-                periodTicks = periodSeconds?.takeIf { it > BigDecimal.ZERO && it.remainder(deltaTimeSeconds) == BigDecimal.ZERO }
-                    ?.divide(deltaTimeSeconds)?.longValueExact(),
+                // BigDecimal.equals is scale-sensitive (0.00 != 0), so exact divisibility is tested with signum().
+                periodTicks = periodSeconds?.takeIf { it > BigDecimal.ZERO && it.remainder(deltaTimeSeconds).signum() == 0 }
+                    ?.divide(deltaTimeSeconds)?.let { ticks -> runCatching { ticks.longValueExact() }.getOrNull() },
                 isTimer = every,
                 hasHazard = hasHazard,
             ),
@@ -277,7 +283,7 @@ class SemanticAnalyzer(
             is LetCondition -> {
                 val type = checkerHere.checkExpression(condition.value)
                 val inner = (type as? Type.Option)?.inner ?: Type.Unknown
-                if (type !is Type.Option) {
+                if (type !is Type.Option && type != Type.Unknown) {
                     diagnostics.error("SEM_IF_LET", condition.span, "if let требует Option<T>, получено ${type.render()}", "if let requires Option<T>, got ${type.render()}")
                 }
                 val symbol = Symbol.Local(condition.name, inner, condition.span)
@@ -389,9 +395,24 @@ class SemanticAnalyzer(
         else -> null
     }
 
+    /** Type names that resolve syntactically must still exist: entity kinds for Ref<T>, records and events otherwise. */
+    private fun checkKnownNames(type: Type, span: SourceSpan): Type = when (type) {
+        is Type.Ref -> if (options.environment.kindContract(type.kind) != null) type else {
+            diagnostics.error("SEM_UNKNOWN_KIND", span, "Неизвестный вид '${type.kind}' в Ref<${type.kind}>", "Unknown entity kind '${type.kind}' in Ref<${type.kind}>")
+            Type.Unknown
+        }
+        is Type.Option -> Type.Option(checkKnownNames(type.inner, span))
+        is Type.List -> Type.List(checkKnownNames(type.element, span))
+        is Type.Kind -> if (options.environment.recordFields(type.name) != null || type.name in declaredEventNames) type else {
+            diagnostics.error("SEM_UNKNOWN_TYPE", span, "Неизвестный тип '${type.name}'", "Unknown type '${type.name}'")
+            Type.Unknown
+        }
+        else -> type
+    }
+
     private fun resolveType(type: TypeRef, behaviorName: String, enums: Map<String, Type.Enum>, span: SourceSpan): Type {
         return try {
-            resolveTypeRef(type, behaviorName, enums)
+            checkKnownNames(resolveTypeRef(type, behaviorName, enums), span)
         } catch (e: IllegalArgumentException) {
             diagnostics.error("SEM_BAD_TYPE", span, "Некорректный тип '${type.name}'", "Invalid type '${type.name}'")
             Type.Unknown

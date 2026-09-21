@@ -46,6 +46,7 @@ class TypeChecker internal constructor(
             }
         }
         model.record(expr, type)
+        checkNumberRange(expr, type)
         if (type == Type.Rate) {
             // Rate literal must be finite and non-negative; positivity is a semantic value check.
             val value = BigDecimal(expr.rawNumber)
@@ -54,6 +55,22 @@ class TypeChecker internal constructor(
             }
         }
         return type
+    }
+
+    /** Literals must fit the runtime representation: Int64 exactly, everything else as a finite double. */
+    private fun checkNumberRange(expr: NumberLiteral, type: Type) {
+        if (type == Type.Unknown) return
+        val value = runCatching { BigDecimal(expr.rawNumber) }.getOrNull() ?: return
+        if (type == Type.Int64) {
+            if (value > BigDecimal(Long.MAX_VALUE)) {
+                diagnostics.error("SEM_INT_RANGE", expr.span, "Литерал ${expr.rawNumber} не помещается в Int64", "Literal ${expr.rawNumber} does not fit in Int64")
+            }
+            return
+        }
+        val canonical = value.multiply(expr.unit?.let(::canonicalMultiplier) ?: BigDecimal.ONE)
+        if (!canonical.toDouble().isFinite()) {
+            diagnostics.error("SEM_NUMBER_RANGE", expr.span, "Литерал ${expr.rawNumber} выходит за пределы Real64", "Literal ${expr.rawNumber} is outside the Real64 range")
+        }
     }
 
     private fun checkName(expr: NameExpr): Type {
@@ -77,9 +94,10 @@ class TypeChecker internal constructor(
     private fun checkUnary(expr: UnaryExpr): Type {
         val operand = checkExpression(expr.operand)
         val result = when (expr.operator) {
-            UnaryOperator.NOT -> if (operand == Type.Bool) Type.Bool else typeError(expr, "! requires Bool", "! требует Bool")
+            UnaryOperator.NOT -> if (operand == Type.Bool || operand == Type.Unknown) Type.Bool else typeError(expr, "! requires Bool", "! требует Bool")
             UnaryOperator.PLUS, UnaryOperator.MINUS ->
-                if (operand.isNumericScalar() || operand.isPhysical() || operand == Type.Duration || operand == Type.Money)
+                if (operand == Type.Unknown) Type.Unknown
+                else if (operand.isNumericScalar() || operand.isPhysical() || operand == Type.Duration || operand == Type.Money)
                     operand
                 else typeError(expr, "Unary sign is not defined for ${operand.render()}", "Унарный знак не определён для ${operand.render()}")
         }
@@ -90,7 +108,14 @@ class TypeChecker internal constructor(
     private fun checkBinary(expr: BinaryExpr): Type {
         val left = checkExpression(expr.left)
         val right = checkExpression(expr.right)
-        val result = when (expr.operator) {
+        val result = if (left == Type.Unknown || right == Type.Unknown) {
+            // The operand was already diagnosed; keep the result type useful without cascading errors.
+            when (expr.operator) {
+                BinaryOperator.OR, BinaryOperator.AND, BinaryOperator.EQ, BinaryOperator.NEQ,
+                BinaryOperator.LT, BinaryOperator.LE, BinaryOperator.GT, BinaryOperator.GE -> Type.Bool
+                else -> Type.Unknown
+            }
+        } else when (expr.operator) {
             BinaryOperator.OR, BinaryOperator.AND ->
                 if (left == Type.Bool && right == Type.Bool) Type.Bool else typeError(expr, "Logical operator requires Bool operands", "Логический оператор требует Bool")
             BinaryOperator.EQ, BinaryOperator.NEQ ->
@@ -155,6 +180,7 @@ class TypeChecker internal constructor(
     private fun checkMember(expr: MemberExpr): Type {
         val receiverType = checkExpression(expr.receiver)
         val result = when {
+            receiverType == Type.Unknown -> Type.Unknown
             receiverType is Type.View -> {
                 val fieldType = environment.kindContract(receiverType.kind)?.viewFields?.get(expr.member)
                 if (fieldType == null) {
@@ -209,8 +235,10 @@ class TypeChecker internal constructor(
         ) {
             normalizedArgTypes = argTypes.toMutableList().also { it[0] = Type.Probability }
         }
-        intrinsic.argumentCheck(normalizedArgTypes)?.let { message ->
-            diagnostics.error("SEM_BAD_INTRINSIC_ARGS", expr.span, message, message)
+        if (normalizedArgTypes.none { it == Type.Unknown }) {
+            intrinsic.argumentCheck(normalizedArgTypes)?.let { message ->
+                diagnostics.error("SEM_BAD_INTRINSIC_ARGS", expr.span, message, message)
+            }
         }
         if (intrinsic.requiredCapability != null) {
             val kind = environment.kindContract(targetKind)
@@ -260,6 +288,10 @@ class TypeChecker internal constructor(
     private fun checkIndex(expr: IndexExpr): Type {
         val receiver = checkExpression(expr.receiver)
         val index = checkExpression(expr.index)
+        if (receiver == Type.Unknown || index == Type.Unknown) {
+            model.record(expr, (receiver as? Type.List)?.element ?: Type.Unknown)
+            return (receiver as? Type.List)?.element ?: Type.Unknown
+        }
         if (receiver !is Type.List || index != Type.Int64) {
             diagnostics.error("SEM_INDEX", expr.span, "Индексирование требует List<T> и Int64", "Indexing requires List<T> and Int64")
             model.record(expr, Type.Unknown)
@@ -314,7 +346,7 @@ class TypeChecker internal constructor(
 
     fun checkSend(stmt: SendStmt, event: Type.Event) {
         val targetType = checkExpression(stmt.target)
-        if (targetType !is Type.Ref) {
+        if (targetType !is Type.Ref && targetType != Type.Unknown) {
             diagnostics.error("SEM_SEND_TARGET", stmt.target.span, "Адресат send должен иметь тип Ref<Kind>", "send target must have type Ref<Kind>")
         }
         checkRecordAgainst(event, stmt.fields)

@@ -52,7 +52,7 @@ val bytecodeJson = Json { prettyPrint = true; encodeDefaults = false }
 
 class BytecodeCompiler {
     fun compile(ir: IRProgram): BytecodeProgram = BytecodeProgram(
-        stepSeconds = ir.deltaTimeSeconds.toPlainString(),
+        stepSeconds = ir.deltaTimeSeconds.stripTrailingZeros().toPlainString(),
         events = ir.events.map { EventSchema(it.id, it.name, it.fields.map { f -> Slot(f.name, f.type.render()) }) },
         behaviors = ir.behaviors.map(::compileBehavior),
     ).also(BytecodeVerifier::verify)
