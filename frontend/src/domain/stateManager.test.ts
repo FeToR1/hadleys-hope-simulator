@@ -20,6 +20,25 @@ describe('StateManager', () => {
     }
     expect(manager.snapshot().logs).toHaveLength(200);
   });
+
+  it('replaces mock data on live run, ignores old ticks and removes absent entities', () => {
+    const manager = new StateManager();
+    const mock = new MockDataGenerator().getInitialBatch();
+    manager.ingest(mock);
+    manager.appendLog({ timestamp: 1, entityId: 'house-1', level: 'info', message: 'mock' });
+    const live = { ...mock, runId: 'live-1', full: true, tickId: 10, seed: '426', runtimeMode: 'reference' as const,
+      entities: mock.entities.slice(0, 2) };
+    manager.ingest(live);
+    expect(manager.snapshot().entities.size).toBe(2);
+    expect(manager.snapshot().logs).toHaveLength(0);
+    manager.ingest({ ...live, tickId: 9, entities: [] });
+    expect(manager.snapshot().entities.size).toBe(2);
+    manager.ingest({ ...live, tickId: 11, entities: [] });
+    expect(manager.snapshot().entities.size).toBe(0);
+    manager.ingest({ ...live, runId: 'live-2', tickId: 0 });
+    expect(manager.snapshot().entities.size).toBe(2);
+    expect(manager.snapshot().tickId).toBe(0);
+  });
 });
 
 describe('MockDataGenerator', () => {

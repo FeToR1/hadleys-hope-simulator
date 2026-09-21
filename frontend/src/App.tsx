@@ -21,6 +21,7 @@ export function App(): JSX.Element {
   const [brokerAvailable, setBrokerAvailable] = useState(false);
   const [sourceWarning, setSourceWarning] = useState<string>();
   const [tickId, setTickId] = useState(0);
+  const [runMeta, setRunMeta] = useState({ revision: 0, seed: '', runtimeMode: 'mock' });
   const mapFocusRef = useRef<((entityId: string) => void) | undefined>(undefined);
   const graphFocusRef = useRef<((entityId: string) => void) | undefined>(undefined);
   const liveSourceRef = useRef<LiveBrokerSource | null>(null);
@@ -31,9 +32,10 @@ export function App(): JSX.Element {
     const unsubscribeGraphics = manager.subscribe((snapshot) => {
       setEntities([...snapshot.entities.values()]);
       setTickId(snapshot.tickId);
+      setRunMeta({ revision: snapshot.revision, seed: snapshot.seed, runtimeMode: snapshot.runtimeMode });
     }, { animationFrame: true });
     const unsubscribeSidebar = manager.subscribe((snapshot) => {
-      setLogs(snapshot.logs);
+      setLogs([...snapshot.logs]);
     }, { throttleMs: 200 });
     const unsubscribeGenerator = generator.subscribe((batch) => manager.ingest(batch));
     manager.ingest(generator.getInitialBatch());
@@ -51,12 +53,9 @@ export function App(): JSX.Element {
       healthUrl: '/health',
       streamUrl: '/stream',
       onHealthChange: setBrokerAvailable,
-      onBatch: (batch) => managerRef.current.ingest(batch),
+      onBatch: (batch) => { setSourceWarning(undefined); managerRef.current.ingest(batch); },
       onError: (message) => {
         setSourceWarning(message);
-        setSourceMode('mock');
-        liveSourceRef.current?.disconnect();
-        generatorRef.current.start(300);
       },
     });
     liveSourceRef.current = live;
@@ -77,8 +76,11 @@ export function App(): JSX.Element {
     }
     setSourceWarning(undefined);
     setSourceMode(mode);
+    managerRef.current.reset();
+    setSelectedId(undefined);
     if (mode === 'mock') {
       liveSourceRef.current?.disconnect();
+      managerRef.current.ingest(generatorRef.current.getInitialBatch());
       generatorRef.current.start(300);
     }
     else {
@@ -92,7 +94,7 @@ export function App(): JSX.Element {
     () => entities.filter((entity) => entity.parentId === selected?.id && (entity.type === 'heater' || entity.type === 'kettle')),
     [entities, selected],
   );
-  const causalChain = useMemo(() => createCausalChain(entities), [entities]);
+  const causalChain = useMemo(() => sourceMode === 'mock' ? createCausalChain(entities) : [], [entities, sourceMode]);
   const selectEntity = (entityId: string): void => {
     setSelectedId(entityId);
     const entity = managerRef.current.getEntity(entityId);
@@ -109,17 +111,16 @@ export function App(): JSX.Element {
     }, 50);
   };
   const exportCsv = (): void => {
-    const rows = [['entity_id', 'owner_id', 'type', 'pid', 'shared_cost', 'repair_cost', 'water_level', 'temperature']];
+    const rows = [['entity_id', 'type', 'pid', 'repair_cost', 'water_level', 'temperature', 'power_consumption']];
     for (const entity of entities) {
       rows.push([
         entity.id,
-        entity.type === 'house' ? `owner-${entity.id}` : 'settlement',
         entity.type,
-        String(entity.pid),
-        entity.type === 'power_node' ? String(entity.metrics.repair_cost ?? 0) : '0',
-        String(entity.metrics.repair_cost ?? 0),
+        String(entity.pid ?? ''),
+        String(entity.metrics.repair_cost ?? ''),
         String(entity.metrics.water_level ?? ''),
         String(entity.metrics.temperature ?? ''),
+        String(entity.metrics.power_consumption ?? ''),
       ]);
     }
     const csv = rows.map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(',')).join('\n');
@@ -133,11 +134,11 @@ export function App(): JSX.Element {
 
   return (
     <main className="shell">
-      <header className="topbar"><div><span className="eyebrow">WORLD KERNEL / LV-426</span><h1>Settlement monitor</h1><div className="run-meta">seed: <strong>{generatorRef.current.simulationSeed}</strong> · tick: <strong>{tickId}</strong></div></div><div className="topbar-right"><SourceSwitcher mode={sourceMode} brokerAvailable={brokerAvailable} warning={sourceWarning} onChange={switchSource} /><div className="live-indicator"><span /> {sourceMode === 'live' ? 'LIVE' : 'MOCK'} · {entities.length} entities</div></div></header>
+      <header className="topbar"><div><span className="eyebrow">WORLD KERNEL / LV-426</span><h1>Settlement monitor</h1><div className="run-meta">seed: <strong>{runMeta.seed || '—'}</strong> · tick: <strong>{tickId}</strong></div></div><div className="topbar-right"><SourceSwitcher mode={sourceMode} brokerAvailable={brokerAvailable} warning={sourceWarning} onChange={switchSource} /><div className="live-indicator"><span /> {sourceMode === 'live' ? runMeta.runtimeMode.toUpperCase() : 'MOCK'} · {entities.length} entities</div></div></header>
       <div className="content">
         <section className="workspace">
           <nav className="tabs"><button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>2D карта</button><button className={tab === 'topology' ? 'active' : ''} onClick={() => setTab('topology')}>Топология сетей</button></nav>
-          {tab === 'map' ? <SettlementMap entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { mapFocusRef.current = focus; }} /> : <NetworkTopology entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { graphFocusRef.current = focus; }} />}
+          {tab === 'map' ? <SettlementMap key={runMeta.revision} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { mapFocusRef.current = focus; }} /> : <NetworkTopology key={runMeta.revision} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { graphFocusRef.current = focus; }} />}
         </section>
         <Sidebar selected={selected} devices={devices} logs={logs} causalChain={causalChain} onFocusCausalStep={focusCausalStep} onExportCsv={exportCsv} />
       </div>

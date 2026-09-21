@@ -18,7 +18,7 @@ export interface EntityMetrics {
 
 export interface EntityState {
   id: string;
-  pid: number;
+  pid: number | null;
   type: EntityType;
   status: EntityStatus;
   metrics: EntityMetrics;
@@ -28,6 +28,11 @@ export interface EntityState {
 }
 
 export interface TickBatch {
+  version?: 1;
+  runId?: string;
+  runtimeMode?: 'reference' | 'process' | 'mock';
+  seed?: string;
+  full?: boolean;
   tickId: number;
   timestamp: number;
   entities: EntityState[];
@@ -47,6 +52,10 @@ export interface EntityDelta {
 }
 
 export interface StateSnapshot {
+  runId: string;
+  revision: number;
+  seed: string;
+  runtimeMode: 'reference' | 'process' | 'mock';
   tickId: number;
   timestamp: number;
   entities: ReadonlyMap<string, EntityState>;

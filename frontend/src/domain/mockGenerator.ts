@@ -78,7 +78,7 @@ export class MockDataGenerator {
   }
 
   public getInitialBatch(): TickBatch {
-    return { tickId: 0, timestamp: Date.now(), entities: [...this.entities.values()] };
+    return { tickId: this.tickId, timestamp: Date.now(), entities: [...this.entities.values()] };
   }
 
   public step(): TickBatch {

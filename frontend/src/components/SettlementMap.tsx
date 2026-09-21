@@ -43,7 +43,7 @@ export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus 
     const application = new Application();
     const scene = new Container();
     application.init({ width: 900, height: 650, background: 0x0e1726, antialias: true }).then(() => {
-      if (disposed) return;
+      if (disposed) { application.destroy(true, { children: true }); return; }
       initialized = true;
       const viewport = new Viewport({ events: application.renderer.events, screenWidth: 900, screenHeight: 650, worldWidth: 1_500, worldHeight: 1_200 });
       viewportRef.current = viewport;
@@ -171,7 +171,7 @@ export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus 
 function EntityTooltip({ tooltip }: { tooltip: { entity: EntityState; x: number; y: number } }): JSX.Element {
   const { entity } = tooltip;
   return <div className="entity-tooltip" style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}>
-    <strong>{entity.id}</strong><span>{entity.type} · PID {entity.pid}</span>
+    <strong>{entity.id}</strong><span>{entity.type} · PID {entity.pid ?? '—'}</span>
     <span>Температура: {entity.metrics.temperature?.toFixed(1) ?? '—'} °C</span>
     <span>Вода: {entity.metrics.water_level?.toFixed(1) ?? '—'} %</span>
     <span>Мощность: {entity.metrics.power_consumption?.toFixed(1) ?? '—'} W</span>

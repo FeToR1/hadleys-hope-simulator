@@ -56,7 +56,7 @@ export function NetworkTopology({ entities, onSelect, selectedId, onRegisterFocu
           const item = items[0];
           const entity = entitiesRef.current.find((candidate) => candidate.id === String(item?.id));
           if (entity === undefined) return '';
-          return `<div class="g6-tooltip-content"><strong>${entity.id}</strong><span>${entity.type} · PID ${entity.pid}</span><span>Температура: ${entity.metrics.temperature?.toFixed(1) ?? '—'} °C</span><span>Вода: ${entity.metrics.water_level?.toFixed(1) ?? '—'} %</span><span>Мощность: ${entity.metrics.power_consumption?.toFixed(1) ?? '—'} W</span></div>`;
+          return `<div class="g6-tooltip-content"><strong>${entity.id}</strong><span>${entity.type} · PID ${entity.pid ?? '—'}</span><span>Температура: ${entity.metrics.temperature?.toFixed(1) ?? '—'} °C</span><span>Вода: ${entity.metrics.water_level?.toFixed(1) ?? '—'} %</span><span>Мощность: ${entity.metrics.power_consumption?.toFixed(1) ?? '—'} W</span></div>`;
         },
         onOpenChange: () => undefined,
       }],
