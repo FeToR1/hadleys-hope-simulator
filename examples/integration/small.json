@@ -7,6 +7,8 @@
   "changes": [
     {"tick": 5, "target": "home-1/house", "view": {"occupants": 0}},
     {"tick": 10, "target": "home-1/house", "view": {"occupants": 1}},
-    {"tick": 15, "target": "home-2/kettle", "view": {"water_temperature": 96}}
+    {"tick": 15, "target": "home-2/kettle", "view": {"water_temperature": 96}},
+    {"tick": 20, "target": "home-2/house", "view": {"power_connected": false}},
+    {"tick": 45, "target": "home-2/house", "view": {"power_connected": true}}
   ]
 }

@@ -40,4 +40,19 @@ class ScenarioTest {
         val badParams = badTemplate.copy(objects = badTemplate.objects.mapValues { it.value.copy(params = JsonObject(emptyMap())) })
         assertFailsWith<IllegalArgumentException> { expandScenario(scenario, catalog.copy(templates = mapOf("bad" to badParams)), prepared.program) }
     }
+
+    @Test fun aPowerOutageInTheDemoScenarioReachesTheHeaterAndTheResident() {
+        val run = ReferenceRun(prepareScenario(Path.of("../examples/integration/small.json")), "test")
+        val frames = (0..46).map { run.step() }
+        fun power(tick: Int) = frames[tick].entities.single { it.id == "home-2/heater" }.metrics.getValue("power_consumption").jsonPrimitive.double
+        fun stress(tick: Int) = frames[tick].entities.single { it.id == "home-2/resident" }.vmState.getValue("stress").jsonPrimitive.double
+        assertEquals(2000.0, power(19), "the heater draws power while the house is connected")
+        assertEquals(0.0, power(20), "the heater sees power_connected = false in the same frame")
+        assertEquals(0.15, stress(20) - stress(19), 1e-9, "the resident reacts to PowerLost")
+        assertEquals(2000.0, power(46), "and draws again after PowerRestored at tick 45")
+        val lost = frames[20].events.single { it.type == "PowerLost" }
+        assertEquals("home-2/house", lost.entityId)
+        assertContains(lost.recipients, "home-2/resident")
+        assertEquals(1, frames.flatMap { it.events }.count { it.type == "PowerRestored" })
+    }
 }

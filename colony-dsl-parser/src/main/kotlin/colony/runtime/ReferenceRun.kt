@@ -15,18 +15,42 @@ import kotlin.math.min
     val metrics: JsonObject, val connectedTo: List<String>, val coordinates: Coordinates, val parentId: String? = null,
     val vmState: JsonObject,
 )
-@Serializable data class TraceEvent(val source: String, val operation: String, val arguments: List<JsonElement>, val accepted: Boolean = true)
+
+/** A request a program made in a step; ref names it as the cause of world events: "entity@tick#index". */
+@Serializable data class TraceEvent(
+    val source: String, val operation: String, val arguments: List<JsonElement>, val accepted: Boolean = true, val ref: String = "",
+)
+
+/**
+ * A fact the world established (docs/simulation/trigger-conditions.md, section 3). Recipients are the entities whose
+ * programs can receive it and fields are the payload they receive; no recipients means the journal only.
+ * The tick is the snapshot in which the event first appears.
+ */
+@Serializable data class WorldEvent(
+    val id: String, val type: String, val tick: Long, val entityId: String, val actorId: String? = null,
+    val causationId: String? = null, val fields: JsonObject = JsonObject(emptyMap()), val recipients: List<String> = emptyList(),
+)
+
 @Serializable data class TickSnapshot(
     val version: Int = 1, val runId: String, val runtimeMode: String = "reference",
     val seed: String, val tickId: Long, val timestamp: Long, val full: Boolean = true,
-    val entities: List<EntitySnapshot>, val effects: List<TraceEvent>, val deliveredEvents: Int,
+    val entities: List<EntitySnapshot>, val effects: List<TraceEvent>, val events: List<WorldEvent> = emptyList(),
+    val deliveredEvents: Int,
 )
 
-/** Deterministic reference harness, NOT the production world kernel or process broker.
- * Views are scenario inputs; no thermal/electrical/network physics is inferred from them.
- * Reference reducers show requested power, movement and damage, and events cross tick boundaries.
+private const val WORLD = "world"
+private val APPLIANCES = setOf("Heater", "Kettle")
+
+/**
+ * Deterministic reference harness, NOT the production world kernel or process broker.
+ * Observations are scenario inputs plus what the run derives from its own state; no thermal, electrical or
+ * network physics is inferred. Reducers show requested power, movement and damage. The run reports what it can
+ * establish as world events: confirmation of actions, damage, broken objects and losses of power and water
+ * that a scenario change causes. Events cross tick boundaries as the spec requires.
  */
 class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUID().toString()) {
+    private data class Delivery(val recipient: String, val event: DeliveredEvent)
+
     private val objects = prepared.manifest.instances.associateBy { it.id }
     private val vms = objects.mapValues { (_, instance) -> ReferenceVm(instance.id, prepared.program, instance.behavior, instance.params, prepared.scenario.seed) }
     private val views = objects.mapValues { it.value.view }.toMutableMap()
@@ -34,12 +58,18 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     private val power = mutableMapOf<String, Double>()
     private val health = objects.mapValues { 100.0 }.toMutableMap()
     private var pending = emptyList<OutgoingEvent>()
+    private var pendingWorld = emptyList<Delivery>()
     private var tick = 0L
     private var failed = false
+    private var eventCounter = 0L
+    private var worldSequence = 0L
     private val contracts = SemanticEnvironment().kindContracts
-    /** A frame carries only what the entity's program reads (docs: the frame is a projection, not a copy of the world). */
-    private val observed = objects.mapValues { (_, instance) -> prepared.program.behaviors.single { it.name == instance.behavior }.observes.toSet() }
-    private val devicesOf = objects.values.filter { it.kind == "Heater" || it.kind == "Kettle" }.filter { it.parent != null }.groupBy { it.parent!! }
+    /** A frame carries only what the entity's program reads (the frame is a projection, not a copy of the world). */
+    private val behaviors = objects.mapValues { (_, instance) -> prepared.program.behaviors.single { it.name == instance.behavior } }
+    private val observed = behaviors.mapValues { it.value.observes.toSet() }
+    private val subscriptions = behaviors.mapValues { (_, behavior) -> behavior.handlers.mapNotNull { it.eventId }.toSet() }
+    private val eventIds = prepared.program.events.associate { it.name to it.id }
+    private val childrenOf = objects.values.filter { it.parent != null }.groupBy { it.parent!! }
     /** Power granted in the previous step: what a device sees as power_granted. */
     private var granted = emptyMap<String, Double>()
 
@@ -56,10 +86,12 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
         if ("position" in fields) view["position"] = positionJson(positions.getValue(id))
         if ("health" in fields) view["health"] = JsonPrimitive(health.getValue(id))
         if ("broken" in fields) view["broken"] = JsonPrimitive(effectivelyBroken(id))
+        // The same rule that decides the PowerLost and PowerRestored events: an appliance follows its house.
+        if ("power_connected" in fields) view["power_connected"] = JsonPrimitive(powerOn(id))
         if ("power_granted" in fields) view["power_granted"] = JsonPrimitive(granted[id] ?: 0.0)
         if ("home_occupants" in fields && instance.parent != null) view["home_occupants"] = views.getValue(instance.parent).getValue("occupants")
         if ("devices" in fields) {
-            view["devices"] = JsonArray(devicesOf[id].orEmpty().sortedBy { it.id }.map { device ->
+            view["devices"] = JsonArray(childrenOf[id].orEmpty().filter { it.kind in APPLIANCES }.sortedBy { it.id }.map { device ->
                 buildJsonObject { put("id", device.id); put("kind", device.kind); put("broken", effectivelyBroken(device.id)) }
             })
         }
@@ -79,23 +111,79 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
         return JsonObject(view.filterKeys { it in observed.getValue(id) })
     }
 
+    private fun flag(id: String, name: String): Boolean = views.getValue(id)[name]?.jsonPrimitive?.boolean ?: true
+
+    /** Power reaches an object when its own connection and, for an appliance, its house's connection are up. */
+    private fun powerOn(id: String): Boolean {
+        val instance = objects.getValue(id)
+        if ("power_connected" !in contracts.getValue(instance.kind).viewFields) return true
+        return flag(id, "power_connected") && (instance.parent?.let { flag(it, "power_connected") } ?: true)
+    }
+
+    private fun worldEvent(type: String, entityId: String, actorId: String?, causation: String?, fields: JsonObject, recipients: List<String>) =
+        WorldEvent("e${++eventCounter}", type, tick, entityId, actorId, causation, fields, recipients)
+
+    /** The copies handed to programs: only recipients whose program subscribed by declaring the event. */
+    private fun deliveriesOf(event: WorldEvent): List<Delivery> {
+        val id = eventIds[event.type] ?: return emptyList()
+        val sequence = worldSequence++
+        return event.recipients.filter { id in subscriptions.getValue(it) }.map { Delivery(it, DeliveredEvent(id, event.fields, WORLD, sequence)) }
+    }
+
+    private fun positionJson(position: Coordinates) = buildJsonObject { put("x", position.x); put("y", position.y) }
+
+    private fun obj(vararg pairs: Pair<String, String>) = JsonObject(pairs.associate { it.first to JsonPrimitive(it.second) })
+
+    /**
+     * Scenario changes of this tick, and the losses and returns of power and water they cause. A change is the
+     * transition into this snapshot, so its event is delivered in this frame together with the new observation.
+     * Assumption of the reference run: residents of a house hear about its power (the spec table names house and appliances).
+     */
+    private fun applyChanges(): List<WorldEvent> {
+        val changes = prepared.scenario.changes.filter { it.tick == tick }
+        if (changes.isEmpty()) return emptyList()
+        val powerBefore = objects.keys.associateWith(::powerOn)
+        val waterBefore = objects.keys.filter { "water_available" in views.getValue(it) }.associateWith { flag(it, "water_available") }
+        for (change in changes) views[change.target] = JsonObject(views.getValue(change.target) + change.view)
+        if (tick == 0L) return emptyList() // changes of tick 0 define the initial state
+        val events = mutableListOf<WorldEvent>()
+        for ((id, instance) in objects) {
+            val on = powerOn(id)
+            if (on == powerBefore.getValue(id)) continue
+            val parent = instance.parent
+            if (parent != null && powerOn(parent) != powerBefore.getValue(parent)) continue // covered by the house event
+            val recipients = if (instance.kind == "House") {
+                listOf(id) + childrenOf[id].orEmpty().filter { it.kind == "Human" || powerOn(it.id) != powerBefore.getValue(it.id) }.map { it.id }
+            } else listOf(id)
+            events += worldEvent(if (on) "PowerRestored" else "PowerLost", id, null, null, JsonObject(emptyMap()), recipients)
+        }
+        for ((id, before) in waterBefore) {
+            val now = flag(id, "water_available")
+            if (now != before) events += worldEvent(if (now) "WaterRestored" else "WaterLost", id, null, null, JsonObject(emptyMap()), listOf(id))
+        }
+        return events
+    }
+
     fun step(): TickSnapshot {
         check(!failed) { "Run failed; create a fresh run before continuing" }
         check(tick < prepared.scenario.ticks) { "Run complete" }
         try {
-            for (change in prepared.scenario.changes.filter { it.tick == tick }) {
-                views[change.target] = JsonObject(views.getValue(change.target) + change.view)
-            }
+            val changeEvents = applyChanges()
+            val changeDeliveries = changeEvents.flatMap(::deliveriesOf)
             // Materialize all observations before executing any VM (snapshot isolation).
             val snapshot = objects.mapValues { (id, instance) -> observe(id, instance) }
-            val inboxes = pending.groupBy { it.target }
+            val messageInboxes = pending.groupBy({ it.target }, { DeliveredEvent(it.eventId, it.fields, it.sender, it.sequence) })
+            val worldInboxes = (pendingWorld + changeDeliveries).groupBy({ it.recipient }, { it.event })
             val results = vms.mapValues { (id, vm) ->
-                vm.step(VmFrame(tick, snapshot.getValue(id), inboxes[id].orEmpty().map { DeliveredEvent(it.eventId, it.fields, it.sender, it.sequence) }))
+                vm.step(VmFrame(tick, snapshot.getValue(id), messageInboxes[id].orEmpty() + worldInboxes[id].orEmpty()))
             }
+            val delivered = pending.size + pendingWorld.size + changeDeliveries.size
             val outgoing = results.values.flatMap { it.events }
             require(outgoing.all { it.target in objects }) { "SEND references an unknown object" }
             val intents = results.values.flatMap { it.intents }
-            // Validate entire effect batch before applying reference reducers. A failure stops the run.
+            val counters = HashMap<String, Int>()
+            val refs = intents.map { "${it.source}@$tick#${counters.merge(it.source, 1, Int::plus)!! - 1}" }
+            // Validate the entire effect batch before applying reference reducers. A failure stops the run.
             intents.forEach { intent ->
                 when (intent.operation) {
                     Op.POWER_REQUEST -> require(number(intent.arguments.single()) >= 0)
@@ -108,16 +196,39 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
             val dt = prepared.program.stepSeconds.toDouble()
             // Spec (docs/simulation): a request from an entity that could not act in S_k is rejected.
             val ableToAct = objects.keys.filterTo(HashSet()) { health.getValue(it) > 0 }
-            val accepted = intents.filter { it.source in ableToAct }
+            val events = mutableListOf<WorldEvent>()
+            intents.forEachIndexed { index, intent ->
+                if (intent.source !in ableToAct && intent.operation == Op.DAMAGE_REQUEST) {
+                    events += worldEvent("ActionRejected", intent.source, intent.source, refs[index],
+                        obj("action" to "damage", "reason" to "executor_unable"), listOf(intent.source))
+                }
+            }
             // Damage phase first: simultaneous attacks are summed in stable executor order and clamped at zero.
-            for (intent in accepted.filter { it.operation == Op.DAMAGE_REQUEST }) {
+            intents.forEachIndexed { index, intent ->
+                if (intent.source !in ableToAct || intent.operation != Op.DAMAGE_REQUEST) return@forEachIndexed
                 val target = intent.arguments[0].jsonPrimitive.content
-                health[target] = (health.getValue(target) - number(intent.arguments[1])).coerceAtLeast(0.0)
+                val amount = number(intent.arguments[1])
+                val reason = intent.arguments[2].jsonPrimitive.content
+                val before = health.getValue(target)
+                health[target] = (before - amount).coerceAtLeast(0.0)
+                val owner = objects.getValue(target).takeIf { it.kind in APPLIANCES }?.parent
+                events += worldEvent("ActionSucceeded", intent.source, intent.source, refs[index], obj("action" to "damage"), listOf(intent.source))
+                val applied = worldEvent("DamageApplied", target, intent.source, refs[index],
+                    buildJsonObject { put("target", target); put("amount", amount); put("reason", reason) }, listOfNotNull(intent.source, owner).distinct())
+                events += applied
+                if (before > 0 && health.getValue(target) <= 0) {
+                    val kind = objects.getValue(target).kind
+                    events += if (kind == "Human" || kind == "Xenomorph") {
+                        worldEvent("EntityDied", target, intent.source, applied.id, obj("entity" to target), emptyList())
+                    } else {
+                        worldEvent("ObjectBroken", target, intent.source, applied.id, obj("object" to target, "reason" to reason), listOfNotNull(owner))
+                    }
+                }
             }
             // Power and motion requests live for one step only; entities destroyed in this step no longer act.
             power.clear()
-            for (intent in accepted) {
-                if (health.getValue(intent.source) <= 0) continue
+            for (intent in intents) {
+                if (intent.source !in ableToAct || health.getValue(intent.source) <= 0) continue
                 when (intent.operation) {
                     Op.POWER_REQUEST -> power[intent.source] = number(intent.arguments.single())
                     Op.MOTION_REQUEST -> {
@@ -132,8 +243,8 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                 }
             }
             granted = HashMap(power)
-            val delivered = pending.size
             pending = outgoing
+            pendingWorld = events.flatMap(::deliveriesOf)
             val entities = objects.map { (id, instance) ->
                 val state = results.getValue(id).state
                 EntitySnapshot(id = id, type = when (instance.kind) { "Human" -> "civilian"; else -> instance.kind.lowercase() },
@@ -143,16 +254,13 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                         views.getValue(id)["water_temperature"]?.let { put("temperature", it) }
                         state["stress"]?.let { put("stress", it) }
                         put("health", health.getValue(id))
-                        if (Capability.POWER_REQUEST in SemanticEnvironment().kindContract(instance.kind)!!.capabilities) {
-                            put("power_consumption", power[id] ?: 0.0)
-                        }
+                        if (Capability.POWER_REQUEST in contracts.getValue(instance.kind).capabilities) put("power_consumption", power[id] ?: 0.0)
                     }, connectedTo = listOfNotNull(instance.parent), coordinates = positions.getValue(id), parentId = instance.parent, vmState = state)
             }
             return TickSnapshot(runId = runId, seed = prepared.scenario.seed.toString(), tickId = tick,
                 timestamp = ((tick + 1) * dt * 1000).toLong(), entities = entities,
-                effects = intents.map { TraceEvent(it.source, it.operation.name, it.arguments, it.source in ableToAct) }, deliveredEvents = delivered).also { tick++ }
+                effects = intents.mapIndexed { index, it -> TraceEvent(it.source, it.operation.name, it.arguments, it.source in ableToAct, refs[index]) },
+                events = changeEvents + events, deliveredEvents = delivered).also { tick++ }
         } catch (failure: Exception) { failed = true; throw failure }
     }
-
-    private fun positionJson(position: Coordinates) = buildJsonObject { put("x", position.x); put("y", position.y) }
 }
