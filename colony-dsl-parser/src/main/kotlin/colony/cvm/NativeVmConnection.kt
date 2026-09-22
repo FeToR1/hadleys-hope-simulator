@@ -66,7 +66,13 @@ class NativeVmConnection(
       } catch (failure: Exception) { close(); throw failure }
     }
 
-    fun step(tick: Long, view: JsonObject, events: List<JsonObject>): StepOutcome = timed {
+    /** One round trip. The broker uses the two halves separately so a batch of VMs can work at the same time. */
+    fun step(tick: Long, view: JsonObject, events: List<JsonObject>): StepOutcome {
+        sendFrame(tick, view, events)
+        return receiveResult()
+    }
+
+    fun sendFrame(tick: Long, view: JsonObject, events: List<JsonObject>) = timed {
         val message = Sink()
         message.uvarint(tick)
         for (slot in behavior.observes) {
@@ -86,7 +92,9 @@ class NativeVmConnection(
             }
         }
         send(Protocol.FRAME, message)
+    }
 
+    fun receiveResult(): StepOutcome = timed {
         val result = receive(Protocol.RESULT)
         val status = result.u8()
         require(status in 0..1) { "Invalid RESULT status" }
