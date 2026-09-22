@@ -12,8 +12,10 @@ class ContractAlignmentTest {
         "House" to setOf("occupants", "temperature", "power_connected", "water_available", "devices"),
         "Heater" to setOf("home_occupants", "power_connected", "broken", "power_granted"),
         "Kettle" to setOf("home_occupants", "power_connected", "broken", "power_granted", "water_temperature"),
-        "Human" to setOf("position", "health", "cold", "reachable_breakables"),
+        "Human" to setOf("position", "health", "cold", "reachable_breakables", "home", "workplace"),
         "Xenomorph" to setOf("position", "visible_infrastructure", "visible_humans", "patrol_waypoint"),
+        // The crew of a rover: the spec adds materials and speed on top of the jobs it can see.
+        "Rover" to setOf("position", "speed_eff", "active_jobs", "materials_remaining", "depot"),
     )
 
     @Test fun observationsMatchTheSpecificationPerKind() {

@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "catalog": "catalog.json",
+  "seed": 426,
+  "step": "1s",
+  "ticks": 1800,
+  "populations": [
+    {
+      "template": "household",
+      "count": 6,
+      "prefix": "home"
+    },
+    {
+      "template": "crew",
+      "count": 1,
+      "prefix": "crew"
+    },
+    {
+      "template": "alien",
+      "count": 1,
+      "prefix": "alien"
+    }
+  ],
+  "world": {
+    "climate": {
+      "meanTemperature": -38.0,
+      "amplitude": 6.0
+    },
+    "house": {
+      "conductance": 120.0,
+      "capacity": 120000.0
+    },
+    "water": {
+      "freezeThresholdIndoor": 400.0
+    },
+    "repair": {
+      "duration": {
+        "pole": 600.0,
+        "pipe": 240.0,
+        "device": 90.0
+      }
+    },
+    "sight": {
+      "sightRadius": 400.0
+    },
+    "tariffs": {
+      "billingIntervalSeconds": 600
+    }
+  }
+}

@@ -24,6 +24,11 @@ import kotlin.io.path.readText
     val version: Int = 1, val catalog: String, val seed: Long = 426, val step: String = "1s",
     val ticks: Int = 120, val populations: List<Population>,
     val changes: List<ObservationChange> = emptyList(),
+    /**
+     * With a world, the physical models compute every observation and a scenario change is not needed.
+     * Without one, the run is the old harness: observations are scenario inputs.
+     */
+    val world: colony.world.WorldConfig? = null,
 )
 @Serializable data class Instance(
     val id: String, val kind: String, val behavior: String, val params: JsonObject,
@@ -79,7 +84,9 @@ fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgra
         }
     }
     require(instances.isNotEmpty()) { "Scenario contains no objects" }
-    val completed = instances.map { it.copy(view = JsonObject(HarnessObservations.defaults(it.kind) + it.view)) }
+    // A world computes every observation, so a catalog for one carries no view at all.
+    val completed = if (scenario.world != null) instances.map { it.copy(view = JsonObject(emptyMap())) }
+        else instances.map { it.copy(view = JsonObject(HarnessObservations.defaults(it.kind) + it.view)) }
     val byId = completed.associateBy { it.id }
     require(byId.size == completed.size) { "Duplicate entity ID" }
     for (instance in completed) {
@@ -87,15 +94,21 @@ fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgra
         require(instance.params.keys == behavior.params.map { it.name }.toSet()) { "${instance.id}: parameter names mismatch" }
         behavior.params.forEach { validateValue(instance.params.getValue(it.name), it.type, byId, "${instance.id}.${it.name}") }
         val fields = SemanticEnvironment().kindContract(instance.kind)!!.viewFields
-        val computed = HarnessObservations.computed(instance.kind)
-        val required = fields.keys - computed - HarnessObservations.derived(instance)
-        require(instance.view.keys.none { it in computed }) { "${instance.id}: ${instance.view.keys.filter { it in computed }} are computed by the run and cannot be given" }
-        require(fields.keys.containsAll(instance.view.keys) && instance.view.keys.containsAll(required)) {
-            "${instance.id}: expected observations $required, got ${instance.view.keys}"
+        if (scenario.world == null) {
+            val computed = HarnessObservations.computed(instance.kind)
+            val required = fields.keys - computed - HarnessObservations.derived(instance)
+            require(instance.view.keys.none { it in computed }) { "${instance.id}: ${instance.view.keys.filter { it in computed }} are computed by the run and cannot be given" }
+            require(fields.keys.containsAll(instance.view.keys) && instance.view.keys.containsAll(required)) {
+                "${instance.id}: expected observations $required, got ${instance.view.keys}"
+            }
+            instance.view.forEach { (name, value) -> validateValue(value, fields.getValue(name).render(), byId, "${instance.id}.view.$name") }
         }
-        instance.view.forEach { (name, value) -> validateValue(value, fields.getValue(name).render(), byId, "${instance.id}.view.$name") }
         instance.parent?.let { require(it != instance.id && byId[it]?.kind == "House") { "${instance.id}: parent must reference another House" } }
     }
+    require(scenario.world == null || scenario.changes.isEmpty()) {
+        "A scenario with a world computes its observations; remove the changes"
+    }
+    scenario.world?.validate()
     for (change in scenario.changes) {
         require(change.tick in 0 until scenario.ticks.toLong()) { "Observation change outside run" }
         val instance = byId[change.target] ?: error("Unknown change target ${change.target}")
@@ -114,6 +127,9 @@ fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgra
  * and takes the rest as scenario inputs, some of which may be omitted (defaults).
  */
 internal object HarnessObservations {
+    private fun fieldsOf(kind: String): Set<String> =
+        SemanticEnvironment().kindContract(kind)?.viewFields?.keys.orEmpty()
+
     private val computed = mapOf(
         "House" to setOf("devices"), "Heater" to setOf("power_granted"), "Kettle" to setOf("power_granted"), "Human" to setOf("health"),
     )
@@ -129,7 +145,9 @@ internal object HarnessObservations {
 
     /** Observations a catalog may omit: the run overwrites them every step or supplies a default. */
     fun derived(instance: Instance): Set<String> = buildSet {
-        if (instance.kind == "Human" || instance.kind == "Xenomorph") add("position")
+        if (instance.kind == "Human" || instance.kind == "Xenomorph" || instance.kind == "Rover") add("position")
+        // Places the settlement decides: the harness puts them where the manifest does.
+        addAll(listOf("home", "workplace", "depot").filter { it in fieldsOf(instance.kind) })
         if ((instance.kind == "Heater" || instance.kind == "Kettle") && instance.parent != null) add("home_occupants")
         addAll(defaults(instance.kind).keys)
     }

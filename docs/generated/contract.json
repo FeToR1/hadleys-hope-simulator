@@ -1,5 +1,5 @@
 {
-    "contractVersion": 2,
+    "contractVersion": 3,
     "units": {
         "degC": {
             "quantity": "Temperature",
@@ -90,6 +90,14 @@
             "id": "String",
             "kind": "String",
             "broken": "Bool"
+        },
+        "Job": {
+            "id": "String",
+            "object": "String",
+            "kind": "String",
+            "position": "Position",
+            "distance": "Distance",
+            "progress": "Real64"
         }
     },
     "kinds": {
@@ -119,7 +127,9 @@
                 "cold": "Bool",
                 "position": "Position",
                 "health": "Health",
-                "reachable_breakables": "List<Target>"
+                "reachable_breakables": "List<Target>",
+                "home": "Position",
+                "workplace": "Position"
             },
             "capabilities": [
                 "DAMAGE_REQUEST",
@@ -136,6 +146,19 @@
             },
             "capabilities": [
                 "POWER_REQUEST"
+            ]
+        },
+        "Rover": {
+            "view": {
+                "position": "Position",
+                "speed_eff": "Speed",
+                "active_jobs": "List<Job>",
+                "materials_remaining": "Int64",
+                "depot": "Position"
+            },
+            "capabilities": [
+                "MOTION_REQUEST",
+                "REPAIR_REQUEST"
             ]
         },
         "Xenomorph": {
@@ -175,7 +198,7 @@
             "capability": "MOTION_REQUEST"
         },
         "nearest": {
-            "signature": "nearest(List<Target>) -> Option<Target>",
+            "signature": "nearest(List<R>) -> Option<R>, for an observed record R with id, position and distance",
             "effect": "PURE"
         },
         "power.request": {

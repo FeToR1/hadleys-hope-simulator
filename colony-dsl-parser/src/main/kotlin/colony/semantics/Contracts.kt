@@ -7,7 +7,7 @@ import colony.ast.SourceSpan
  * version (docs/simulation/trigger-conditions.md, section 6), and compiled artifacts record the version
  * they were built against so that a kernel or VM can refuse a mismatch.
  */
-const val CONTRACT_VERSION = 2
+const val CONTRACT_VERSION = 3
 
 /** Entity-kind contract supplied by runtime/simulation owners (Role #7). */
 data class KindContract(
@@ -46,7 +46,7 @@ class SemanticEnvironment(
     fun kindContract(kind: String): KindContract? = kindContracts[kind]
 
     /** Record types a program can name and read fields of. */
-    val recordNames: List<String> = listOf("Position", "Target", "Device")
+    val recordNames: List<String> = listOf("Position", "Target", "Device", "Job")
 
     fun recordFields(name: String): Map<String, Type>? = when (name) {
         "Position" -> mapOf("x" to Type.Physical(PhysicalKind.DISTANCE), "y" to Type.Physical(PhysicalKind.DISTANCE))
@@ -57,6 +57,12 @@ class SemanticEnvironment(
         )
         // One of the appliances of a house, as the house sees it.
         "Device" -> mapOf("id" to Type.String, "kind" to Type.String, "broken" to Type.Bool)
+        // A repair the settlement needs; progress runs from 0 to 1. Observable, so `nearest` accepts a list of them.
+        "Job" -> mapOf(
+            "id" to Type.String, "object" to Type.String, "kind" to Type.String,
+            "position" to Type.Kind("Position"), "distance" to Type.Physical(PhysicalKind.DISTANCE),
+            "progress" to Type.Real64,
+        )
         else -> null
     }
 }
@@ -105,8 +111,22 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
             "position" to Type.Kind("Position"),
             "health" to Type.Physical(PhysicalKind.HEALTH),
             "reachable_breakables" to Type.List(Type.Kind("Target")),
+            // Where this resident lives and works; the settlement decides, not the program.
+            "home" to Type.Kind("Position"),
+            "workplace" to Type.Kind("Position"),
         ),
         capabilities = setOf(Capability.DAMAGE_REQUEST, Capability.MOTION_REQUEST),
+    ),
+    KindContract(
+        kind = "Rover",
+        viewFields = mapOf(
+            "position" to Type.Kind("Position"),
+            "speed_eff" to Type.Physical(PhysicalKind.SPEED),
+            "active_jobs" to Type.List(Type.Kind("Job")),
+            "materials_remaining" to Type.Int64,
+            "depot" to Type.Kind("Position"),
+        ),
+        capabilities = setOf(Capability.MOTION_REQUEST, Capability.REPAIR_REQUEST),
     ),
     KindContract(
         kind = "Xenomorph",
@@ -141,6 +161,10 @@ object KernelEvents {
         "ArrivalConfirmed" to mapOf("point" to Type.Kind("Position")),
     )
 }
+
+/** Records an observation list can hold; `nearest` orders any of them by distance and then by id. */
+private val observableRecords: Map<String, Map<String, Type>> =
+    listOf("Target", "Job").associateWith { SemanticEnvironment().recordFields(it)!! }
 
 object Intrinsics {
     private val contracts: Map<String, IntrinsicContract> = mapOf(
@@ -190,13 +214,23 @@ object Intrinsics {
         ),
         "nearest" to IntrinsicContract(
             name = "nearest",
-            signature = "nearest(List<Target>) -> Option<Target>",
+            signature = "nearest(List<R>) -> Option<R>, for an observed record R with id, position and distance",
             resultType = { args ->
                 val list = args.singleOrNull() as? Type.List
                 if (list != null) Type.Option(list.element) else Type.Unknown
             },
             argumentCheck = { args ->
-                if (args.singleOrNull() == Type.List(Type.Kind("Target"))) null else "nearest expects List<Target> with id, position and distance"
+                // Any observed record that says where it is and how far away: a target, a job, anything later.
+                val element = (args.singleOrNull() as? Type.List)?.element as? Type.Kind
+                val fields = element?.name?.let(observableRecords::get)
+                when {
+                    args.size != 1 -> "nearest expects one list"
+                    fields == null -> "nearest expects a list of observed records"
+                    fields["id"] != Type.String -> "${element.name} has no id"
+                    fields["position"] != Type.Kind("Position") -> "${element.name} has no position"
+                    fields["distance"] != Type.Physical(PhysicalKind.DISTANCE) -> "${element.name} has no distance"
+                    else -> null
+                }
             },
             effect = EffectClass.PURE,
         ),

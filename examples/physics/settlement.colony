@@ -1,0 +1,157 @@
+// Programs of the settlement when the world computes the physics.
+// The house decides the heating, the appliances ask for power, the resident lives a day, the crew repairs
+// what breaks, and the xenomorph attacks the grid. Nothing here touches the physical state directly.
+
+event HeatingDemand { enabled: Bool; }
+event PowerLost {}
+event PowerRestored {}
+event WaterLost {}
+event ObjectBroken { object: String; reason: String; }
+event RepairCompleted { object: String; }
+event ArrivalConfirmed { point: Position; }
+
+behavior HouseControl for House {
+    param heater: Ref<Heater>;
+    state demand: Bool = false;
+    state sent: Option<Bool> = none;
+    state dark: Bool = false;
+    state dry: Bool = false;
+
+    on PowerLost(m) as lights_out { dark = true; }
+    on PowerRestored(m) as lights_on { dark = false; }
+    on WaterLost(m) as no_water { dry = true; }
+
+    every 1s as regulate {
+        // Hysteresis: heat below 18 degrees, stop above 21, and never heat an empty house.
+        if view.occupants == 0 {
+            demand = false;
+        } else if view.temperature < 18degC {
+            demand = true;
+        } else if view.temperature >= 21degC {
+            demand = false;
+        }
+        if sent != some(demand) {
+            send HeatingDemand { enabled: demand } to heater;
+            sent = some(demand);
+        }
+    }
+}
+
+behavior HeaterControl for Heater {
+    param rating: Power;
+    state demand: Bool = false;
+
+    on HeatingDemand(message) as remember { demand = message.enabled; }
+
+    every 1s as apply {
+        if view.home_occupants == 0 || view.broken || !view.power_connected {
+            power.request(0W);
+        } else if demand {
+            power.request(rating);
+        } else {
+            power.request(0W);
+        }
+    }
+}
+
+behavior KettleControl for Kettle {
+    state boiling: Bool = false;
+
+    every 1s as heat {
+        // Someone puts the kettle on when they are home and it has cooled down.
+        if view.home_occupants == 0 || view.broken || !view.power_connected {
+            boiling = false;
+            power.request(0W);
+        } else {
+            if view.water_temperature < 30degC { boiling = true; }
+            if view.water_temperature >= 95degC { boiling = false; }
+            if boiling { power.request(2kW); } else { power.request(0W); }
+        }
+    }
+}
+
+behavior Resident for Human {
+    enum Mood { Calm, Agitated }
+    enum DamageCause { Vandalism }
+
+    state mood: Mood = Calm;
+    state stress: Real64 = 0.15;
+    state minute: Int64 = 0;
+    state next_attempt: Duration = 0s;
+
+    on PowerLost(m) as react_to_outage { stress = clamp(stress + 0.12, 0.0, 1.0); }
+    on WaterLost(m) as react_to_water { stress = clamp(stress + 0.08, 0.0, 1.0); }
+
+    every 1min as live {
+        // A day of 1440 minutes: out from 09:00 to 18:00, at home the rest of the time.
+        minute = (minute + 1) % 1440;
+        if minute >= 540 && minute < 1080 {
+            motion.request(view.workplace, 1.4mps);
+        } else {
+            motion.request(view.home, 1.4mps);
+        }
+
+        if view.cold {
+            stress = clamp(stress + 0.05, 0.0, 1.0);
+        } else {
+            stress = clamp(stress - 0.03, 0.0, 1.0);
+        }
+        if stress > 0.8 { mood = Agitated; } else if stress < 0.35 { mood = Calm; }
+
+        if mood == Agitated && time >= next_attempt {
+            if let target = nearest(view.reachable_breakables) {
+                if chance(0.12, "vandalism") {
+                    damage.request(target.id, 25hp, Vandalism);
+                    next_attempt = time + 20min;
+                }
+            }
+        }
+    }
+}
+
+behavior RepairCrew for Rover {
+    enum Mode { Idle, Driving, Working }
+    state mode: Mode = Idle;
+    state repaired: Int64 = 0;
+
+    on RepairCompleted(m) as finished { repaired = repaired + 1; }
+
+    every 1s as work {
+        // Take the nearest job, drive to it, and work on it once close enough.
+        if let job = nearest(view.active_jobs) {
+            if job.distance > 5m {
+                mode = Driving;
+                motion.request(job.position, view.speed_eff);
+            } else {
+                mode = Working;
+                repair.request(job.object);
+            }
+        } else {
+            mode = Idle;
+            motion.request(view.depot, view.speed_eff);
+        }
+    }
+}
+
+behavior Xenomorph for Xenomorph {
+    enum Mode { Patrol, Chase, Attack }
+    enum DamageCause { XenomorphAttack }
+    state mode: Mode = Patrol;
+
+    every 1s as decide {
+        if let target = nearest(view.visible_infrastructure) {
+            if target.distance > 3m {
+                mode = Chase;
+                motion.request(target.position, 6mps);
+            } else {
+                mode = Attack;
+                if hazard(0.5per_s, "strike") {
+                    damage.request(target.id, 40hp, XenomorphAttack);
+                }
+            }
+        } else {
+            mode = Patrol;
+            motion.request(view.patrol_waypoint, 3mps);
+        }
+    }
+}

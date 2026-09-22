@@ -60,7 +60,8 @@ public:
             if (slot.type.tag == Tag::Rec || slot.type.tag == Tag::List) fail("state may not hold a record or a list");
         }
         for (const Slot& slot : behavior_.params) {
-            if (slot.type.tag == Tag::List) fail("a parameter may not be a list");
+            // A parameter lives for the whole run, so it may not point into the arena the host resets per frame.
+            if (slot.type.tag == Tag::List || slot.type.tag == Tag::Rec) fail("a parameter may not be a record or a list");
         }
         scanInstructions();
         checkEntry(behavior_.initEntry, behavior_.initLocals, nullptr, /*initializer=*/true);

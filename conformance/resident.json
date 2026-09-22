@@ -1,6 +1,6 @@
 {
     "conformance": 1,
-    "contract": 2,
+    "contract": 3,
     "name": "resident",
     "source": "colony-dsl-parser/examples/resident.colony",
     "program": {
@@ -1265,7 +1265,7 @@
                 ]
             }
         ],
-        "contract": 2
+        "contract": 3
     },
     "cases": [
         {

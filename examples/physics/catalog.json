@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "sources": ["settlement.colony"],
+  "templates": {
+    "household": {
+      "objects": {
+        "house": {
+          "kind": "House", "behavior": "HouseControl",
+          "params": {"heater": "$instance/heater"}
+        },
+        "heater": {
+          "kind": "Heater", "behavior": "HeaterControl", "parent": "$instance/house",
+          "params": {"rating": 8000},
+          "x": 6, "y": 6
+        },
+        "kettle": {
+          "kind": "Kettle", "behavior": "KettleControl", "parent": "$instance/house",
+          "x": 12, "y": 6
+        },
+        "resident": {
+          "kind": "Human", "behavior": "Resident", "parent": "$instance/house",
+          "x": 8, "y": 14
+        }
+      }
+    },
+    "crew": {
+      "objects": {
+        "rover": {"kind": "Rover", "behavior": "RepairCrew"}
+      }
+    },
+    "alien": {
+      "objects": {
+        "xenomorph": {"kind": "Xenomorph", "behavior": "Xenomorph"}
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "version": 1, "catalog": "catalog.json", "seed": 426, "step": "1s", "ticks": 600,
+  "populations": [
+    {"template": "household", "count": 300, "prefix": "home"},
+    {"template": "crew", "count": 6, "prefix": "crew"},
+    {"template": "alien", "count": 12, "prefix": "alien"}
+  ],
+  "world": {}
+}

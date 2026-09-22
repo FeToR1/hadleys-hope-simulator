@@ -1,6 +1,6 @@
 {
     "conformance": 1,
-    "contract": 2,
+    "contract": 3,
     "name": "language",
     "source": "conformance/programs/language.colony",
     "program": {
@@ -4092,7 +4092,7 @@
                 ]
             }
         ],
-        "contract": 2
+        "contract": 3
     },
     "cases": [
         {

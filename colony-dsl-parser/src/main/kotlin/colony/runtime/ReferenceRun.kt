@@ -3,6 +3,9 @@ package colony.runtime
 import colony.bytecode.Op
 import colony.semantics.Capability
 import colony.semantics.SemanticEnvironment
+import colony.world.KernelEvent
+import colony.world.WorldKernel
+import colony.world.buildTopology
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.util.UUID
@@ -35,6 +38,8 @@ import kotlin.math.min
     val version: Int = 1, val runId: String, val runtimeMode: String = "reference",
     val seed: String, val tickId: Long, val timestamp: Long, val full: Boolean = true,
     val entities: List<EntitySnapshot>, val effects: List<TraceEvent>, val events: List<WorldEvent> = emptyList(),
+    /** Money the world charged during this step; empty when the run has no economy. */
+    val postings: List<colony.world.Posting> = emptyList(),
     val deliveredEvents: Int,
 )
 
@@ -55,6 +60,10 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     private data class Delivery(val recipient: String, val event: DeliveredEvent)
 
     private val objects = prepared.manifest.instances.associateBy { it.id }
+    /** With a world, the physical models own every observation and every consequence of a request. */
+    val kernel: WorldKernel? = prepared.scenario.world?.let { world ->
+        WorldKernel(prepared.manifest, world, buildTopology(prepared.manifest, world), prepared.program.stepSeconds.toDouble())
+    }
     private val views = objects.mapValues { it.value.view }.toMutableMap()
     private val positions = objects.mapValues { Coordinates(it.value.x, it.value.y) }.toMutableMap()
     private val power = mutableMapOf<String, Double>()
@@ -75,17 +84,26 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     /** Power granted in the previous step: what a device sees as power_granted. */
     private var granted = emptyMap<String, Double>()
 
+    private fun healthOf(id: String): Double = kernel?.healthOf(id) ?: health.getValue(id)
+    private fun positionOf(id: String): Coordinates =
+        kernel?.positionOf(id)?.let { Coordinates(it.x, it.y) } ?: positions.getValue(id)
+
     private fun effectivelyBroken(id: String): Boolean =
-        views.getValue(id)["broken"]?.jsonPrimitive?.boolean == true || health.getValue(id) <= 0
+        views.getValue(id)["broken"]?.jsonPrimitive?.boolean == true || healthOf(id) <= 0
 
     /**
      * The observation of one entity at the start of a step: scenario inputs, plus what the run computes from its own
      * state (docs/simulation/trigger-conditions.md, section 6). Lists are sorted by (distance, id) and drop destroyed objects.
      */
     private fun observe(id: String, instance: Instance): JsonObject {
+        kernel?.let { return JsonObject(it.view(instance, observed.getValue(id))) }
         val fields = contracts.getValue(instance.kind).viewFields
         val view = views.getValue(id).toMutableMap()
         if ("position" in fields) view["position"] = positionJson(positions.getValue(id))
+        // Without a world the harness has no settlement plan, so a place is simply where the manifest put it.
+        if ("home" in fields) view["home"] = positionJson(positions.getValue(instance.parent ?: id))
+        if ("workplace" in fields) view["workplace"] = positionJson(positions.getValue(instance.parent ?: id))
+        if ("depot" in fields) view["depot"] = positionJson(positions.getValue(id))
         if ("health" in fields) view["health"] = JsonPrimitive(health.getValue(id))
         if ("broken" in fields) view["broken"] = JsonPrimitive(effectivelyBroken(id))
         // The same rule that decides the PowerLost and PowerRestored events: an appliance follows its house.
@@ -133,6 +151,20 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     }
 
     private fun positionJson(position: Coordinates) = buildJsonObject { put("x", position.x); put("y", position.y) }
+
+    /**
+     * Kernel facts become journal entries. A break that follows damage in the same step is linked to the hit
+     * that caused it; frost and other causes outside a request have no cause inside the world.
+     */
+    private fun convert(facts: List<KernelEvent>): List<WorldEvent> {
+        val lastDamage = HashMap<String, String>()
+        return facts.map { fact ->
+            val event = worldEvent(fact.type, fact.entityId, fact.actorId, fact.causeRef ?: lastDamage[fact.entityId],
+                fact.fields, fact.recipients)
+            if (fact.type == "DamageApplied") lastDamage[fact.entityId] = event.id
+            event
+        }
+    }
 
     private fun obj(vararg pairs: Pair<String, String>) = JsonObject(pairs.associate { it.first to JsonPrimitive(it.second) })
 
@@ -191,14 +223,21 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                 when (intent.operation) {
                     Op.POWER_REQUEST -> require(number(intent.arguments.single()) >= 0)
                     Op.MOTION_REQUEST -> { require(number(intent.arguments[1]) >= 0); number(intent.arguments[0].jsonObject.getValue("x")); number(intent.arguments[0].jsonObject.getValue("y")) }
-                    Op.DAMAGE_REQUEST -> { require(intent.arguments[0].jsonPrimitive.content in objects); require(number(intent.arguments[1]) >= 0) }
-                    Op.REPAIR_REQUEST -> error("REPAIR_REQUEST requires the future repair/economy kernel")
+                    Op.DAMAGE_REQUEST -> {
+                        val target = intent.arguments[0].jsonPrimitive.content
+                        require(target in objects || kernel?.healthOf(target) != null) { "Damage to an unknown object" }
+                        require(number(intent.arguments[1]) >= 0)
+                    }
+                    Op.REPAIR_REQUEST -> {
+                        checkNotNull(kernel) { "REPAIR_REQUEST needs a world with repair jobs" }
+                        intent.arguments[0].jsonPrimitive.content
+                    }
                     else -> error("Unsupported effect ${intent.operation}")
                 }
             }
             val dt = prepared.program.stepSeconds.toDouble()
             // Spec (docs/simulation): a request from an entity that could not act in S_k is rejected.
-            val ableToAct = objects.keys.filterTo(HashSet()) { health.getValue(it) > 0 }
+            val ableToAct = objects.keys.filterTo(HashSet()) { healthOf(it) > 0 }
             val events = mutableListOf<WorldEvent>()
             intents.forEachIndexed { index, intent ->
                 if (intent.source !in ableToAct && intent.operation == Op.DAMAGE_REQUEST) {
@@ -206,8 +245,10 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                         obj("action" to "damage", "reason" to "executor_unable"), listOf(intent.source))
                 }
             }
+            // With a world, every consequence of the step belongs to the kernel and its phases.
+            if (kernel != null) events += convert(kernel.step(tick, intents, refs, ableToAct))
             // Damage phase first: simultaneous attacks are summed in stable executor order and clamped at zero.
-            intents.forEachIndexed { index, intent ->
+            if (kernel == null) intents.forEachIndexed { index, intent ->
                 if (intent.source !in ableToAct || intent.operation != Op.DAMAGE_REQUEST) return@forEachIndexed
                 val target = intent.arguments[0].jsonPrimitive.content
                 val amount = number(intent.arguments[1])
@@ -230,7 +271,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
             }
             // Power and motion requests live for one step only; entities destroyed in this step no longer act.
             power.clear()
-            for (intent in intents) {
+            if (kernel == null) for (intent in intents) {
                 if (intent.source !in ableToAct || health.getValue(intent.source) <= 0) continue
                 when (intent.operation) {
                     Op.POWER_REQUEST -> power[intent.source] = number(intent.arguments.single())
@@ -245,25 +286,37 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                     else -> Unit
                 }
             }
-            granted = HashMap(power)
+            granted = if (kernel == null) HashMap(power) else emptyMap()
             pending = outgoing
             pendingWorld = events.flatMap(::deliveriesOf)
             val entities = objects.map { (id, instance) ->
                 val state = results.getValue(id).state
                 EntitySnapshot(id = id, pid = fleet.pids[id], type = when (instance.kind) { "Human" -> "civilian"; else -> instance.kind.lowercase() },
-                    status = if (health.getValue(id) <= 0) "dead" else "nominal",
+                    status = if (healthOf(id) <= 0) "dead" else "nominal",
                     metrics = buildJsonObject {
-                        views.getValue(id)["temperature"]?.let { put("temperature", it) }
-                        views.getValue(id)["water_temperature"]?.let { put("temperature", it) }
+                        if (kernel != null) {
+                            kernel.temperatureOf(id)?.let { put("temperature", it) }
+                            if (instance.kind == "House") {
+                                put("water_level", if (kernel.hasWater(id)) 100.0 else 0.0)
+                                put("occupants", kernel.occupants(id))
+                                put("spend", kernel.spentBy(id))
+                            }
+                        } else {
+                            views.getValue(id)["temperature"]?.let { put("temperature", it) }
+                            views.getValue(id)["water_temperature"]?.let { put("temperature", it) }
+                        }
                         state["stress"]?.let { put("stress", it) }
-                        put("health", health.getValue(id))
-                        if (Capability.POWER_REQUEST in contracts.getValue(instance.kind).capabilities) put("power_consumption", power[id] ?: 0.0)
-                    }, connectedTo = listOfNotNull(instance.parent), coordinates = positions.getValue(id), parentId = instance.parent, vmState = state)
+                        put("health", healthOf(id))
+                        if (Capability.POWER_REQUEST in contracts.getValue(instance.kind).capabilities) {
+                            put("power_consumption", kernel?.grantedOf(id) ?: power[id] ?: 0.0)
+                        }
+                    }, connectedTo = listOfNotNull(instance.parent), coordinates = positionOf(id), parentId = instance.parent, vmState = state)
             }
             return TickSnapshot(runId = runId, runtimeMode = fleet.mode, seed = prepared.scenario.seed.toString(), tickId = tick,
                 timestamp = ((tick + 1) * dt * 1000).toLong(), entities = entities,
                 effects = intents.mapIndexed { index, it -> TraceEvent(it.source, it.operation.name, it.arguments, it.source in ableToAct, refs[index]) },
-                events = changeEvents + events, deliveredEvents = delivered).also { tick++ }
+                events = changeEvents + events, postings = kernel?.lastPostings.orEmpty(),
+                deliveredEvents = delivered).also { tick++ }
         } catch (failure: Exception) { failed = true; close(); throw failure }
     }
 }
