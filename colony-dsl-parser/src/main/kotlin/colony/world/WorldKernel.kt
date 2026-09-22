@@ -18,6 +18,11 @@ data class KernelEvent(
     val causeRef: String? = null,
 )
 
+/** A fixture of the settlement as an observer sees it: where it stands, whether it works, and what it feeds. */
+@Serializable data class FixtureState(
+    val id: String, val kind: String, val at: Point, val health: Double, val powered: Boolean, val feeds: List<String>,
+)
+
 /** One line of the ledger: who paid, what for, how much, when. */
 @Serializable data class Posting(val tick: Long, val owner: String, val kind: String, val amount: Long, val detail: String = "")
 
@@ -60,6 +65,24 @@ class WorldKernel(
     private var lastMonthTick = 0L
 
     val ledger: List<Posting> get() = postings
+    /** What the grid and the water network look like right now, for the dashboard and the journal. */
+    fun fixtureState(): List<FixtureState> = topology.fixtures.map { fixture ->
+        FixtureState(
+            id = fixture.id,
+            kind = fixture.kind.name.lowercase(),
+            at = fixture.at,
+            health = healthOf(fixture.id),
+            // A source makes power and a pipe carries water: neither of them draws from the grid.
+            powered = when (fixture.kind) {
+                FixtureKind.REACTOR, FixtureKind.SOLAR, FixtureKind.UPS, FixtureKind.PIPE -> healthOf(fixture.id) > 0
+                else -> isPowered(fixture.id)
+            },
+            // What hangs off this fixture: the poles and consumers it feeds, or the house a pipe serves.
+            feeds = (topology.powerFeed.filterValues { it == fixture.id }.keys +
+                topology.fixtures.filter { it.feedsFrom == fixture.id && it.kind == FixtureKind.POLE }.map { it.id } +
+                listOfNotNull(fixture.serves)).distinct().sorted(),
+        )
+    }
     val activeJobs: Collection<RepairJob> get() = jobs.values
     /** Lines posted during the step that has just finished, for the journal and the dashboard. */
     var lastPostings: List<Posting> = emptyList()

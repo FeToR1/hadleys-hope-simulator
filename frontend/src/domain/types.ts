@@ -11,6 +11,18 @@ export interface EntityMetrics {
   stress?: number;
   repair_cost?: number;
   health?: number;
+  /** Money the world has charged this owner so far, in minimal units. */
+  spend?: number;
+  occupants?: number;
+}
+
+/** One line of the world's ledger: who was charged, what for, and how much. */
+export interface Posting {
+  tick: number;
+  owner: string;
+  kind: string;
+  amount: number;
+  detail?: string;
 }
 
 export interface EntityState {
@@ -57,6 +69,7 @@ export interface TickBatch {
   entities: EntityState[];
   effects?: TraceEffect[];
   events?: WorldEvent[];
+  postings?: Posting[];
   deliveredEvents?: number;
 }
 
@@ -84,6 +97,9 @@ export interface StateSnapshot {
   logs: readonly EntityLog[];
   /** Recent world events of an observed run, oldest first. */
   events: readonly WorldEvent[];
+  /** Recent ledger lines, oldest first, and the total charged per owner. */
+  postings: readonly Posting[];
+  spendByOwner: ReadonlyMap<string, number>;
 }
 
 export type CausalChainStepKind = 'network' | 'thermal' | 'hydraulics' | 'economy' | 'action' | 'failure';

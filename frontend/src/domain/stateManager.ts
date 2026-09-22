@@ -1,7 +1,8 @@
 import { describeEvents } from './effectLog';
-import type { EntityDelta, EntityLog, EntityState, StateSnapshot, TickBatch, WorldEvent } from './types';
+import type { EntityDelta, EntityLog, EntityState, Posting, StateSnapshot, TickBatch, WorldEvent } from './types';
 
 const MAX_EVENTS = 500;
+const MAX_POSTINGS = 500;
 
 type StateListener = (snapshot: StateSnapshot, deltas: readonly EntityDelta[]) => void;
 export interface StateSubscriptionOptions {
@@ -41,6 +42,8 @@ export class StateManager {
   private readonly listeners = new Set<ListenerRecord>();
   private readonly logs: EntityLog[] = [];
   private readonly events: WorldEvent[] = [];
+  private readonly postings: Posting[] = [];
+  private readonly spendByOwner = new Map<string, number>();
   private tickId = 0;
   private timestamp = 0;
   private nextLogId = 1;
@@ -53,6 +56,8 @@ export class StateManager {
     this.entities.clear();
     this.logs.length = 0;
     this.events.length = 0;
+    this.postings.length = 0;
+    this.spendByOwner.clear();
     this.tickId = -1;
     this.timestamp = 0;
     this.runId = '';
@@ -124,6 +129,11 @@ export class StateManager {
       for (const draft of describeEvents(batch, now)) this.appendLog(draft);
       this.events.push(...(batch.events ?? []));
       if (this.events.length > MAX_EVENTS) this.events.splice(0, this.events.length - MAX_EVENTS);
+      for (const posting of batch.postings ?? []) {
+        this.postings.push(posting);
+        this.spendByOwner.set(posting.owner, (this.spendByOwner.get(posting.owner) ?? 0) + posting.amount);
+      }
+      if (this.postings.length > MAX_POSTINGS) this.postings.splice(0, this.postings.length - MAX_POSTINGS);
     }
     this.tickId = batch.tickId;
     this.timestamp = batch.timestamp;
@@ -179,6 +189,7 @@ export class StateManager {
 
   public snapshot(): StateSnapshot {
     return { runId: this.runId, revision: this.revision, seed: this.seed, runtimeMode: this.runtimeMode,
-      tickId: this.tickId, timestamp: this.timestamp, entities: this.entities, logs: this.logs, events: this.events };
+      tickId: this.tickId, timestamp: this.timestamp, entities: this.entities, logs: this.logs, events: this.events,
+      postings: this.postings, spendByOwner: this.spendByOwner };
   }
 }

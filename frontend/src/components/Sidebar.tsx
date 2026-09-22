@@ -1,9 +1,10 @@
 import { FixedSizeList } from 'react-window';
 import { useMemo, useState, type JSX } from 'react';
-import type { EntityLog, EntityState } from '../domain/types';
+import type { EntityLog, EntityState, Posting } from '../domain/types';
 import type { CausalChainStep } from '../domain/types';
 import { formatVmValue } from '../domain/format';
 import { CausalChainTracker } from './CausalChainTracker';
+import { SpendPanel, formatMoney } from './SpendPanel';
 
 interface SidebarProps {
   selected: EntityState | undefined;
@@ -11,15 +12,17 @@ interface SidebarProps {
   logs: readonly EntityLog[];
   causalChain: readonly CausalChainStep[];
   causalEmptyText?: string;
+  postings: readonly Posting[];
+  spendByOwner: ReadonlyMap<string, number>;
   onFocusCausalStep: (step: CausalChainStep) => void;
   onExportCsv: () => void;
 }
 
-export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText, onFocusCausalStep, onExportCsv }: SidebarProps): JSX.Element {
+export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText, postings, spendByOwner, onFocusCausalStep, onExportCsv }: SidebarProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<'details' | 'causal'>('details');
   const newestFirst = useMemo(() => [...logs].reverse(), [logs]);
   if (selected === undefined) {
-    return <aside className="sidebar"><button type="button" className="export-button" onClick={onExportCsv}>Экспорт отчета в CSV</button><CausalChainTracker steps={causalChain} emptyText={causalEmptyText} onFocus={onFocusCausalStep} /><p className="muted">Выберите дом или узел на карте.</p><LogList logs={newestFirst} /></aside>;
+    return <aside className="sidebar"><button type="button" className="export-button" onClick={onExportCsv}>Экспорт отчета в CSV</button><CausalChainTracker steps={causalChain} emptyText={causalEmptyText} onFocus={onFocusCausalStep} /><SpendPanel postings={postings} spendByOwner={spendByOwner} /><p className="muted">Выберите дом или узел на карте.</p><LogList logs={newestFirst} /></aside>;
   }
   return (
     <aside className="sidebar">
@@ -31,7 +34,8 @@ export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText,
         <span className={`status status-${selected.status}`}>{selected.status}</span>
       </div>
       <p className="pid">PID процесса: <strong>{selected.pid ?? '—'}</strong></p>
-      <section><h3>Метрики</h3><Metric label="Температура" value={selected.metrics.temperature} suffix=" °C" /><Metric label="Потребление" value={selected.metrics.power_consumption} suffix=" W" /><Metric label="Вода" value={selected.metrics.water_level} suffix=" %" /><Metric label="Стресс" value={selected.metrics.stress} /><Metric label="Здоровье" value={selected.metrics.health} suffix=" hp" /></section>
+      <section><h3>Метрики</h3><Metric label="Температура" value={selected.metrics.temperature} suffix=" °C" /><Metric label="Потребление" value={selected.metrics.power_consumption} suffix=" W" /><Metric label="Вода" value={selected.metrics.water_level} suffix=" %" /><Metric label="Жильцов" value={selected.metrics.occupants} digits={0} /><Metric label="Стресс" value={selected.metrics.stress} /><Metric label="Здоровье" value={selected.metrics.health} suffix=" hp" />
+      {selected.metrics.spend !== undefined && <div className="metric"><span>Начислено</span><strong>{formatMoney(selected.metrics.spend)}</strong></div>}</section>
       <VmState state={selected.vmState} />
       {devices.length > 0 && <section><h3>Приборы</h3>{devices.map((device) => <div className="device" key={device.id}><strong>{device.type}</strong><span>PID {device.pid ?? '—'}</span><span>{device.metrics.power_consumption ?? 0} W</span></div>)}</section>}
       <LogList logs={newestFirst} />
@@ -40,8 +44,8 @@ export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText,
   );
 }
 
-function Metric({ label, value, suffix = '' }: { label: string; value: number | undefined; suffix?: string }): JSX.Element {
-  return <div className="metric"><span>{label}</span><strong>{value === undefined ? '—' : `${value.toFixed(1)}${suffix}`}</strong></div>;
+function Metric({ label, value, suffix = '', digits = 1 }: { label: string; value: number | undefined; suffix?: string; digits?: number }): JSX.Element {
+  return <div className="metric"><span>{label}</span><strong>{value === undefined ? '—' : `${value.toFixed(digits)}${suffix}`}</strong></div>;
 }
 
 /** Behavior variables held by the entity's own VM; only observed runs provide them. */

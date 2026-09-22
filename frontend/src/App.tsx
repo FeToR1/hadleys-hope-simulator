@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { MockDataGenerator } from './domain/mockGenerator';
 import { StateManager } from './domain/stateManager';
-import type { EntityLog, EntityState, WorldEvent } from './domain/types';
+import type { EntityLog, EntityState, Posting, WorldEvent } from './domain/types';
 import type { CausalChainStep } from './domain/types';
 import { createCausalChain } from './domain/causalChain';
 import { createLiveCausalChain } from './domain/liveCausalChain';
@@ -19,6 +19,8 @@ export function App(): JSX.Element {
   const [selectedId, setSelectedId] = useState<string>();
   const [logs, setLogs] = useState<readonly EntityLog[]>([]);
   const [worldEvents, setWorldEvents] = useState<readonly WorldEvent[]>([]);
+  const [money, setMoney] = useState<{ postings: readonly Posting[]; spendByOwner: ReadonlyMap<string, number> }>(
+    { postings: [], spendByOwner: new Map() });
   const [tab, setTab] = useState<'map' | 'topology'>('map');
   const [sourceMode, setSourceMode] = useState<DataSourceMode>('mock');
   const [brokerHealth, setBrokerHealth] = useState<BrokerHealth>();
@@ -42,6 +44,7 @@ export function App(): JSX.Element {
     }, { animationFrame: true });
     const unsubscribeSidebar = manager.subscribe((snapshot) => {
       setLogs([...snapshot.logs]);
+      setMoney({ postings: [...snapshot.postings], spendByOwner: new Map(snapshot.spendByOwner) });
     }, { throttleMs: 200 });
     const unsubscribeGenerator = generator.subscribe((batch) => manager.ingest(batch));
     manager.ingest(generator.getInitialBatch());
@@ -129,13 +132,14 @@ export function App(): JSX.Element {
     }, 50);
   };
   const exportCsv = (): void => {
-    const rows = [['entity_id', 'type', 'pid', 'repair_cost', 'water_level', 'temperature', 'power_consumption', 'health']];
+    const rows = [['entity_id', 'type', 'pid', 'spend', 'occupants', 'water_level', 'temperature', 'power_consumption', 'health']];
     for (const entity of entities) {
       rows.push([
         entity.id,
         entity.type,
         String(entity.pid ?? ''),
-        String(entity.metrics.repair_cost ?? ''),
+        String(entity.metrics.spend ?? entity.metrics.repair_cost ?? ''),
+        String(entity.metrics.occupants ?? ''),
         String(entity.metrics.water_level ?? ''),
         String(entity.metrics.temperature ?? ''),
         String(entity.metrics.power_consumption ?? ''),
@@ -159,7 +163,7 @@ export function App(): JSX.Element {
           <nav className="tabs"><button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>2D карта</button><button className={tab === 'topology' ? 'active' : ''} onClick={() => setTab('topology')}>Топология сетей</button></nav>
           {tab === 'map' ? <SettlementMap key={runMeta.revision} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { mapFocusRef.current = focus; }} /> : <NetworkTopology key={runMeta.revision} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { graphFocusRef.current = focus; }} />}
         </section>
-        <Sidebar selected={selected} devices={devices} logs={logs} causalChain={causalChain} causalEmptyText={sourceMode === 'live' ? 'Поломок и гибели пока не было. Цепочка причин появится после первой.' : undefined} onFocusCausalStep={focusCausalStep} onExportCsv={exportCsv} />
+        <Sidebar selected={selected} devices={devices} logs={logs} causalChain={causalChain} postings={money.postings} spendByOwner={money.spendByOwner} causalEmptyText={sourceMode === 'live' ? 'Поломок и гибели пока не было. Цепочка причин появится после первой.' : undefined} onFocusCausalStep={focusCausalStep} onExportCsv={exportCsv} />
       </div>
     </main>
   );

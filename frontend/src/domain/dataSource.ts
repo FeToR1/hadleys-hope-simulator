@@ -1,4 +1,4 @@
-import { KNOWN_ENTITY_TYPES, type EntityType, type TickBatch, type TraceEffect, type WorldEvent } from './types';
+import { KNOWN_ENTITY_TYPES, type EntityType, type Posting, type TickBatch, type TraceEffect, type WorldEvent } from './types';
 
 export type DataSourceMode = 'mock' | 'live';
 
@@ -132,18 +132,33 @@ export function parseTickBatch(value: unknown): TickBatch {
   }
   const effects = parseEffects(value.effects);
   const events = parseEvents(value.events);
+  const postings = parsePostings(value.postings);
   // Kotlin JSON emits explicit nulls; the UI uses undefined for absent parents.
   // A kind this UI does not know yet is kept and drawn as a generic object.
   return {
     ...value,
     effects,
     events,
+    postings,
     entities: value.entities.map((entity) => ({
       ...entity,
       type: (KNOWN_ENTITY_TYPES as readonly string[]).includes(String(entity.type)) ? entity.type : 'other' as EntityType,
       parentId: entity.parentId ?? undefined,
     })),
   } as unknown as TickBatch;
+}
+
+function parsePostings(value: unknown): Posting[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error('Invalid postings');
+  return value.map((posting: unknown) => {
+    if (typeof posting !== 'object' || posting === null || Array.isArray(posting)) throw new Error('Invalid posting');
+    const item = posting as Record<string, unknown>;
+    if (!Number.isSafeInteger(item.tick) || typeof item.owner !== 'string' || typeof item.kind !== 'string' ||
+      !Number.isSafeInteger(item.amount) || Number(item.amount) < 0 ||
+      !(item.detail === undefined || typeof item.detail === 'string')) throw new Error('Invalid posting');
+    return { tick: Number(item.tick), owner: item.owner, kind: item.kind, amount: Number(item.amount), detail: item.detail };
+  });
 }
 
 function parseEvents(value: unknown): WorldEvent[] {

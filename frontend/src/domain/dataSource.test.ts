@@ -39,6 +39,21 @@ describe('observer protocol v1', () => {
     expect(parsed.events?.[1].actorId).toBeUndefined();
     expect(parsed.events?.[1].causationId).toBeUndefined();
   });
+  it('keeps the ledger lines the world posted', () => {
+    const parsed = parseTickBatch({
+      ...batch,
+      postings: [{ tick: 3600, owner: 'home-1/house', kind: 'electricity', amount: 218, detail: '' },
+        { tick: 3600, owner: 'settlement', kind: 'repair', amount: 145000, detail: 'grid/pole-1' }],
+    });
+    expect(parsed.postings).toHaveLength(2);
+    expect(parsed.postings?.[1]).toMatchObject({ owner: 'settlement', kind: 'repair', amount: 145000 });
+    expect(parseTickBatch(batch).postings).toEqual([]);
+  });
+  it('rejects malformed ledger lines', () => {
+    expect(() => parseTickBatch({ ...batch, postings: 'x' })).toThrow();
+    expect(() => parseTickBatch({ ...batch, postings: [{ tick: 1, owner: 'a', kind: 'b', amount: -5 }] })).toThrow();
+    expect(() => parseTickBatch({ ...batch, postings: [{ tick: 1.5, owner: 'a', kind: 'b', amount: 5 }] })).toThrow();
+  });
   it('rejects malformed world events', () => {
     expect(() => parseTickBatch({ ...batch, events: 'x' })).toThrow();
     expect(() => parseTickBatch({ ...batch, events: [{ id: 'e', type: 'T', tick: 1.5, entityId: 'x', fields: {}, recipients: [] }] })).toThrow();

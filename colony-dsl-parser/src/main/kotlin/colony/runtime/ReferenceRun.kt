@@ -312,8 +312,21 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                         }
                     }, connectedTo = listOfNotNull(instance.parent), coordinates = positionOf(id), parentId = instance.parent, vmState = state)
             }
+            // The grid and the water network have no program of their own, but an observer has to see them.
+            val fixtures = kernel?.fixtureState().orEmpty().map { fixture ->
+                EntitySnapshot(
+                    id = fixture.id, pid = null, type = "power_node",
+                    status = if (fixture.health <= 0) "dead" else if (!fixture.powered) "warning" else "nominal",
+                    metrics = buildJsonObject {
+                        put("health", fixture.health)
+                        if (fixture.id == "water/pump") put("power_consumption", kernel!!.grantedOf(fixture.id))
+                    },
+                    connectedTo = fixture.feeds, coordinates = Coordinates(fixture.at.x, fixture.at.y),
+                    parentId = null, vmState = buildJsonObject { put("kind", fixture.kind) },
+                )
+            }
             return TickSnapshot(runId = runId, runtimeMode = fleet.mode, seed = prepared.scenario.seed.toString(), tickId = tick,
-                timestamp = ((tick + 1) * dt * 1000).toLong(), entities = entities,
+                timestamp = ((tick + 1) * dt * 1000).toLong(), entities = entities + fixtures,
                 effects = intents.mapIndexed { index, it -> TraceEvent(it.source, it.operation.name, it.arguments, it.source in ableToAct, refs[index]) },
                 events = changeEvents + events, postings = kernel?.lastPostings.orEmpty(),
                 deliveredEvents = delivered).also { tick++ }

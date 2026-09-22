@@ -81,6 +81,19 @@ describe('observed run log', () => {
     expect(manager.snapshot().events).toHaveLength(0);
   });
 
+  it('adds the ledger up per owner and forgets it when the run changes', () => {
+    const manager = new StateManager();
+    const line = (owner: string, amount: number) => ({ tick: 1, owner, kind: 'electricity', amount });
+    manager.ingest({ ...tick(0, 'nominal'), postings: [line('home-1/house', 100), line('settlement', 500)] });
+    manager.ingest({ ...tick(1, 'nominal'), postings: [line('home-1/house', 40)] });
+    expect(manager.snapshot().postings).toHaveLength(3);
+    expect(manager.snapshot().spendByOwner.get('home-1/house')).toBe(140);
+    expect(manager.snapshot().spendByOwner.get('settlement')).toBe(500);
+    manager.ingest({ ...tick(0, 'nominal'), runId: 'r2' });
+    expect(manager.snapshot().postings).toHaveLength(0);
+    expect(manager.snapshot().spendByOwner.size).toBe(0);
+  });
+
   it('keeps the VM state of stored entities current and stays silent for mock data', () => {
     const manager = new StateManager();
     manager.ingest(tick(0, 'nominal'));
