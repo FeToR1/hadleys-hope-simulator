@@ -100,6 +100,8 @@ export interface StateSnapshot {
   /** Recent ledger lines, oldest first, and the total charged per owner. */
   postings: readonly Posting[];
   spendByOwner: ReadonlyMap<string, number>;
+  /** One row per recent step, oldest first: what the charts plot. */
+  trend: readonly import('./trend').TrendSample[];
 }
 
 export type CausalChainStepKind = 'network' | 'thermal' | 'hydraulics' | 'economy' | 'action' | 'failure';

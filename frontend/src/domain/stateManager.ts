@@ -1,4 +1,5 @@
 import { describeEvents } from './effectLog';
+import { pushTrend, sampleTrend, type TrendSample } from './trend';
 import type { EntityDelta, EntityLog, EntityState, Posting, StateSnapshot, TickBatch, WorldEvent } from './types';
 
 const MAX_EVENTS = 500;
@@ -44,6 +45,7 @@ export class StateManager {
   private readonly events: WorldEvent[] = [];
   private readonly postings: Posting[] = [];
   private readonly spendByOwner = new Map<string, number>();
+  private readonly trend: TrendSample[] = [];
   private tickId = 0;
   private timestamp = 0;
   private nextLogId = 1;
@@ -58,6 +60,7 @@ export class StateManager {
     this.events.length = 0;
     this.postings.length = 0;
     this.spendByOwner.clear();
+    this.trend.length = 0;
     this.tickId = -1;
     this.timestamp = 0;
     this.runId = '';
@@ -134,6 +137,8 @@ export class StateManager {
         this.spendByOwner.set(posting.owner, (this.spendByOwner.get(posting.owner) ?? 0) + posting.amount);
       }
       if (this.postings.length > MAX_POSTINGS) this.postings.splice(0, this.postings.length - MAX_POSTINGS);
+      // The charts read the settlement from the snapshot the world just committed.
+      pushTrend(this.trend, sampleTrend(batch, this.spendByOwner));
     }
     this.tickId = batch.tickId;
     this.timestamp = batch.timestamp;
@@ -190,6 +195,6 @@ export class StateManager {
   public snapshot(): StateSnapshot {
     return { runId: this.runId, revision: this.revision, seed: this.seed, runtimeMode: this.runtimeMode,
       tickId: this.tickId, timestamp: this.timestamp, entities: this.entities, logs: this.logs, events: this.events,
-      postings: this.postings, spendByOwner: this.spendByOwner };
+      postings: this.postings, spendByOwner: this.spendByOwner, trend: this.trend };
   }
 }

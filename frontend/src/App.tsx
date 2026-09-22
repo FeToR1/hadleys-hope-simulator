@@ -10,6 +10,8 @@ import { SettlementMap } from './components/SettlementMap';
 import { NetworkTopology } from './components/NetworkTopology';
 import { Sidebar } from './components/Sidebar';
 import { SourceSwitcher } from './components/SourceSwitcher';
+import { TrendPanel } from './components/TrendPanel';
+import type { TrendSample } from './domain/trend';
 import { RunControls, type RunCommand } from './components/RunControls';
 
 export function App(): JSX.Element {
@@ -21,7 +23,8 @@ export function App(): JSX.Element {
   const [worldEvents, setWorldEvents] = useState<readonly WorldEvent[]>([]);
   const [money, setMoney] = useState<{ postings: readonly Posting[]; spendByOwner: ReadonlyMap<string, number> }>(
     { postings: [], spendByOwner: new Map() });
-  const [tab, setTab] = useState<'map' | 'topology'>('map');
+  const [tab, setTab] = useState<'map' | 'topology' | 'trend'>('map');
+  const [trend, setTrend] = useState<readonly TrendSample[]>([]);
   const [sourceMode, setSourceMode] = useState<DataSourceMode>('mock');
   const [brokerHealth, setBrokerHealth] = useState<BrokerHealth>();
   const brokerAvailable = brokerHealth !== undefined;
@@ -45,6 +48,7 @@ export function App(): JSX.Element {
     const unsubscribeSidebar = manager.subscribe((snapshot) => {
       setLogs([...snapshot.logs]);
       setMoney({ postings: [...snapshot.postings], spendByOwner: new Map(snapshot.spendByOwner) });
+      setTrend([...snapshot.trend]);
     }, { throttleMs: 200 });
     const unsubscribeGenerator = generator.subscribe((batch) => manager.ingest(batch));
     manager.ingest(generator.getInitialBatch());
@@ -160,8 +164,10 @@ export function App(): JSX.Element {
       <header className="topbar"><div><span className="eyebrow">WORLD KERNEL / LV-426</span><h1>Settlement monitor</h1><div className="run-meta">seed: <strong>{runMeta.seed || '—'}</strong> · tick: <strong>{tickId}</strong></div></div><div className="topbar-right">{sourceMode === 'live' && <RunControls health={brokerHealth} currentTick={tickId} onControl={(command) => void runControl(command)} />}<SourceSwitcher mode={sourceMode} brokerAvailable={brokerAvailable} warning={sourceWarning} onChange={switchSource} /><div className="live-indicator"><span /> {sourceMode === 'live' ? runMeta.runtimeMode.toUpperCase() : 'MOCK'} · {entities.length} entities</div></div></header>
       <div className="content">
         <section className="workspace">
-          <nav className="tabs"><button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>2D карта</button><button className={tab === 'topology' ? 'active' : ''} onClick={() => setTab('topology')}>Топология сетей</button></nav>
-          {tab === 'map' ? <SettlementMap key={runMeta.revision} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { mapFocusRef.current = focus; }} /> : <NetworkTopology key={runMeta.revision} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { graphFocusRef.current = focus; }} />}
+          <nav className="tabs"><button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>2D карта</button><button className={tab === 'topology' ? 'active' : ''} onClick={() => setTab('topology')}>Топология сетей</button><button className={tab === 'trend' ? 'active' : ''} onClick={() => setTab('trend')}>Графики</button></nav>
+          {tab === 'map' && <SettlementMap key={runMeta.revision} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { mapFocusRef.current = focus; }} />}
+          {tab === 'topology' && <NetworkTopology key={runMeta.revision} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { graphFocusRef.current = focus; }} />}
+          {tab === 'trend' && <div className="visualization-shell"><TrendPanel trend={trend} /></div>}
         </section>
         <Sidebar selected={selected} devices={devices} logs={logs} causalChain={causalChain} postings={money.postings} spendByOwner={money.spendByOwner} causalEmptyText={sourceMode === 'live' ? 'Поломок и гибели пока не было. Цепочка причин появится после первой.' : undefined} onFocusCausalStep={focusCausalStep} onExportCsv={exportCsv} />
       </div>

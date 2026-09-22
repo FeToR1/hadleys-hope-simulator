@@ -30,3 +30,14 @@ section { margin-bottom: 26px; } .metric, .device { display: flex; justify-conte
 .run-status { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #90a7bf; font-size: 10px; letter-spacing: .04em; } .run-status.run-failed { color: #ff6d80; } .run-status.run-paused { color: #f2c94c; } .run-status.run-running { color: #48d597; }
 .causal-action .causal-index { background: #4a3a1c; color: #f2c94c; } .causal-failure .causal-index { background: #451d2a; color: #ff6d80; }
 .spend { margin-bottom: 24px; } .spend-owners { margin-top: 16px; }
+.trend { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; } .trend-empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; }
+.trend-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #1a2a3f; } .trend-scope { color: #8197b1; font-size: 11px; }
+.trend-toggle { border: 1px solid #2a405b; border-radius: 5px; background: #0d1c30; color: #b9cbe0; padding: 5px 10px; font-size: 11px; cursor: pointer; } .trend-toggle:hover { border-color: #48d597; color: #48d597; } .trend-toggle[aria-pressed="true"] { background: #21415c; color: #d8e4f3; }
+.trend-charts { flex: 1; min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 4px 16px 12px; } .trend-charts:focus-visible { outline: 2px solid #48d597; outline-offset: -2px; }
+.trend-chart { margin: 0; } .trend-chart svg { display: block; }
+.trend-title { fill: #8197b1; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.trend-tick { fill: #627995; font-size: 10px; } .trend-value { fill: #f2f7ff; font-size: 12px; font-weight: 500; }
+.trend-grid { stroke: #1e3149; stroke-width: 1; } .trend-crosshair { stroke: #44607f; stroke-width: 1; }
+.trend-table-wrap { flex: 1; min-height: 0; overflow: auto; padding: 0 16px 16px; }
+.trend-table { width: 100%; border-collapse: collapse; font-size: 11px; } .trend-table th { position: sticky; top: 0; background: #0d1a2b; color: #7f94af; font-weight: 500; text-align: left; padding: 8px 10px; border-bottom: 1px solid #203149; }
+.trend-table td { padding: 6px 10px; border-bottom: 1px solid #16273c; color: #c5d5e8; font-variant-numeric: tabular-nums; }
