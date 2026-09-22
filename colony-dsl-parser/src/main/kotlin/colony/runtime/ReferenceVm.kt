@@ -1,17 +1,18 @@
 package colony.runtime
 
 import colony.bytecode.*
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 
-data class DeliveredEvent(val eventId: Int, val fields: JsonObject, val sender: String = "scenario", val sequence: Long = 0)
-data class OutgoingEvent(val target: String, val eventId: Int, val fields: JsonObject, val sender: String, val sequence: Long)
-data class VmIntent(val source: String, val operation: Op, val arguments: List<JsonElement>)
-data class VmFrame(val tick: Long, val view: JsonObject, val events: List<DeliveredEvent> = emptyList())
-data class VmResult(val intents: List<VmIntent>, val events: List<OutgoingEvent>, val state: JsonObject)
+@Serializable data class DeliveredEvent(val eventId: Int, val fields: JsonObject, val sender: String = "scenario", val sequence: Long = 0)
+@Serializable data class OutgoingEvent(val target: String, val eventId: Int, val fields: JsonObject, val sender: String, val sequence: Long)
+@Serializable data class VmIntent(val source: String, val operation: Op, val arguments: List<JsonElement>)
+@Serializable data class VmFrame(val tick: Long, val view: JsonObject, val events: List<DeliveredEvent> = emptyList())
+@Serializable data class VmResult(val intents: List<VmIntent>, val events: List<OutgoingEvent>, val state: JsonObject)
 
 /** Temporary, in-process reference for the future native VM. It executes the actual stack artifact. */
 class ReferenceVm(
@@ -193,7 +194,12 @@ private fun convert(value: JsonElement, type: String): JsonElement = when {
 }
 
 private fun binary(operation: String, type: String, left: JsonElement, right: JsonElement): JsonElement {
-    fun decimal(value: JsonElement) = (value as? JsonPrimitive)?.takeUnless { it.isString }?.content?.toBigDecimalOrNull()
+    fun decimal(value: JsonElement): java.math.BigDecimal? {
+        val primitive = (value as? JsonPrimitive)?.takeUnless { it.isString } ?: return null
+        primitive.longOrNull?.let { return java.math.BigDecimal.valueOf(it) }
+        // Compare the exact binary Real64 value, not its rounded decimal rendering in JSON.
+        return primitive.doubleOrNull?.let { java.math.BigDecimal(it) }
+    }
     val a = decimal(left); val b = decimal(right)
     if (operation == "EQ" || operation == "NEQ") {
         val equal = if (a != null && b != null) a.compareTo(b) == 0 else left == right

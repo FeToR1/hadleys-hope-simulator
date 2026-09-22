@@ -73,7 +73,7 @@ class TypeChecker internal constructor(
         }
     }
 
-    private fun checkName(expr: NameExpr): Type {
+    private fun checkName(expr: NameExpr, viewMember: Boolean = false): Type {
         val symbol = ruleScope.lookup(expr.name)
         if (symbol == null) {
             diagnostics.error(
@@ -84,6 +84,9 @@ class TypeChecker internal constructor(
             )
             model.record(expr, Type.Unknown)
             return Type.Unknown
+        }
+        if (!viewMember && symbol.type is Type.View) {
+            diagnostics.error("SEM_VIEW_VALUE", expr.span, "view можно использовать только как view.поле", "view can only be used as view.field")
         }
         model.record(expr, symbol)
         val valueType = (symbol.type as? Type.EnumValue)?.enumType ?: symbol.type
@@ -178,7 +181,8 @@ class TypeChecker internal constructor(
     }
 
     private fun checkMember(expr: MemberExpr): Type {
-        val receiverType = checkExpression(expr.receiver)
+        val receiver = expr.receiver
+        val receiverType = if (receiver is NameExpr) checkName(receiver, viewMember = true) else checkExpression(receiver)
         val result = when {
             receiverType == Type.Unknown -> Type.Unknown
             receiverType is Type.View -> {
@@ -263,6 +267,9 @@ class TypeChecker internal constructor(
         }
         if (path == "chance") validateChanceLiteral(expr)
         val result = intrinsic.resultType(normalizedArgTypes)
+        if (result is Type.Option && result.inner is Type.Option) {
+            diagnostics.error("SEM_NESTED_OPTION", expr.span, "Option<Option<T>> не поддерживается", "Option<Option<T>> is not supported")
+        }
         model.record(expr, intrinsic)
         model.record(expr, result)
         return result

@@ -30,7 +30,7 @@ import kotlin.io.path.readText
     val view: JsonObject, val parent: String?, val x: Double, val y: Double,
 )
 @Serializable data class RunManifest(val version: Int = 1, val seed: Long, val stepSeconds: String, val instances: List<Instance>)
-data class PreparedRun(val scenario: Scenario, val program: BytecodeProgram, val manifest: RunManifest)
+data class PreparedRun(val scenario: Scenario, val program: BytecodeProgram, val manifest: RunManifest, val sources: List<SourceFile> = emptyList())
 
 fun prepareScenario(path: Path): PreparedRun {
     val absolute = path.toAbsolutePath().normalize()
@@ -41,8 +41,9 @@ fun prepareScenario(path: Path): PreparedRun {
     require(scenario.ticks in 1..1_000_000) { "ticks must be in 1..1000000" }
     require(catalog.sources.isNotEmpty() && catalog.sources.distinct().size == catalog.sources.size) { "Sources must be nonempty and unique" }
     // The sources form one compilation package; diagnostics are mapped back to the individual file names.
-    val program = compileSources(catalog.sources.map { SourceFile(it, catalogPath.parent.resolve(it).readText()) }, scenario.step)
-    return expandScenario(scenario, catalog, program)
+    val sources = catalog.sources.map { SourceFile(it, catalogPath.parent.resolve(it).readText()) }
+    val program = compileSources(sources, scenario.step)
+    return expandScenario(scenario, catalog, program).copy(sources = sources)
 }
 
 fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgram): PreparedRun {

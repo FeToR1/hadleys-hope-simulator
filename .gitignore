@@ -4,3 +4,5 @@ frontend/dist
 .gradle/
 .kotlin/
 **/build/
+**/build-*/
+**/__pycache__/

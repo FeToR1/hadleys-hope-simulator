@@ -150,14 +150,14 @@ internal fun isLocalRequest(host: String?, origin: String?): Boolean {
 }
 
 /** Entry point of the serve command: runs until the process is stopped. */
-fun serveReference(prepared: PreparedRun, port: Int) {
+fun serveReference(prepared: PreparedRun, port: Int, fleetFactory: (PreparedRun, String) -> VmFleet = { p, _ -> ReferenceFleet(p) }) {
     require(port in 1..65535)
-    val controller = RunController(prepared)
+    val controller = RunController(prepared, fleetFactory = fleetFactory)
     val pacer = RunPacer(controller)
-    val gateway = ObserverGateway(controller, port)
-    Runtime.getRuntime().addShutdownHook(Thread { pacer.close(); gateway.close() })
+    val gateway = try { ObserverGateway(controller, port) } catch (error: Exception) { controller.close(); throw error }
+    Runtime.getRuntime().addShutdownHook(Thread { pacer.close(); gateway.close(); controller.close() })
     gateway.start()
     pacer.start()
-    println("Reference gateway http://127.0.0.1:$port; ${prepared.manifest.instances.size} in-process VMs. " +
+    println("Gateway http://127.0.0.1:$port; ${prepared.manifest.instances.size} VMs, mode=${controller.health()["runtimeMode"]}. " +
         "The run starts with the first /stream observer; control it with POST /control/pause, resume, step, reset, speed.")
 }

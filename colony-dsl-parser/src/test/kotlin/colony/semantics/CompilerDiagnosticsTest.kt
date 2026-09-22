@@ -46,11 +46,29 @@ class CompilerDiagnosticsTest {
         assertEquals(listOf("SEM_UNKNOWN_KIND"), codes("behavior T for House { state x: Option<Ref<Nothing>> = none; }"))
         assertEquals(listOf("SEM_UNKNOWN_TYPE"), codes("behavior T for House { state s: Float = 1.0; }"))
         // Known kinds and the built-in records remain valid type names.
-        assertEquals(emptyList(), codes("event Ping {} behavior T for House { param h: Ref<Heater>; param spot: Position; param seen: List<Target>; }"))
+        assertEquals(emptyList(), codes("event Sighting { spot: Position; seen: List<Target>; } behavior T for House { param h: Ref<Heater>; }"))
     }
 
     @Test fun eventNamesMayBeUsedAsTypesEvenBeforeTheirDeclaration() {
-        assertEquals(emptyList(), codes("behavior T for House { state e: Option<Later> = none; } event Later { n: Int64; }"))
+        assertEquals(emptyList(), codes("event First { later: Later; } event Later { n: Int64; }"))
+    }
+
+    @Test fun stateAndParametersHoldOnlyFlatValues() {
+        assertEquals(emptyList(), codes("behavior T for House { param h: Ref<Heater>; state a: Option<Bool> = none; state b: Option<Ref<Heater>> = none; }"))
+        assertEquals(listOf("SEM_FLAT_TYPE"), codes("behavior T for House { param spot: Position; }"))
+        assertContains(codes("behavior T for House { state xs: List<Real64> = none; }"), "SEM_FLAT_TYPE")
+        assertContains(codes("event E {} behavior T for House { state e: E = none; }"), "SEM_FLAT_TYPE")
+    }
+
+    @Test fun anOptionOfAnOptionIsRejectedBecauseNoneIsTheOnlyEmptyValue() {
+        assertEquals(listOf("SEM_NESTED_OPTION"), codes("behavior T for House { state x: Option<Option<Bool>> = none; }"))
+        assertContains(codes("behavior T for House { every 1s as tick { let x = some(some(1)); } }"), "SEM_NESTED_OPTION")
+        assertContains(codes("behavior T for House { every 1s as tick { let x = some(none); } }"), "SEM_NESTED_OPTION")
+    }
+
+    @Test fun viewIsOnlyAReceiverOfFieldAccess() {
+        assertEquals(emptyList(), codes("behavior T for House { every 1s as x { let n = view.occupants; } }"))
+        assertEquals(listOf("SEM_VIEW_VALUE"), codes("behavior T for House { every 1s as x { let v = view; } }"))
     }
 
     @Test fun numericLiteralsMustFitTheirRuntimeRepresentation() {

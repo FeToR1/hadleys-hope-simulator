@@ -134,10 +134,12 @@ class SemanticAnalyzer(
                 }
                 is ParamDecl -> {
                     val type = resolveType(member.type, behavior.name, enums, member.span)
+                    requireFlat(type, "параметр", "parameter", member.span)
                     scope.declare(Symbol.Param(member.name, type, member.span), diagnostics)
                 }
                 is StateDecl -> {
                     val type = resolveType(member.type, behavior.name, enums, member.span)
+                    requireFlat(type, "состояние", "state", member.span)
                     val checker = checker(scope, behavior, null, null, enums)
                     val actual = checker.checkExpression(member.initializer)
                     if (containsUnsafeInitializer(member.initializer)) {
@@ -157,6 +159,22 @@ class SemanticAnalyzer(
             }
         }
         behavior.members.filterIsInstance<RuleDecl>().forEach { analyzeRule(behavior, it, scope, enums) }
+    }
+
+    /** State and parameters persist between steps, so they hold only flat values; records and lists live for one step. */
+    private fun isFlat(type: Type): Boolean = when (type) {
+        Type.Bool, Type.Int64, Type.Real64, Type.Duration, Type.Probability, Type.Rate, Type.Money, Type.String, Type.Unknown -> true
+        is Type.Physical, is Type.Ref, is Type.Enum, is Type.EnumValue -> true
+        is Type.Option -> isFlat(type.inner)
+        else -> false
+    }
+
+    private fun requireFlat(type: Type, ru: String, en: String, span: SourceSpan) {
+        if (!isFlat(type)) {
+            diagnostics.error("SEM_FLAT_TYPE", span,
+                "Тип ${type.render()} нельзя хранить как $ru: записи и списки живут один шаг",
+                "Type ${type.render()} cannot be held as $en: records and lists live for one step")
+        }
     }
 
     private fun containsUnsafeInitializer(expr: Expr): Boolean = when (expr) {
@@ -412,7 +430,12 @@ class SemanticAnalyzer(
             diagnostics.error("SEM_UNKNOWN_KIND", span, "Неизвестный вид '${type.kind}' в Ref<${type.kind}>", "Unknown entity kind '${type.kind}' in Ref<${type.kind}>")
             Type.Unknown
         }
-        is Type.Option -> Type.Option(checkKnownNames(type.inner, span))
+        is Type.Option -> {
+            if (type.inner is Type.Option) {
+                diagnostics.error("SEM_NESTED_OPTION", span, "Option<Option<T>> не поддерживается", "Option<Option<T>> is not supported")
+                Type.Unknown
+            } else Type.Option(checkKnownNames(type.inner, span))
+        }
         is Type.List -> Type.List(checkKnownNames(type.element, span))
         is Type.Kind -> if (options.environment.recordFields(type.name) != null || type.name in declaredEventNames) type else {
             diagnostics.error("SEM_UNKNOWN_TYPE", span, "Неизвестный тип '${type.name}'", "Unknown type '${type.name}'")

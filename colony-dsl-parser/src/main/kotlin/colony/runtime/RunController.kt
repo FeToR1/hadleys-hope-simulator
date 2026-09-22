@@ -18,8 +18,10 @@ import kotlin.concurrent.withLock
  */
 class RunController(
     private val prepared: PreparedRun,
+    private val fleetFactory: (PreparedRun, String) -> VmFleet = { p, _ -> ReferenceFleet(p) },
     private val newRunId: () -> String = { UUID.randomUUID().toString() },
-) {
+) : AutoCloseable {
+    private fun createRun(): ReferenceRun { val id = newRunId(); return ReferenceRun(prepared, id, fleetFactory(prepared, id)) }
     enum class Status { WAITING, RUNNING, PAUSED, COMPLETED, FAILED }
 
     /** One committed step exactly as observers receive it. */
@@ -28,7 +30,7 @@ class RunController(
     private val lock = ReentrantLock()
     private val committed = lock.newCondition()
     private val json = Json { encodeDefaults = true }
-    private var run = ReferenceRun(prepared, newRunId()) // fail fast: a broken program must not start a server
+    private var run = createRun() // fail fast: a broken program must not start a server
     private var status = Status.WAITING
     private var failure: String? = null
     private var latest: Frame? = null
@@ -54,7 +56,9 @@ class RunController(
     /** New run under a new ID, evaluated to its first committed step and paused there. Also recovers a failed run. */
     fun reset() = lock.withLock {
         try {
-            run = ReferenceRun(prepared, newRunId())
+            run.close()
+            latest = null
+            run = createRun()
             failure = null
             status = Status.PAUSED
             advance(Status.PAUSED)
@@ -95,7 +99,7 @@ class RunController(
 
     fun health(): JsonObject = lock.withLock {
         buildJsonObject {
-            put("version", 1); put("runtimeMode", "reference"); put("runId", run.runId)
+            put("version", 1); put("runtimeMode", run.runtimeMode); put("runId", run.runId)
             put("status", status.name.lowercase()); put("tick", latest?.tick ?: -1L)
             put("ticks", prepared.scenario.ticks); put("stepsPerSecond", speed)
             failure?.let { put("error", it) }
@@ -108,6 +112,7 @@ class RunController(
             sequence++
             latest = Frame(sequence, snapshot.runId, snapshot.tickId, json.encodeToString(snapshot))
             status = if (snapshot.tickId + 1 >= prepared.scenario.ticks) Status.COMPLETED else continueAs
+            if (status == Status.COMPLETED) run.close()
         } catch (error: Exception) {
             fail(error)
         }
@@ -115,10 +120,13 @@ class RunController(
     }
 
     private fun fail(error: Exception) {
+        run.close()
         failure = error.message ?: error.javaClass.simpleName
         status = Status.FAILED
         committed.signalAll()
     }
+
+    override fun close() = lock.withLock { run.close() }
 
     companion object {
         const val DEFAULT_STEPS_PER_SECOND = 3.0

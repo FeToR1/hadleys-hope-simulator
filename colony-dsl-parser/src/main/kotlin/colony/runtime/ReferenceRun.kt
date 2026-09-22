@@ -48,11 +48,13 @@ private val APPLIANCES = setOf("Heater", "Kettle")
  * establish as world events: confirmation of actions, damage, broken objects and losses of power and water
  * that a scenario change causes. Events cross tick boundaries as the spec requires.
  */
-class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUID().toString()) {
+class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUID().toString(),
+                   private val fleet: VmFleet = ReferenceFleet(prepared)) : AutoCloseable {
+    val runtimeMode: String get() = fleet.mode
+    override fun close() = fleet.close()
     private data class Delivery(val recipient: String, val event: DeliveredEvent)
 
     private val objects = prepared.manifest.instances.associateBy { it.id }
-    private val vms = objects.mapValues { (_, instance) -> ReferenceVm(instance.id, prepared.program, instance.behavior, instance.params, prepared.scenario.seed) }
     private val views = objects.mapValues { it.value.view }.toMutableMap()
     private val positions = objects.mapValues { Coordinates(it.value.x, it.value.y) }.toMutableMap()
     private val power = mutableMapOf<String, Double>()
@@ -174,9 +176,10 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
             val snapshot = objects.mapValues { (id, instance) -> observe(id, instance) }
             val messageInboxes = pending.groupBy({ it.target }, { DeliveredEvent(it.eventId, it.fields, it.sender, it.sequence) })
             val worldInboxes = (pendingWorld + changeDeliveries).groupBy({ it.recipient }, { it.event })
-            val results = vms.mapValues { (id, vm) ->
-                vm.step(VmFrame(tick, snapshot.getValue(id), messageInboxes[id].orEmpty() + worldInboxes[id].orEmpty()))
+            val frames = objects.mapValues { (id, _) ->
+                VmFrame(tick, snapshot.getValue(id), messageInboxes[id].orEmpty() + worldInboxes[id].orEmpty())
             }
+            val results = fleet.step(frames)
             val delivered = pending.size + pendingWorld.size + changeDeliveries.size
             val outgoing = results.values.flatMap { it.events }
             require(outgoing.all { it.target in objects }) { "SEND references an unknown object" }
@@ -247,7 +250,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
             pendingWorld = events.flatMap(::deliveriesOf)
             val entities = objects.map { (id, instance) ->
                 val state = results.getValue(id).state
-                EntitySnapshot(id = id, type = when (instance.kind) { "Human" -> "civilian"; else -> instance.kind.lowercase() },
+                EntitySnapshot(id = id, pid = fleet.pids[id], type = when (instance.kind) { "Human" -> "civilian"; else -> instance.kind.lowercase() },
                     status = if (health.getValue(id) <= 0) "dead" else "nominal",
                     metrics = buildJsonObject {
                         views.getValue(id)["temperature"]?.let { put("temperature", it) }
@@ -257,10 +260,10 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                         if (Capability.POWER_REQUEST in contracts.getValue(instance.kind).capabilities) put("power_consumption", power[id] ?: 0.0)
                     }, connectedTo = listOfNotNull(instance.parent), coordinates = positions.getValue(id), parentId = instance.parent, vmState = state)
             }
-            return TickSnapshot(runId = runId, seed = prepared.scenario.seed.toString(), tickId = tick,
+            return TickSnapshot(runId = runId, runtimeMode = fleet.mode, seed = prepared.scenario.seed.toString(), tickId = tick,
                 timestamp = ((tick + 1) * dt * 1000).toLong(), entities = entities,
                 effects = intents.mapIndexed { index, it -> TraceEvent(it.source, it.operation.name, it.arguments, it.source in ableToAct, refs[index]) },
                 events = changeEvents + events, deliveredEvents = delivered).also { tick++ }
-        } catch (failure: Exception) { failed = true; throw failure }
+        } catch (failure: Exception) { failed = true; close(); throw failure }
     }
 }
