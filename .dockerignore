@@ -1,0 +1,10 @@
+.git
+.gradle
+.kotlin
+**/build
+**/build-*
+**/__pycache__
+frontend/node_modules
+frontend/dist
+docs
+*.log

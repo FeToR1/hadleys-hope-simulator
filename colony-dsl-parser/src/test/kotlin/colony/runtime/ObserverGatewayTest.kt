@@ -18,6 +18,8 @@ class ObserverGatewayTest {
         assertFalse(isLocalRequest("localhost:8080", "https://evil.example"), "cross-site POST presents a foreign Origin")
         assertFalse(isLocalRequest("localhost:8080", "null"))
         assertFalse(isLocalRequest("localhost.evil.example", null))
+        assertTrue(isLocalRequest("backend:8080", null, setOf("backend")))
+        assertFalse(isLocalRequest("backend:8080", "https://evil.example", setOf("backend")))
     }
 
     @Test fun controlsAndStreamWorkOverRealHttp() {

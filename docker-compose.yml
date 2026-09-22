@@ -1,0 +1,34 @@
+services:
+  backend:
+    build:
+      context: .
+      target: backend
+    command: ["serve-native", "examples/physics/cascade.json", "8080"]
+    environment:
+      HH_BIND_HOST: 0.0.0.0
+      HH_ALLOWED_HOSTS: backend
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      target: frontend
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      VITE_BACKEND_URL: http://backend:8080
+    ports:
+      - "5173:5173"
+    restart: unless-stopped
+
+  simulation:
+    profiles: ["simulation"]
+    build:
+      context: .
+      target: backend
+    command: ["run-native", "examples/physics/cascade.json", "/results/cascade.jsonl"]
+    volumes:
+      - ./results:/results

@@ -18,8 +18,13 @@ import java.util.concurrent.atomic.AtomicInteger
  * the run state (GET /health) and accepts run control (POST /control/pause, resume, step, reset, speed).
  * A slow UI client only skips full snapshots and never influences the simulation. Loopback only.
  */
-class ObserverGateway(private val controller: RunController, port: Int) : AutoCloseable {
-    private val server = HttpServer.create(InetSocketAddress("127.0.0.1", port), 16)
+class ObserverGateway(
+    private val controller: RunController,
+    port: Int,
+    bindHost: String = System.getenv("HH_BIND_HOST")?.ifBlank { null } ?: "127.0.0.1",
+    private val allowedHosts: Set<String> = configuredAllowedHosts(),
+) : AutoCloseable {
+    private val server = HttpServer.create(InetSocketAddress(bindHost, port), 16)
     private val requests: ExecutorService = Executors.newFixedThreadPool(8)
     private val clients = AtomicInteger(0)
 
@@ -50,7 +55,7 @@ class ObserverGateway(private val controller: RunController, port: Int) : AutoCl
     private fun guarded(exchange: HttpExchange, method: String, action: () -> Unit) {
         try {
             when {
-                !isLocalRequest(exchange.requestHeaders.getFirst("Host"), exchange.requestHeaders.getFirst("Origin")) ->
+                !isLocalRequest(exchange.requestHeaders.getFirst("Host"), exchange.requestHeaders.getFirst("Origin"), allowedHosts) ->
                     respond(exchange, 403, errorBody("Only local requests are served"))
                 exchange.requestMethod != method -> respond(exchange, 405, errorBody("Use $method"))
                 else -> action()
@@ -135,19 +140,28 @@ private val LOCAL_NAMES = setOf("localhost", "127.0.0.1", "[::1]")
 
 /**
  * The gateway serves the local machine only. A page on another site can make a browser send requests to
- * 127.0.0.1, so besides binding to loopback the Host header (DNS rebinding) and an Origin header (cross-site
- * POST) must both name a local host.
+ * 127.0.0.1 by default, so besides binding to loopback the Host header (DNS rebinding) and an Origin header
+ * (cross-site POST) must both name a local or explicitly configured host.
  */
-internal fun isLocalRequest(host: String?, origin: String?): Boolean {
+internal fun isLocalRequest(host: String?, origin: String?, allowedHosts: Set<String> = emptySet()): Boolean {
     fun localAuthority(authority: String?): Boolean {
         val value = authority?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return false
         val name = if (value.startsWith("[")) value.substringBefore("]") + "]" else value.substringBefore(":")
-        return name in LOCAL_NAMES
+        return name in LOCAL_NAMES || name in allowedHosts
     }
+
     if (!localAuthority(host)) return false
     if (origin == null) return true
     return localAuthority(runCatching { URI(origin).authority }.getOrNull())
 }
+
+private fun configuredAllowedHosts(): Set<String> =
+    System.getenv("HH_ALLOWED_HOSTS")
+        ?.split(',')
+        ?.map { it.trim().lowercase() }
+        ?.filter { it.isNotEmpty() }
+        ?.toSet()
+        ?: emptySet()
 
 /** Entry point of the serve command: runs until the process is stopped. */
 fun serveReference(prepared: PreparedRun, port: Int, fleetFactory: (PreparedRun, String) -> VmFleet = { p, _ -> ReferenceFleet(p) }) {

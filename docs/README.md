@@ -45,6 +45,32 @@ cd frontend && npm ci && npm run dev    # затем открыть адрес V
 На Windows вместо `./gradlew` используется `gradlew.bat`, а исполняемый файл называется
 `colony-dsl-parser.bat`.
 
+### Docker
+
+Docker Desktop на macOS Apple Silicon автоматически выберет arm64-варианты
+официальных образов. Для запуска шлюза и дашборда:
+
+```bash
+docker compose up --build
+```
+
+После сборки откройте <http://localhost:5173>. Backend доступен отдельно на
+<http://localhost:8080>, а Vite проксирует к нему запросы `/health`, `/stream` и
+`/control`.
+
+При сборке Docker выполняются `installDist` для Gradle-приложения и production
+сборка frontend; полный набор интеграционных тестов Gradle остаётся отдельной
+проверкой проекта, так как он использует дополнительные репозиторные fixtures.
+
+Шаг 3 (нативная симуляция в файл) запускается отдельным профилем и сохраняет
+результат в `results/cascade.jsonl`:
+
+```bash
+docker compose --profile simulation run --rm simulation
+```
+
+Для остановки dashboard-режима используйте `docker compose down`.
+
 ## Куда смотреть в интерфейсе
 
 | Вкладка или панель | Что показывает |
