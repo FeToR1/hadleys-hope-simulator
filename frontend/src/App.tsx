@@ -9,6 +9,7 @@ import { SettlementMap } from './components/SettlementMap';
 import { NetworkTopology } from './components/NetworkTopology';
 import { Sidebar } from './components/Sidebar';
 import { SourceSwitcher } from './components/SourceSwitcher';
+import type { MockScenario } from './domain/mockGenerator';
 
 export function App(): JSX.Element {
   const managerRef = useRef(new StateManager());
@@ -21,6 +22,7 @@ export function App(): JSX.Element {
   const [brokerAvailable, setBrokerAvailable] = useState(false);
   const [sourceWarning, setSourceWarning] = useState<string>();
   const [tickId, setTickId] = useState(0);
+  const [scenario, setScenario] = useState<MockScenario>('storm');
   const mapFocusRef = useRef<((entityId: string) => void) | undefined>(undefined);
   const graphFocusRef = useRef<((entityId: string) => void) | undefined>(undefined);
   const liveSourceRef = useRef<LiveBrokerSource | null>(null);
@@ -130,14 +132,19 @@ export function App(): JSX.Element {
     link.click();
     URL.revokeObjectURL(url);
   };
+  const runScenario = (nextScenario: MockScenario): void => {
+    setScenario(nextScenario);
+    generatorRef.current.runScenario(nextScenario);
+  };
 
   return (
     <main className="shell">
-      <header className="topbar"><div><span className="eyebrow">WORLD KERNEL / LV-426</span><h1>Settlement monitor</h1><div className="run-meta">seed: <strong>{generatorRef.current.simulationSeed}</strong> · tick: <strong>{tickId}</strong></div></div><div className="topbar-right"><SourceSwitcher mode={sourceMode} brokerAvailable={brokerAvailable} warning={sourceWarning} onChange={switchSource} /><div className="live-indicator"><span /> {sourceMode === 'live' ? 'LIVE' : 'MOCK'} · {entities.length} entities</div></div></header>
+      <header className="topbar"><div><span className="eyebrow">WORLD KERNEL / LV-426</span><h1>Settlement monitor</h1><div className="run-meta">seed: <strong>{generatorRef.current.simulationSeed}</strong> · tick: <strong>{tickId}</strong></div></div><div className="topbar-right"><label className="scenario-picker">Сценарий<select value={scenario} onChange={(event) => runScenario(event.target.value as MockScenario)}><option value="storm">Буря на LV-426</option><option value="weekend">Катастрофа выходного дня</option><option value="xenomorph">Ксеноморф в секторе</option><option value="marines">Морпехи-вандалы</option></select></label><SourceSwitcher mode={sourceMode} brokerAvailable={brokerAvailable} warning={sourceWarning} onChange={switchSource} /><div className="live-indicator"><span /> {sourceMode === 'live' ? 'LIVE' : 'MOCK'} · {entities.length} entities</div></div></header>
       <div className="content">
         <section className="workspace">
           <nav className="tabs"><button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>2D карта</button><button className={tab === 'topology' ? 'active' : ''} onClick={() => setTab('topology')}>Топология сетей</button></nav>
-          {tab === 'map' ? <SettlementMap entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { mapFocusRef.current = focus; }} /> : <NetworkTopology entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { graphFocusRef.current = focus; }} />}
+          <div className="tab-panel" style={{ display: tab === 'map' ? 'block' : 'none' }}><SettlementMap entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { mapFocusRef.current = focus; }} /></div>
+          <div className="tab-panel" style={{ display: tab === 'topology' ? 'block' : 'none' }}><NetworkTopology entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { graphFocusRef.current = focus; }} /></div>
         </section>
         <Sidebar selected={selected} devices={devices} logs={logs} causalChain={causalChain} onFocusCausalStep={focusCausalStep} onExportCsv={exportCsv} />
       </div>

@@ -1,4 +1,5 @@
 import type { EntityState, TickBatch } from './types';
+export type MockScenario = 'storm' | 'weekend' | 'xenomorph' | 'marines';
 
 const HOUSE_COUNT = 300;
 const GRID_COLUMNS = 20;
@@ -116,5 +117,38 @@ export class MockDataGenerator {
   public stop(): void {
     if (this.timer !== undefined) clearInterval(this.timer);
     this.timer = undefined;
+  }
+
+  public runScenario(scenario: MockScenario): TickBatch {
+    const power = this.entities.get('power-1');
+    const house = this.entities.get('house-5');
+    if (scenario === 'storm' || scenario === 'weekend') {
+      if (power !== undefined) power.status = 'dead';
+      if (house !== undefined) {
+        house.status = 'critical';
+        house.metrics.temperature = scenario === 'weekend' ? 1 : 3;
+        house.metrics.water_level = 0;
+        house.metrics.repair_cost = 500;
+      }
+      this.failureTick = this.tickId;
+    } else if (scenario === 'xenomorph') {
+      const alien = this.entities.get('xenomorph-1');
+      const civilian = this.entities.get('civilian-5');
+      if (alien !== undefined) {
+        alien.coordinates.x = house?.coordinates.x ?? 0;
+        alien.coordinates.y = house?.coordinates.y ?? 0;
+        alien.status = 'critical';
+      }
+      if (civilian !== undefined) civilian.metrics.stress = 1;
+    } else {
+      const powerNode = this.entities.get('power-2');
+      if (powerNode !== undefined) powerNode.status = 'dead';
+      for (const entity of this.entities.values()) {
+        if (entity.type === 'heater' || entity.type === 'kettle') entity.status = 'dead';
+      }
+    }
+    const batch = { tickId: ++this.tickId, timestamp: Date.now(), entities: [...this.entities.values()] };
+    for (const listener of this.listeners) listener(batch);
+    return batch;
   }
 }

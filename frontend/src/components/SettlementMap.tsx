@@ -63,12 +63,39 @@ export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus 
       viewport.eventMode = 'static';
       application.stage.addChild(viewport);
       viewport.addChild(scene);
+      const pulseLayer = new Container();
+      scene.addChild(pulseLayer);
+      const pulses = new Map<string, { graphics: Graphics; age: number; x: number; y: number }>();
+      const previousStatuses = new Map<string, EntityState['status']>();
+      const animatePulses = (ticker: { deltaMS: number }): void => {
+        for (const [id, pulse] of pulses) {
+          pulse.age += ticker.deltaMS;
+          const progress = Math.min(1, pulse.age / 1500);
+          pulse.graphics.clear().circle(0, 0, 18 + progress * 42).stroke({ color: 0xff4d67, width: 3, alpha: 1 - progress });
+          pulse.graphics.position.set(pulse.x, pulse.y);
+          pulse.graphics.alpha = 1 - progress;
+          if (progress >= 1) {
+            pulseLayer.removeChild(pulse.graphics);
+            pulse.graphics.destroy();
+            pulses.delete(id);
+          }
+        }
+      };
+      application.ticker.add(animatePulses);
 
       const updateStage = (currentEntities: readonly EntityState[]): void => {
         entityRef.current.clear();
         const agentCounts = new Map<string, number>();
         for (const entity of currentEntities) {
           entityRef.current.set(entity.id, entity);
+          const previousStatus = previousStatuses.get(entity.id);
+          if ((entity.status === 'critical' || entity.status === 'dead') &&
+            previousStatus !== entity.status && previousStatus !== 'critical' && previousStatus !== 'dead') {
+            const pulse = new Graphics();
+            pulseLayer.addChild(pulse);
+            pulses.set(entity.id, { graphics: pulse, age: 0, x: entity.coordinates.x, y: entity.coordinates.y });
+          }
+          previousStatuses.set(entity.id, entity.status);
           if ((entity.type === 'civilian' || entity.type === 'xenomorph') && entity.parentId !== undefined) {
             agentCounts.set(entity.parentId, (agentCounts.get(entity.parentId) ?? 0) + 1);
           }

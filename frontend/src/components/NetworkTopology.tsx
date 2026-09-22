@@ -46,7 +46,11 @@ export function NetworkTopology({ entities, onSelect, selectedId, onRegisterFocu
         edges: topology.edges.map((edge) => ({ ...edge, style: { stroke: '#60718b', lineWidth: 1 } })),
       },
       node: { type: 'circle', style: { size: 12, labelFill: '#d8e4f3', labelFontSize: 8 } },
-      edge: { type: 'line', style: { endArrow: true } },
+      edge: {
+        type: 'line',
+        style: { endArrow: true },
+        state: { running: { stroke: '#8ffff0', lineWidth: 5, opacity: 1, halo: true } },
+      },
       layout: { type: 'radial', unitRadius: 180, preventOverlap: true, nodeSize: 12, animation: false },
       behaviors: ['drag-canvas', 'zoom-canvas', 'drag-element'],
       plugins: [{
@@ -66,6 +70,12 @@ export function NetworkTopology({ entities, onSelect, selectedId, onRegisterFocu
       if (nodeId !== '') onSelectRef.current(nodeId);
     });
     let disposed = false;
+    const resizeObserver = new ResizeObserver(() => {
+      if (!disposed && graphRef.current === graph && host.clientWidth > 0 && host.clientHeight > 0) {
+        graph.resize();
+      }
+    });
+    resizeObserver.observe(host);
     const initialRender = graph.render();
     graphOperationRef.current = initialRender;
     void initialRender.then(() => {
@@ -76,6 +86,13 @@ export function NetworkTopology({ entities, onSelect, selectedId, onRegisterFocu
         setGraphReady(true);
         onRegisterFocus?.((entityId) => {
           void graph.focusElement(entityId, true);
+          const runningEdges = topology.edges.filter((edge) => edge.source === entityId || edge.target === entityId).map((edge) => edge.id);
+          if (runningEdges.length > 0) {
+            void graph.setElementState(Object.fromEntries(runningEdges.map((edgeId) => [edgeId, ['running']])), true);
+            window.setTimeout(() => {
+              void graph.setElementState(Object.fromEntries(runningEdges.map((edgeId) => [edgeId, []])), false);
+            }, 2_000);
+          }
         });
       }
     }).catch((error: unknown) => {
@@ -83,6 +100,7 @@ export function NetworkTopology({ entities, onSelect, selectedId, onRegisterFocu
     });
     return () => {
       disposed = true;
+      resizeObserver.disconnect();
       graphRef.current = null;
       graphReadyRef.current = false;
       manifestReadyRef.current = false;
