@@ -1,0 +1,31 @@
+; nested.hhvm
+
+.func c 0 1
+c:
+    arg 0
+    push 100
+    add
+    ret
+
+.func b 0 1
+b:
+    arg 0
+    call c
+    push 10
+    add
+    ret
+
+.func a 0 1
+a:
+    arg 0
+    call b
+    push 1
+    add
+    ret
+
+.entry main
+main:
+    push 5
+    call a
+    syscall 1        ; 116
+    halt

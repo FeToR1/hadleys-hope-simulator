@@ -1,0 +1,32 @@
+; loop.hhvm — sum_to(n) = 1 + 2 + ... + n
+
+.func sum_to 2 1
+sum_to:
+    push 0
+    store 0          ; local0 = i = 0
+    push 0
+    store 1          ; local1 = acc = 0
+loop:
+    load 0
+    arg 0
+    sub              ; n - i
+    jump_if_false done
+    load 0
+    push 1
+    add
+    store 0          ; i = i + 1
+    load 1
+    load 0
+    add
+    store 1          ; acc += i
+    jump loop
+done:
+    load 1
+    ret
+
+.entry main
+main:
+    push 5
+    call sum_to
+    syscall 1        ; 15
+    halt

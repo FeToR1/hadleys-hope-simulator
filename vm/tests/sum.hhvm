@@ -1,0 +1,10 @@
+; sum.hhvm
+
+.entry start
+
+start:
+    push    2
+    push    3
+    add
+    syscall 1
+    halt

@@ -1,0 +1,28 @@
+; factorial.hhvm
+
+.func factorial 0 1
+
+factorial:
+    push          1
+    arg           0
+    sub
+    jump_if_false base
+    arg           0
+    push          1
+    arg           0
+    sub
+    call          factorial
+    mul
+    ret
+
+base:
+    push 1
+    ret
+
+.entry main
+
+main:
+    push    5
+    call    factorial
+    syscall 1
+    halt

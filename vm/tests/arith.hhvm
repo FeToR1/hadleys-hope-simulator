@@ -1,0 +1,52 @@
+; arith.hhvm
+
+.entry main
+main:
+    push 4
+    push 10
+    sub
+    syscall 1        ; 6
+    push 6
+    push 7
+    mul
+    syscall 1        ; 42
+    push 6
+    push 42
+    div
+    syscall 1        ; 7
+    push 0
+    push 5
+    div
+    syscall 1        ; 0  (x/0 -> 0)
+    push 12
+    push 10
+    and
+    syscall 1        ; 8
+    push 12
+    push 10
+    or
+    syscall 1        ; 14
+    push 12
+    push 10
+    xor
+    syscall 1        ; 6
+    push 4
+    push 1
+    shl
+    syscall 1        ; 16
+    push 4
+    push 16
+    shr
+    syscall 1        ; 1
+    push 40
+    push 16
+    shr
+    syscall 1        ; 0  (сдвиг >= 32)
+    push 5
+    inc
+    syscall 1        ; 6
+    push 6
+    dec
+    dec
+    syscall 1        ; 4
+    halt
