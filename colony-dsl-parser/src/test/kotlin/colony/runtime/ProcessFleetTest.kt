@@ -37,6 +37,22 @@ class ProcessFleetTest {
     }
 
     @Test fun deadVmAbortsBarrierAndCleansUpTheWholeRun() = failedProcess(false)
+
+    @Test fun residentRoutineMovesIdenticallyThroughTheBroker() {
+        val base = prepareScenario(Path.of("../examples/physics/cascade.json"))
+        val p = base.copy(manifest = base.manifest.copy(instances = base.manifest.instances.filter {
+            it.id.startsWith("home-1/") || it.id.startsWith("home-2/")
+        }))
+        ReferenceRun(p, "routine", fleet(p)).use { native ->
+            ReferenceRun(p, "routine").use { reference ->
+                repeat(180) { tick ->
+                    val actual = native.step().let { s -> s.copy(runtimeMode = "reference", entities = s.entities.map { it.copy(pid = null) }) }
+                    assertTrue(jsonEquivalent(brokerJson.encodeToJsonElement(reference.step()), brokerJson.encodeToJsonElement(actual)),
+                        "Resident snapshot differs at tick $tick")
+                }
+            }
+        }
+    }
     @Test fun deadBrokerCleansUpItsChildren() = failedProcess(true)
     private fun failedProcess(killBroker: Boolean) {
         val p = prepared(); val f = fleet(p); val processes = handles(f)

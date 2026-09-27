@@ -1,5 +1,5 @@
 {
-    "contractVersion": 3,
+    "contractVersion": 4,
     "units": {
         "degC": {
             "quantity": "Temperature",
@@ -129,7 +129,10 @@
                 "health": "Health",
                 "reachable_breakables": "List<Target>",
                 "home": "Position",
-                "workplace": "Position"
+                "workplace": "Position",
+                "meeting_point": "Position",
+                "routine_slot": "Int64",
+                "day_minute": "Int64"
             },
             "capabilities": [
                 "DAMAGE_REQUEST",

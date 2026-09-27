@@ -103,6 +103,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
         // Without a world the harness has no settlement plan, so a place is simply where the manifest put it.
         if ("home" in fields) view["home"] = positionJson(positions.getValue(instance.parent ?: id))
         if ("workplace" in fields) view["workplace"] = positionJson(positions.getValue(instance.parent ?: id))
+        if ("meeting_point" in fields) view["meeting_point"] = positionJson(positions.getValue(instance.parent ?: id))
         if ("depot" in fields) view["depot"] = positionJson(positions.getValue(id))
         if ("health" in fields) view["health"] = JsonPrimitive(health.getValue(id))
         if ("broken" in fields) view["broken"] = JsonPrimitive(effectivelyBroken(id))
