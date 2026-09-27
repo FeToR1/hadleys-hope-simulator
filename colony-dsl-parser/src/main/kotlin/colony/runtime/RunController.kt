@@ -19,13 +19,18 @@ import kotlin.concurrent.withLock
 class RunController(
     private val prepared: PreparedRun,
     private val fleetFactory: (PreparedRun, String) -> VmFleet = { p, _ -> ReferenceFleet(p) },
+    private val replayCapacity: Int = 256,
     private val newRunId: () -> String = { UUID.randomUUID().toString() },
 ) : AutoCloseable {
     private fun createRun(): ReferenceRun { val id = newRunId(); return ReferenceRun(prepared, id, fleetFactory(prepared, id)) }
     enum class Status { WAITING, RUNNING, PAUSED, COMPLETED, FAILED }
 
     /** One committed step exactly as observers receive it. */
-    data class Frame(val sequence: Long, val runId: String, val tick: Long, val json: String)
+    data class Frame(val sequence: Long, val runId: String, val tick: Long, val json: String) {
+        val eventId: String get() = "$runId:$sequence"
+    }
+
+    data class Update(val revision: Long, val frames: List<Frame>, val health: JsonObject, val gap: Boolean)
 
     private val lock = ReentrantLock()
     private val committed = lock.newCondition()
@@ -36,16 +41,28 @@ class RunController(
     private var latest: Frame? = null
     private var sequence = 0L
     private var speed = DEFAULT_STEPS_PER_SECOND
+    private var revision = 0L
+    private val history = ArrayDeque<Frame>()
+    private var historyChars = 0L
+
+    init { require(replayCapacity > 0) }
+
+    private fun changed() {
+        revision++
+        committed.signalAll()
+    }
 
     val stepsPerSecond: Double get() = lock.withLock { speed }
     val currentStatus: Status get() = lock.withLock { status }
 
     /** First observer attached: an untouched run begins. Later calls change nothing. */
-    fun start() = lock.withLock { if (status == Status.WAITING) status = Status.RUNNING }
+    fun start() = lock.withLock { if (status == Status.WAITING) { status = Status.RUNNING; changed() } }
 
-    fun pause() = lock.withLock { if (status == Status.RUNNING) status = Status.PAUSED }
+    fun pause() = lock.withLock { if (status == Status.RUNNING) { status = Status.PAUSED; changed() } }
 
-    fun resume() = lock.withLock { if (status == Status.PAUSED || status == Status.WAITING) status = Status.RUNNING }
+    fun resume() = lock.withLock {
+        if (status == Status.PAUSED || status == Status.WAITING) { status = Status.RUNNING; changed() }
+    }
 
     /** Step mode: pauses if needed, then performs exactly one step. */
     fun stepOnce() = lock.withLock {
@@ -58,6 +75,8 @@ class RunController(
         try {
             run.close()
             latest = null
+            history.clear()
+            historyChars = 0
             run = createRun()
             failure = null
             status = Status.PAUSED
@@ -72,6 +91,7 @@ class RunController(
             "speed must be between $MIN_STEPS_PER_SECOND and $MAX_STEPS_PER_SECOND steps per second"
         }
         speed = stepsPerSecond
+        changed()
     }
 
     /** Called by the pacing loop: performs one step when the run is running. */
@@ -106,24 +126,44 @@ class RunController(
         }
     }
 
+    /** Ordered replay and run status captured under one lock; network writes never hold this lock. */
+    fun awaitUpdate(afterId: String?, afterRevision: Long, timeoutMillis: Long): Update? = lock.withLock {
+        var remaining = TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+        while (revision == afterRevision) {
+            if (remaining <= 0) return@withLock null
+            remaining = committed.awaitNanos(remaining)
+        }
+        val previous = history.firstOrNull { it.eventId == afterId }
+        val gap = previous == null && history.isNotEmpty() && history.first().tick > 0
+        val frames = if (previous == null) history.toList() else history.filter { it.sequence > previous.sequence }
+        Update(revision, frames, health(), gap)
+    }
+
     private fun advance(continueAs: Status) {
         try {
             val snapshot = run.step()
             sequence++
-            latest = Frame(sequence, snapshot.runId, snapshot.tickId, json.encodeToString(snapshot))
+            val frame = Frame(sequence, snapshot.runId, snapshot.tickId, json.encodeToString(snapshot))
+            latest = frame
+            history.addLast(frame)
+            historyChars += frame.json.length
+            // Bound both frame count and payload size, retaining at least the current snapshot.
+            while (history.size > 1 && (history.size > replayCapacity || historyChars > MAX_REPLAY_CHARS)) {
+                historyChars -= history.removeFirst().json.length
+            }
             status = if (snapshot.tickId + 1 >= prepared.scenario.ticks) Status.COMPLETED else continueAs
             if (status == Status.COMPLETED) run.close()
         } catch (error: Exception) {
             fail(error)
         }
-        committed.signalAll()
+        changed()
     }
 
     private fun fail(error: Exception) {
         run.close()
         failure = error.message ?: error.javaClass.simpleName
         status = Status.FAILED
-        committed.signalAll()
+        changed()
     }
 
     override fun close() = lock.withLock { run.close() }
@@ -132,6 +172,7 @@ class RunController(
         const val DEFAULT_STEPS_PER_SECOND = 3.0
         const val MIN_STEPS_PER_SECOND = 0.1
         const val MAX_STEPS_PER_SECOND = 100.0
+        private const val MAX_REPLAY_CHARS = 16L * 1024 * 1024
     }
 }
 

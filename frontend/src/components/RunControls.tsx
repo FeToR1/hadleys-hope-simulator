@@ -15,7 +15,7 @@ export type RunCommand = ControlAction | 'restart';
 
 interface RunControlsProps {
   health: BrokerHealth | undefined;
-  /** Last step of the stream; the health document is only polled and lags behind it. */
+  /** Last step applied from the stream. */
   currentTick?: number;
   onControl: (command: RunCommand) => void;
 }
@@ -43,7 +43,7 @@ export function RunControls({ health, currentTick, onControl }: RunControlsProps
 export function describeRun(health: BrokerHealth | undefined, currentTick?: number): string {
   if (health === undefined) return 'нет связи';
   if (health.status === 'failed') return `ошибка: ${health.error ?? 'неизвестна'}`;
-  // The stream is the source of truth for progress; the polled document may be a couple of seconds old.
+  // Show progress for the snapshot already applied to the UI.
   const done = Math.max(0, (currentTick ?? health.tick) + 1);
   return `${STATUS_LABEL[health.status]} · ${Math.min(done, health.ticks)} / ${health.ticks}`;
 }

@@ -27,8 +27,10 @@ export function App(): JSX.Element {
   const [trend, setTrend] = useState<readonly TrendSample[]>([]);
   const [sourceMode, setSourceMode] = useState<DataSourceMode>('mock');
   const [brokerHealth, setBrokerHealth] = useState<BrokerHealth>();
-  const brokerAvailable = brokerHealth !== undefined;
+  const [streamConnected, setStreamConnected] = useState(false);
+  const brokerAvailable = sourceMode === 'live' ? streamConnected : brokerHealth !== undefined;
   const [sourceWarning, setSourceWarning] = useState<string>();
+  const [historyWarning, setHistoryWarning] = useState<string>();
   const [tickId, setTickId] = useState(0);
   const [runMeta, setRunMeta] = useState({ revision: 0, seed: '', runtimeMode: 'mock' });
   const mapFocusRef = useRef<((entityId: string) => void) | undefined>(undefined);
@@ -67,7 +69,16 @@ export function App(): JSX.Element {
       streamUrl: '/stream',
       controlUrl: '/control',
       onHealthChange: setBrokerHealth,
-      onBatch: (batch) => { setSourceWarning(undefined); managerRef.current.ingest(batch); },
+      onConnectionChange: (connected) => {
+        setStreamConnected(connected);
+        if (connected) setSourceWarning(undefined);
+      },
+      onGap: () => setHistoryWarning('Часть истории недоступна: события, графики и суммы расходов могут быть неполными.'),
+      onBatch: (batch) => {
+        setSourceWarning(undefined);
+        if (batch.tickId === 0) setHistoryWarning(undefined);
+        managerRef.current.ingest(batch);
+      },
       onError: (message) => {
         setSourceWarning(message);
       },
@@ -88,6 +99,7 @@ export function App(): JSX.Element {
     setSourceWarning(mode !== requested ? 'Live Broker недоступен: продолжаем работу в режиме Mock' : undefined);
     if (mode === sourceMode) return;
     setSourceMode(mode);
+    setHistoryWarning(undefined);
     managerRef.current.reset();
     setSelectedId(undefined);
     if (mode === 'mock') {
@@ -161,7 +173,7 @@ export function App(): JSX.Element {
 
   return (
     <main className="shell">
-      <header className="topbar"><div><span className="eyebrow">WORLD KERNEL / LV-426</span><h1>Settlement monitor</h1><div className="run-meta">seed: <strong>{runMeta.seed || '—'}</strong> · tick: <strong>{tickId}</strong></div></div><div className="topbar-right">{sourceMode === 'live' && <RunControls health={brokerHealth} currentTick={tickId} onControl={(command) => void runControl(command)} />}<SourceSwitcher mode={sourceMode} brokerAvailable={brokerAvailable} warning={sourceWarning} onChange={switchSource} /><div className="live-indicator"><span /> {sourceMode === 'live' ? runMeta.runtimeMode.toUpperCase() : 'MOCK'} · {entities.length} entities</div></div></header>
+      <header className="topbar"><div><span className="eyebrow">WORLD KERNEL / LV-426</span><h1>Settlement monitor</h1><div className="run-meta">seed: <strong>{runMeta.seed || '—'}</strong> · tick: <strong>{tickId}</strong></div></div><div className="topbar-right">{sourceMode === 'live' && <RunControls health={brokerHealth} currentTick={tickId} onControl={(command) => void runControl(command)} />}<SourceSwitcher mode={sourceMode} brokerAvailable={brokerAvailable} warning={[sourceWarning, historyWarning].filter(Boolean).join(" ") || undefined} onChange={switchSource} /><div className="live-indicator"><span /> {sourceMode === 'live' ? runMeta.runtimeMode.toUpperCase() : 'MOCK'} · {entities.length} entities</div></div></header>
       <div className="content">
         <section className="workspace">
           <nav className="tabs"><button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>2D карта</button><button className={tab === 'topology' ? 'active' : ''} onClick={() => setTab('topology')}>Топология сетей</button><button className={tab === 'trend' ? 'active' : ''} onClick={() => setTab('trend')}>Графики</button></nav>

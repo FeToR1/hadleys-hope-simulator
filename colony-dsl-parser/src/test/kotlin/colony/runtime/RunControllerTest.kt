@@ -90,8 +90,13 @@ class RunControllerTest {
         val catalog = Catalog(sources = listOf("inline"), templates = mapOf("t" to Template(mapOf("house" to house))))
         val run = controller(expandScenario(scenario, catalog, program))
         run.start()
-        repeat(3) { run.tick() }
+        repeat(2) { run.tick() }
+        val beforeFailure = run.awaitUpdate(null, -1, 0)!!
+        run.tick()
         assertEquals("failed", run.status())
+        val failure = run.awaitUpdate(beforeFailure.frames.last().eventId, beforeFailure.revision, 0)!!
+        assertTrue(failure.frames.isEmpty())
+        assertEquals("failed", failure.health.getValue("status").jsonPrimitive.content)
         assertContains(run.field("error").jsonPrimitive.content, "Division by zero")
         assertFalse(run.tick())
         run.reset()
@@ -132,5 +137,56 @@ class RunControllerTest {
         }
         assertEquals("completed", run.status())
         assertEquals(4L, run.lastTick())
+    }
+
+    @Test fun streamReplaysEveryTickAfterTheLastDeliveredId() {
+        controller(small(20)).use { run ->
+            run.stepOnce()
+            val first = run.awaitUpdate(null, -1, 0)!!
+            repeat(10) { run.stepOnce() }
+            val update = run.awaitUpdate(first.frames.single().eventId, first.revision, 0)!!
+            assertEquals((1L..10L).toList(), update.frames.map { it.tick })
+            assertFalse(update.gap)
+            assertNull(run.awaitUpdate(update.frames.last().eventId, update.revision, 0))
+            val reconnected = run.awaitUpdate(update.frames.last().eventId, -1, 0)!!
+            assertTrue(reconnected.frames.isEmpty(), "reconnect must not repeat a committed posting")
+        }
+    }
+
+    @Test fun expiredHistoryIsExplicitAndResetReplaysOnlyTheNewRun() {
+        var id = 0
+        RunController(small(10), replayCapacity = 2, newRunId = { "run-${++id}" }).use { run ->
+            run.stepOnce()
+            val first = run.awaitUpdate(null, -1, 0)!!
+            repeat(4) { run.stepOnce() }
+            val expired = run.awaitUpdate(first.frames.single().eventId, first.revision, 0)!!
+            assertTrue(expired.gap)
+            assertEquals(listOf(3L, 4L), expired.frames.map { it.tick })
+            assertTrue(run.awaitUpdate(null, -1, 0)!!.gap, "late join also has incomplete history")
+            run.reset()
+            val reset = run.awaitUpdate(expired.frames.last().eventId, expired.revision, 0)!!
+            assertFalse(reset.gap)
+            assertEquals("run-2", reset.frames.single().runId)
+            assertEquals(0L, reset.frames.single().tick)
+        }
+    }
+
+    @Test fun controlChangesWakeTheStreamWithoutATick() {
+        controller().use { run ->
+            run.start()
+            val initial = run.awaitUpdate(null, -1, 0)!!
+            val received = AtomicReference<RunController.Update?>()
+            val waiter = Thread { received.set(run.awaitUpdate(null, initial.revision, 5000)) }.also { it.start() }
+            run.pause()
+            waiter.join(5000)
+            val paused = assertNotNull(received.get())
+            assertEquals("paused", paused.health.getValue("status").jsonPrimitive.content)
+            assertTrue(paused.frames.isEmpty())
+            run.setSpeed(10.0)
+            val speed = run.awaitUpdate(null, paused.revision, 0)!!
+            assertEquals(10.0, speed.health.getValue("stepsPerSecond").jsonPrimitive.double)
+            run.resume()
+            assertEquals("running", run.awaitUpdate(null, speed.revision, 0)!!.health.getValue("status").jsonPrimitive.content)
+        }
     }
 }

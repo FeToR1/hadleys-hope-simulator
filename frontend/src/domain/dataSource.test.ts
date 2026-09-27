@@ -1,5 +1,119 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LiveBrokerSource, parseHealth, parseTickBatch } from './dataSource';
+import { StateManager } from './stateManager';
+
+describe('live stream lifecycle', () => {
+  class FakeStream extends EventTarget {
+    static instances: FakeStream[] = [];
+    onopen: (() => void) | null = null;
+    onmessage: ((event: { data: string }) => void) | null = null;
+    onerror: (() => void) | null = null;
+    close = vi.fn();
+    constructor(public readonly url: string) { super(); FakeStream.instances.push(this); }
+    emit(type: string, value: unknown): void {
+      const data = JSON.stringify(value);
+      if (type === 'message') this.onmessage?.({ data });
+      else this.dispatchEvent(Object.assign(new Event(type), { data }));
+    }
+  }
+  const health = { status: 'paused', runId: 'r1', tick: 0, ticks: 120, stepsPerSecond: 3 };
+  const setup = () => {
+    vi.stubGlobal('EventSource', FakeStream);
+    const options = { healthUrl: '/health', streamUrl: '/stream', controlUrl: '/control',
+      onHealthChange: vi.fn(), onBatch: vi.fn(), onError: vi.fn(), onConnectionChange: vi.fn(), onGap: vi.fn() };
+    const live = new LiveBrokerSource(options);
+    return { live, options, stream: () => FakeStream.instances.at(-1)! };
+  };
+  afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); FakeStream.instances = []; });
+
+  it('pushes status while paused, reports disconnects and recovers on open', () => {
+    const { live, options, stream } = setup();
+    live.connect();
+    expect(stream().url).toBe('/stream');
+    stream().onopen?.();
+    expect(options.onConnectionChange).toHaveBeenLastCalledWith(true);
+    stream().emit('health', health);
+    expect(options.onHealthChange).toHaveBeenLastCalledWith(parseHealth(health));
+    stream().onerror?.();
+    expect(options.onConnectionChange).toHaveBeenLastCalledWith(false);
+    expect(options.onHealthChange).toHaveBeenLastCalledWith(undefined);
+    expect(stream().close).not.toHaveBeenCalled(); // native EventSource retries this connection
+    stream().onopen?.();
+    stream().emit('health', { ...health, status: 'completed' });
+    expect(options.onConnectionChange).toHaveBeenLastCalledWith(true);
+    expect(options.onHealthChange).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'completed' }));
+    live.disconnect();
+  });
+
+  it('does not let a pending health poll overwrite stream status or poll over a broken stream', async () => {
+    vi.useFakeTimers();
+    let resolve!: (response: unknown) => void;
+    const fetch = vi.fn(() => new Promise((done) => { resolve = done; }));
+    vi.stubGlobal('fetch', fetch);
+    const { live, options, stream } = setup();
+    const stop = live.startHealthCheck();
+    live.connect();
+    stream().emit('health', health);
+    resolve({ ok: true, json: async () => ({ ...health, status: 'waiting' }) });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(options.onHealthChange).toHaveBeenCalledTimes(1);
+    expect(options.onHealthChange).toHaveBeenLastCalledWith(parseHealth(health));
+    stream().onerror?.();
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(options.onHealthChange).toHaveBeenLastCalledWith(undefined);
+    live.disconnect();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
+  it('rejects malformed data, reports missing history and ignores events after disconnect', () => {
+    const { live, options, stream } = setup();
+    live.connect();
+    const old = stream();
+    old.emit('message', { broken: true });
+    old.emit('health', { status: 'wrong' });
+    expect(options.onError).toHaveBeenCalledTimes(2);
+    expect(options.onBatch).not.toHaveBeenCalled();
+    old.emit('gap', { reason: 'Replay history expired' });
+    expect(options.onGap).toHaveBeenCalledTimes(1);
+    live.disconnect();
+    old.emit('health', health);
+    old.emit('gap', {});
+    expect(old.close).toHaveBeenCalledOnce();
+    expect(options.onHealthChange).not.toHaveBeenCalled();
+    expect(options.onGap).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses stream ordering for status even when a command response arrives first', async () => {
+    const { live, options, stream } = setup();
+    live.connect();
+    stream().emit('health', health);
+    const running = { ...health, status: 'running' };
+    vi.stubGlobal('fetch', async () => ({ ok: true, json: async () => running }));
+    expect(await live.control('resume')).toEqual(parseHealth(running));
+    expect(options.onHealthChange).toHaveBeenCalledTimes(1);
+    stream().emit('health', running);
+    expect(options.onHealthChange).toHaveBeenLastCalledWith(parseHealth(running));
+    live.disconnect();
+  });
+
+  it('ingests replayed ticks without losing or double counting their ledger entries', () => {
+    const { live, options, stream } = setup();
+    const manager = new StateManager();
+    options.onBatch.mockImplementation((batch) => manager.ingest(batch));
+    live.connect();
+    for (const tickId of [0, 1, 1, 2]) stream().emit('message', {
+      version: 1, runId: 'r1', runtimeMode: 'reference', seed: '426', full: true, tickId, timestamp: tickId * 1000,
+      entities: [], postings: [{ tick: tickId, owner: 'settlement', kind: 'repair', amount: 10 }],
+    });
+    expect(manager.snapshot().tickId).toBe(2);
+    expect(manager.snapshot().postings).toHaveLength(3);
+    expect(manager.snapshot().spendByOwner.get('settlement')).toBe(30);
+    live.disconnect();
+  });
+});
 
 describe('observer protocol v1', () => {
   const batch = {
