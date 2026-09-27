@@ -24,24 +24,30 @@ interface LiveSourceOptions {
   onHealthChange: (health: BrokerHealth | undefined) => void;
   onBatch: (batch: TickBatch) => void;
   onError: (message: string) => void;
+  onConnectionChange?: (connected: boolean) => void;
+  onGap?: () => void;
 }
 
 export class LiveBrokerSource {
   private healthTimer: ReturnType<typeof setInterval> | undefined;
   private stream: EventSource | undefined;
+  private healthRevision = 0;
 
   public constructor(private readonly options: LiveSourceOptions) {}
 
   public startHealthCheck(): () => void {
     let stopped = false;
     const check = async (): Promise<void> => {
+      // While observing, the stream is authoritative, including loss of connectivity.
+      if (this.stream !== undefined) return;
+      const revision = this.healthRevision;
       try {
         const response = await fetch(this.options.healthUrl, { method: 'GET', cache: 'no-store' });
         // 503 is a reachable gateway whose run failed; its body still says why.
         const health = response.ok || response.status === 503 ? parseHealth(await response.json()) : undefined;
-        if (!stopped) this.options.onHealthChange(health);
+        if (!stopped && revision === this.healthRevision) this.options.onHealthChange(health);
       } catch {
-        if (!stopped) this.options.onHealthChange(undefined);
+        if (!stopped && revision === this.healthRevision) this.options.onHealthChange(undefined);
       }
     };
     void check();
@@ -55,6 +61,7 @@ export class LiveBrokerSource {
 
   /** Pause, resume, single step, restart or speed change; the gateway answers with the new run state. */
   public async control(action: ControlAction): Promise<BrokerHealth | undefined> {
+    const revision = this.healthRevision;
     const path = typeof action === 'string' ? action : `speed?value=${encodeURIComponent(String(action.speed))}`;
     try {
       const response = await fetch(`${this.options.controlUrl}/${path}`, { method: 'POST', cache: 'no-store' });
@@ -65,7 +72,10 @@ export class LiveBrokerSource {
         this.options.onError(`Команда не выполнена: ${reason}`);
         return undefined;
       }
-      this.options.onHealthChange(health);
+      if (this.stream === undefined && revision === this.healthRevision) {
+        this.healthRevision++;
+        this.options.onHealthChange(health);
+      }
       return health;
     } catch {
       this.options.onError('Команда не выполнена: шлюз недоступен');
@@ -79,21 +89,48 @@ export class LiveBrokerSource {
       this.options.onError('Live Broker недоступен в текущем окружении');
       return;
     }
-    this.stream = new EventSource(this.options.streamUrl);
-    this.stream.onmessage = (event) => {
+    const stream = new EventSource(this.options.streamUrl);
+    this.stream = stream;
+    stream.onopen = () => {
+      if (this.stream === stream) this.options.onConnectionChange?.(true);
+    };
+    stream.onmessage = (event) => {
+      if (this.stream !== stream) return;
       try {
         this.options.onBatch(parseTickBatch(JSON.parse(event.data)));
       } catch {
         this.options.onError('Live Broker прислал некорректный TickBatch');
       }
     };
-    this.stream.onerror = () => this.options.onError('Соединение с Live Broker потеряно');
+    stream.addEventListener('health', (event) => {
+      if (this.stream !== stream) return;
+      try {
+        const health = parseHealth(JSON.parse((event as MessageEvent<string>).data));
+        if (health === undefined) throw new Error('Invalid health');
+        this.healthRevision++;
+        this.options.onHealthChange(health);
+      } catch {
+        this.options.onError('Live Broker прислал некорректный статус прогона');
+      }
+    });
+    stream.addEventListener('gap', () => {
+      if (this.stream === stream) this.options.onGap?.();
+    });
+    stream.onerror = () => {
+      if (this.stream !== stream) return;
+      this.healthRevision++;
+      this.options.onHealthChange(undefined);
+      this.options.onConnectionChange?.(false);
+      this.options.onError('Соединение с Live Broker потеряно; переподключаемся…');
+    };
   }
 
   public disconnect(): void {
-    if (this.stream) { this.stream.onmessage = null; this.stream.onerror = null; }
+    this.healthRevision++;
+    if (this.stream) { this.stream.onopen = null; this.stream.onmessage = null; this.stream.onerror = null; }
     this.stream?.close();
     this.stream = undefined;
+    this.options.onConnectionChange?.(false);
   }
 }
 

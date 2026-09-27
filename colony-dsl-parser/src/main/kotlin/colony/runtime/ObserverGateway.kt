@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * Local observer and control gateway, not a broker. It publishes committed snapshots (GET /stream, SSE),
  * the run state (GET /health) and accepts run control (POST /control/pause, resume, step, reset, speed).
- * A slow UI client only skips full snapshots and never influences the simulation. Loopback only.
+ * Ordered, bounded replay lets reconnecting clients recover ticks without blocking the simulation.
  */
 class ObserverGateway(
     private val controller: RunController,
@@ -94,20 +94,28 @@ class ObserverGateway(
         try {
             exchange.responseHeaders.set("Content-Type", "text/event-stream; charset=utf-8")
             exchange.responseHeaders.set("Cache-Control", "no-cache")
+            exchange.responseHeaders.set("X-Accel-Buffering", "no")
             exchange.sendResponseHeaders(200, 0)
             controller.start() // an untouched run begins with its first observer
             val writer = exchange.responseBody.bufferedWriter(Charsets.UTF_8)
-            var seen = -1L
+            writer.write("retry: 1000\n\n")
+            writer.flush()
+            var seen = exchange.requestHeaders.getFirst("Last-Event-ID")
+            var revision = -1L
             while (!Thread.currentThread().isInterrupted) {
-                val frame = controller.awaitAfter(seen, KEEP_ALIVE_MILLIS)
-                if (frame != null) {
-                    writer.write("data: ${frame.json}\n\n")
-                    seen = frame.sequence
+                val update = controller.awaitUpdate(seen, revision, KEEP_ALIVE_MILLIS)
+                if (update != null) {
+                    if (update.gap) writer.write("event: gap\ndata: {\"reason\":\"Replay history expired\"}\n\n")
+                    for (frame in update.frames) {
+                        writer.write("id: ${frame.eventId}\ndata: ${frame.json}\n\n")
+                        seen = frame.eventId
+                    }
+                    writer.write("event: health\ndata: ${update.health}\n\n")
+                    revision = update.revision
                 } else {
                     writer.write(": keep-alive\n\n")
                 }
                 writer.flush()
-                Thread.sleep(MIN_PUSH_INTERVAL_MILLIS) // the UI never needs more than about ten snapshots per second
             }
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
@@ -128,7 +136,6 @@ class ObserverGateway(
     private companion object {
         const val MAX_STREAM_CLIENTS = 6
         const val KEEP_ALIVE_MILLIS = 15_000L
-        const val MIN_PUSH_INTERVAL_MILLIS = 100L
     }
 }
 
