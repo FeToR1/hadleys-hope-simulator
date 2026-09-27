@@ -7,7 +7,7 @@ import colony.ast.SourceSpan
  * version (docs/simulation/trigger-conditions.md, section 6), and compiled artifacts record the version
  * they were built against so that a kernel or VM can refuse a mismatch.
  */
-const val CONTRACT_VERSION = 3
+const val CONTRACT_VERSION = 4
 
 /** Entity-kind contract supplied by runtime/simulation owners (Role #7). */
 data class KindContract(
@@ -114,6 +114,9 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
             // Where this resident lives and works; the settlement decides, not the program.
             "home" to Type.Kind("Position"),
             "workplace" to Type.Kind("Position"),
+            "meeting_point" to Type.Kind("Position"),
+            "routine_slot" to Type.Int64,
+            "day_minute" to Type.Int64,
         ),
         capabilities = setOf(Capability.DAMAGE_REQUEST, Capability.MOTION_REQUEST),
     ),

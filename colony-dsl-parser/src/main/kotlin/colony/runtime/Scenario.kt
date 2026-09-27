@@ -138,6 +138,7 @@ internal object HarnessObservations {
         "Heater" to mapOf("broken" to JsonPrimitive(false), "power_connected" to JsonPrimitive(true)),
         "Kettle" to mapOf("broken" to JsonPrimitive(false), "power_connected" to JsonPrimitive(true)),
         "Xenomorph" to mapOf("visible_humans" to JsonArray(emptyList())),
+        "Human" to mapOf("routine_slot" to JsonPrimitive(0), "day_minute" to JsonPrimitive(480)),
     )
 
     fun computed(kind: String): Set<String> = computed[kind].orEmpty()
@@ -147,7 +148,7 @@ internal object HarnessObservations {
     fun derived(instance: Instance): Set<String> = buildSet {
         if (instance.kind == "Human" || instance.kind == "Xenomorph" || instance.kind == "Rover") add("position")
         // Places the settlement decides: the harness puts them where the manifest does.
-        addAll(listOf("home", "workplace", "depot").filter { it in fieldsOf(instance.kind) })
+        addAll(listOf("home", "workplace", "meeting_point", "depot").filter { it in fieldsOf(instance.kind) })
         if ((instance.kind == "Heater" || instance.kind == "Kettle") && instance.parent != null) add("home_occupants")
         addAll(defaults(instance.kind).keys)
     }

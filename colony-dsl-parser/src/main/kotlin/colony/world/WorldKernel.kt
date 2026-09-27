@@ -42,6 +42,8 @@ class WorldKernel(
 ) {
     private val people = Population(manifest)
     private val dt = stepSeconds
+    private var elapsedSeconds = 0.0
+    private val routineSlots = people.residents.sortedBy { it.id }.mapIndexed { index, resident -> resident.id to index }.toMap()
 
     // --- state the kernel owns
     private val health = HashMap<String, Double>()
@@ -149,7 +151,10 @@ class WorldKernel(
                 "visible_humans" -> targets(id, people.residents.filter { !isBroken(it.id) }.map { it.id })
                 "patrol_waypoint" -> pointJson(patrolPoint(id))
                 "home" -> pointJson(positionOf(instance.parent ?: id))
-                "workplace" -> pointJson(workplace)
+                "workplace" -> pointJson(if ((routineSlots[id] ?: 0) % 4 == 2) servicePoint else minePoint)
+                "meeting_point" -> pointJson(meetingPoint)
+                "routine_slot" -> JsonPrimitive(routineSlots[id] ?: 0)
+                "day_minute" -> JsonPrimitive((config.human.startMinute + (elapsedSeconds / 60).toLong()) % 1440)
                 "depot" -> pointJson(depotOf(instance))
                 "active_jobs" -> jobList(id)
                 "materials_remaining" -> JsonPrimitive(config.repair.materials)
@@ -176,8 +181,10 @@ class WorldKernel(
             })
     }
 
-    /** Everyone works at the same place: the shift building next to the grid. */
-    private val workplace: Point = Point(topology.byId.getValue(BUS).at.x + 40.0, topology.byId.getValue(BUS).at.y + 140.0)
+    /** Routine destinations: mine outside the housing area, services and a meeting place in the colony. */
+    private val minePoint = Point(people.houses.maxOf { it.x } + 120.0, people.houses.map { it.y }.average())
+    private val servicePoint = Point(people.houses.map { it.x }.average(), people.houses.minOf { it.y } - 90.0)
+    private val meetingPoint = Point(servicePoint.x, servicePoint.y + 45.0)
 
     /** A crew returns to where its manifest put it. */
     private fun depotOf(instance: Instance): Point = Point(instance.x, instance.y)
@@ -251,6 +258,7 @@ class WorldKernel(
         reportChanges(poweredBefore, waterBefore, events)
         bill(tick, events)
         lastPostings = if (postings.size > postedBefore) postings.subList(postedBefore, postings.size).toList() else emptyList()
+        elapsedSeconds += dt
         return events
     }
 

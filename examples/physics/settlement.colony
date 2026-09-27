@@ -73,26 +73,80 @@ behavior KettleControl for Kettle {
 behavior Resident for Human {
     enum Mood { Calm, Agitated }
     enum DamageCause { Vandalism }
+    enum Occupation { Miner, ColonyWorker, HomeResident }
+    enum Activity { Resting, GoingToWork, Mining, Working, GoingToMeet, Socializing, ReturningHome, Injured, Dead }
 
     state mood: Mood = Calm;
+    state occupation: Occupation = HomeResident;
+    state activity: Activity = Resting;
     state stress: Real64 = 0.15;
     state minute: Int64 = 0;
+    state shift_start: Int64 = 0;
+    state shift_end: Int64 = 0;
     state next_attempt: Duration = 0s;
 
     on PowerLost(m) as react_to_outage { stress = clamp(stress + 0.12, 0.0, 1.0); }
     on WaterLost(m) as react_to_water { stress = clamp(stress + 0.08, 0.0, 1.0); }
 
-    every 1min as live {
-        // A day of 1440 minutes: out from 09:00 to 18:00, at home the rest of the time.
-        minute = (minute + 1) % 1440;
-        if minute >= 540 && minute < 1080 {
-            motion.request(view.workplace, 1.4mps);
+    every 1s as routine {
+        // Stable cohorts: two mine shifts, local services, and residents without a work shift.
+        // Small departure offsets stop a whole shift leaving on the same tick.
+        minute = view.day_minute;
+        let cohort = view.routine_slot % 4;
+        let offset = (view.routine_slot % 3) * 5;
+        if cohort == 0 {
+            occupation = Miner;
+            shift_start = 480 + offset;
+            shift_end = 840 + offset;
+        } else if cohort == 3 {
+            occupation = Miner;
+            shift_start = 840 + offset;
+            shift_end = 1200 + offset;
+        } else if cohort == 2 {
+            occupation = ColonyWorker;
+            shift_start = 540 + offset;
+            shift_end = 1020 + offset;
         } else {
-            motion.request(view.home, 1.4mps);
+            occupation = HomeResident;
+            shift_start = 0;
+            shift_end = 0;
         }
 
+        // Injured residents stay home. Each request advances only one physical tick,
+        // so keep asking while travelling, and stop when the actual position reaches the destination.
+        if view.health <= 0hp {
+            activity = Dead;
+        } else if view.health < 40hp {
+            activity = Injured;
+            if view.position != view.home { motion.request(view.home, 1.4mps); }
+        } else if minute >= shift_start && minute < shift_end {
+            if view.position == view.workplace {
+                if occupation == Miner { activity = Mining; } else { activity = Working; }
+            } else {
+                activity = GoingToWork;
+                motion.request(view.workplace, 1.4mps);
+            }
+        } else if (occupation == HomeResident && minute >= 660 + offset && minute < 720 + offset)
+            || (occupation != HomeResident && minute >= shift_end + 60 && minute < shift_end + 105) {
+            if view.position == view.meeting_point {
+                activity = Socializing;
+            } else {
+                activity = GoingToMeet;
+                motion.request(view.meeting_point, 1.2mps);
+            }
+        } else if view.position != view.home {
+            activity = ReturningHome;
+            motion.request(view.home, 1.4mps);
+        } else {
+            activity = Resting;
+        }
+    }
+
+    every 1min as live {
         if view.cold {
             stress = clamp(stress + 0.05, 0.0, 1.0);
+        } else if activity == Socializing || activity == Resting {
+            stress = clamp(stress - 0.05, 0.0, 1.0);
         } else {
             stress = clamp(stress - 0.03, 0.0, 1.0);
         }
