@@ -194,4 +194,81 @@ class TransportAndRepairTest {
         }
     }
 
+    private fun residents(count: Int): RunManifest {
+        val base = smallManifest()
+        val person = base.instances.single { it.id == "person" }
+        return base.copy(instances = base.instances.filter { it.id != "person" } +
+            (1..count).map { person.copy(id = "walker-$it", x = 2.0 + 10.0 * (it - 1)) })
+    }
+    private fun walk(id: String, to: Point) = VmIntent(id, Op.MOTION_REQUEST,
+        listOf(buildJsonObject { put("x", to.x); put("y", to.y) }, JsonPrimitive(1.4)))
+    private fun seesRover(k: WorldKernel, m: RunManifest, id: String) =
+        k.field(m, id, "available_vehicles").jsonArray.any { it.jsonObject["id"]?.jsonPrimitive?.content == "rover" }
+
+    @Test fun seatsGoToTheNearestWalkersAndTheRoverWaitsForThem() {
+        val m = residents(7)
+        val k = world(m)
+        val rover = k.positionOf("rover")
+        assertTrue((1..7).all { seesRover(k, m, "walker-$it") }, "before anyone walks, every seat is free")
+        k.advance(0, m, (1..7).map { walk("walker-$it", rover) })
+        assertEquals((1..5).map { true } + listOf(false, false), (1..7).map { seesRover(k, m, "walker-$it") },
+            "five seats go to the five nearest; the rest see no rover and walk instead")
+        assertEquals(5, k.field(m, "rover", "boarding_pending").jsonPrimitive.int)
+
+        val work = k.field(m, "walker-1", "workplace").jsonObject
+        val destination = Point(work.getValue("x").jsonPrimitive.double, work.getValue("y").jsonPrimitive.double)
+        k.advance(1, m, (2..5).map { walk("walker-$it", rover) }, listOf(TransportRequest("ride", "walker-1", "rover", destination)))
+        assertEquals("rover", k.vehicleOf("walker-1"))
+        assertFalse(k.field(m, "rover", "transport_ready").jsonPrimitive.boolean, "four more are on their way")
+        assertTrue(seesRover(k, m, "walker-2"), "a rover going to their workplace still takes them")
+        k.advance(2, m)
+        assertTrue(k.field(m, "rover", "transport_ready").jsonPrimitive.boolean, "nobody is walking to it any more")
+    }
+
+    @Test fun aRoverDoesNotWaitForeverForResidentsWhoAreStillWalking() {
+        val m = residents(2)
+        val k = world(m, WorldConfig(transport = TransportConfig(boardingWaitSeconds = 3.0)))
+        val rover = k.positionOf("rover")
+        val work = k.field(m, "walker-1", "workplace").jsonObject
+        val destination = Point(work.getValue("x").jsonPrimitive.double, work.getValue("y").jsonPrimitive.double)
+        k.advance(0, m, listOf(walk("walker-2", rover)), listOf(TransportRequest("ride", "walker-1", "rover", destination)))
+        for (tick in 1L..2L) {
+            assertFalse(k.field(m, "rover", "transport_ready").jsonPrimitive.boolean)
+            k.advance(tick, m, listOf(VmIntent("walker-2", Op.MOTION_REQUEST, listOf(buildJsonObject { put("x", rover.x); put("y", rover.y) }, JsonPrimitive(0.0)))))
+        }
+        assertTrue(k.field(m, "rover", "transport_ready").jsonPrimitive.boolean)
+    }
+
+    @Test fun aClosedFenceStopsAXenomorphUntilItBreaksTheSegmentInItsWay() {
+        val base = smallManifest()
+        val m = base.copy(instances = base.instances + Instance("alien", "Xenomorph", "Dummy", JsonObject(emptyMap()), JsonObject(emptyMap()), null, 0.0, 0.0))
+        val k = world(m, WorldConfig(fence = FenceConfig(enabled = true, margin = 10.0, segmentLength = 20.0)))
+        val box = assertNotNull(k.topology.fenceBox)
+        assertFalse(box.contains(k.positionOf("alien")), "xenomorphs appear outside the fence")
+        assertTrue(k.topology.fence.all { k.healthOf(it.id) == 400.0 })
+
+        val house = VmIntent("alien", Op.MOTION_REQUEST, listOf(buildJsonObject { put("x", 0.0); put("y", 0.0) }, JsonPrimitive(1000.0)))
+        k.advance(0, m, listOf(house))
+        assertFalse(box.contains(k.positionOf("alien")), "the fence holds")
+        val segment = k.field(m, "alien", "visible_infrastructure").jsonArray.first().jsonObject
+        assertEquals("Fence", segment.getValue("kind").jsonPrimitive.content)
+        assertTrue(segment.getValue("distance").jsonPrimitive.double <= 1.0, "it stands right at the segment it ran into")
+
+        val id = segment.getValue("id").jsonPrimitive.content
+        val events = k.advance(1, m, listOf(VmIntent("alien", Op.DAMAGE_REQUEST, listOf(JsonPrimitive(id), JsonPrimitive(1000.0), JsonPrimitive("test")))))
+        assertTrue(events.any { it.type == "ObjectBroken" && it.entityId == id })
+        k.advance(2 + ceil(WorldConfig().repair.dispatchDelaySeconds).toLong(), m, listOf(house))
+        assertEquals(Point(0.0, 0.0), k.positionOf("alien"), "a broken segment lets it through")
+        assertEquals("fence", k.activeJobs.single().kind)
+    }
+
+    @Test fun aSquadWhoseTargetDiesOnTheWayTakesTheNextOne() {
+        val base = squadManifest()
+        val m = base.copy(instances = base.instances + base.instances.single { it.id == "alien" }.copy(id = "alien-2", x = 60.0))
+        val k = world(m)
+        k.advance(0, m, requests = listOf(request("marine-1", 36.0)))
+        k.advance(1, m, listOf(VmIntent("marine-1", Op.DAMAGE_REQUEST, listOf(JsonPrimitive("alien"), JsonPrimitive(100.0), JsonPrimitive("test")))))
+        assertEquals("rover", k.vehicleOf("marine-1"), "the sortie goes on")
+        assertEquals("alien-2", k.field(m, "marine-1", "visible_xenomorphs").jsonArray.single().jsonObject.getValue("id").jsonPrimitive.content)
+    }
 }

@@ -20,11 +20,12 @@ data class WorldConfig(
     val repair: RepairConfig = RepairConfig(),
     val tariffs: Tariffs = Tariffs(),
     val sight: SightConfig = SightConfig(),
+    val fence: FenceConfig = FenceConfig(),
 ) {
     fun validate() {
         require(version == 1) { "Unsupported world version $version" }
         climate.validate(); power.validate(); water.validate(); house.validate()
-        human.validate(); marine.validate(); transport.validate(); repair.validate(); tariffs.validate(); sight.validate()
+        human.validate(); marine.validate(); transport.validate(); repair.validate(); tariffs.validate(); sight.validate(); fence.validate()
     }
 }
 
@@ -161,10 +162,15 @@ data class TransportConfig(
     val boardRadius: Double = 6.0,
     /** Maximum number of passengers a rover can carry in the simulation. */
     val passengerCapacity: Int = 5,
+    /** How far a resident is willing to walk to a rover standing at its depot. */
+    val walkRadius: Double = 120.0,
+    /** Longest time a rover with residents aboard waits for the others who are walking to it. */
+    val boardingWaitSeconds: Double = 90.0,
 ) {
     fun validate() {
         require(boardRadius > 0.0) { "Transport board radius must be positive" }
         require(passengerCapacity in 1..32) { "Bad transport passenger capacity" }
+        require(walkRadius >= 0.0 && boardingWaitSeconds >= 0.0) { "Bad boarding parameters" }
     }
 }
 
@@ -209,11 +215,34 @@ data class Tariffs(
 
 @Serializable
 data class SightConfig(
-    /** How far a xenomorph sees infrastructure and people. */
+    /** How far marines detect xenomorphs and how far the other observation lists reach. */
     val sightRadius: Double = 260.0,
     /** Most objects an observation list may hold. */
     val listLimit: Int = 16,
     val attackRadius: Double = 3.0,
+    /** How far a xenomorph sees infrastructure and people; a short sight spreads the hunters over the map. */
+    val xenomorphRadius: Double = 260.0,
 ) {
-    fun validate() { require(sightRadius >= 0 && listLimit in 1..4096 && attackRadius >= 0) { "Bad observation limits" } }
+    fun validate() {
+        require(sightRadius >= 0 && listLimit in 1..4096 && attackRadius >= 0 && xenomorphRadius >= 0) { "Bad observation limits" }
+    }
+}
+
+/**
+ * A perimeter fence around everything the colony uses. It stops xenomorphs only: a closed segment has to be
+ * broken before one can pass, and a broken segment becomes a repair job like a pole.
+ */
+@Serializable
+data class FenceConfig(
+    val enabled: Boolean = false,
+    /** Distance between the fence and the outermost object it encloses. */
+    val margin: Double = 40.0,
+    val segmentLength: Double = 60.0,
+    val health: Double = 400.0,
+    /** How far outside the fence the xenomorphs roam and where they appear. */
+    val roamingDistance: Double = 60.0,
+) {
+    fun validate() {
+        require(margin >= 0 && segmentLength > 0 && health > 0 && roamingDistance > 0) { "Bad fence parameters" }
+    }
 }

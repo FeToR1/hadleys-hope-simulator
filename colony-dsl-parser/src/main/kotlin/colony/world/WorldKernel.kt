@@ -21,6 +21,8 @@ data class KernelEvent(
 /** A fixture of the settlement as an observer sees it: where it stands, whether it works, and what it feeds. */
 @Serializable data class FixtureState(
     val id: String, val kind: String, val at: Point, val health: Double, val powered: Boolean, val feeds: List<String>,
+    /** The ends of a fence segment. */
+    val from: Point? = null, val to: Point? = null,
 )
 
 /** One line of the ledger: who paid, what for, how much, when. */
@@ -70,6 +72,11 @@ class WorldKernel(
     private val vehiclePassengers = LinkedHashMap<String, LinkedHashSet<String>>()
     private val vehicleRouteTarget = LinkedHashMap<String, Point>()
     private val squadTargets = HashMap<String, String>()
+    /** Residents walking to each rover during the latest step, and when its first resident got on. */
+    private var walkersOf: Map<String, List<String>> = emptyMap()
+    private val boardingSince = HashMap<String, Double>()
+    /** The closed fence segment a xenomorph last ran into. */
+    private val blockedBy = HashMap<String, String>()
     private var nextJobId = 0L
     private var upsCharge = config.power.upsCapacity
     private var poweredNow = emptySet<String>()
@@ -88,15 +95,16 @@ class WorldKernel(
             kind = fixture.kind.name.lowercase(),
             at = fixture.at,
             health = healthOf(fixture.id),
-            // A source makes power and a pipe carries water: neither of them draws from the grid.
+            // A source makes power, a pipe carries water and a fence just stands: none of them draws from the grid.
             powered = when (fixture.kind) {
-                FixtureKind.REACTOR, FixtureKind.SOLAR, FixtureKind.UPS, FixtureKind.PIPE -> healthOf(fixture.id) > 0
+                FixtureKind.REACTOR, FixtureKind.SOLAR, FixtureKind.UPS, FixtureKind.PIPE, FixtureKind.FENCE -> healthOf(fixture.id) > 0
                 else -> isPowered(fixture.id)
             },
             // What hangs off this fixture: the poles and consumers it feeds, or the house a pipe serves.
             feeds = (topology.powerFeed.filterValues { it == fixture.id }.keys +
                 topology.fixtures.filter { it.feedsFrom == fixture.id && it.kind == FixtureKind.POLE }.map { it.id } +
                 listOfNotNull(fixture.serves)).distinct().sorted(),
+            from = fixture.from, to = fixture.to,
         )
     }
     val activeJobs: Collection<RepairJob> get() = jobs.values.filter { it.availableAtTick <= currentTick }
@@ -114,9 +122,10 @@ class WorldKernel(
             position[instance.id] = Point(instance.x, instance.y)
         }
         for (fixture in topology.fixtures) {
-            health[fixture.id] = if (fixture.kind == FixtureKind.POLE) config.power.poleHealth else 100.0
+            health[fixture.id] = fullHealth(fixture.id)
             position[fixture.id] = fixture.at
         }
+
         for (house in people.houses) {
             insideTemperature[house.id] = config.house.initialTemperature
             frostExposure[topology.waterPipe.getValue(house.id)] = 0.0
@@ -138,6 +147,13 @@ class WorldKernel(
     fun isBroken(id: String): Boolean = healthOf(id) <= 0.0
     fun monthlyReport(): Map<String, Long> = monthlyTotals.toMap()
     fun vehicleOf(id: String): String? = passengerVehicle[id]
+    /** The same site the residents observe as their workplace; exposed to the observer, not re-inferred by the UI. */
+    val minePosition: Point get() = topology.mine
+    private fun fullHealth(id: String): Double = when (topology.byId[id]?.kind) {
+        FixtureKind.POLE -> config.power.poleHealth
+        FixtureKind.FENCE -> config.fence.health
+        else -> 100.0
+    }
 
     /** The values of the observations a program reads, computed from the physical state of this moment. */
     fun view(instance: Instance, fields: Set<String>): Map<String, JsonElement> {
@@ -161,13 +177,19 @@ class WorldKernel(
                     .sortedBy { it.id }
                     .map { buildJsonObject { put("id", it.id); put("kind", it.kind); put("broken", isBroken(it.id)) } })
                 "reachable_breakables" -> targets(id, reachableAppliances(instance))
-                // The substation is fenced off; what stands in the open is the distribution poles.
-                "visible_infrastructure" -> targets(id, topology.poles.filter { it.id != BUS && !isBroken(it.id) }.map { it.id })
-                "visible_humans" -> targets(id, people.residents.filter { !isBroken(it.id) }.map { it.id })
+                // The substation is fenced off; what stands in the open is the distribution poles, and the fence
+                // segment the hunter has just run into.
+                "visible_infrastructure" -> targets(id, topology.poles.filter { it.id != BUS && !isBroken(it.id) }.map { it.id } +
+                    listOfNotNull(blockedBy[id]?.takeUnless(::isBroken)), config.sight.xenomorphRadius)
+                // People indoors or inside a rover are out of reach; marines are not prey.
+                "visible_humans" -> targets(id, people.residents.filter { resident ->
+                    !isBroken(resident.id) && resident.id !in passengerVehicle &&
+                        positionOf(resident.id).distanceTo(positionOf(resident.parent ?: resident.id)) > HOUSE_ZONE
+                }.map { it.id }, config.sight.xenomorphRadius)
                 "patrol_waypoint" -> pointJson(patrolPoint(id))
                 "home" -> pointJson(positionOf(instance.parent ?: id))
-                "workplace" -> pointJson(if ((routineSlots[id] ?: 0) % 4 == 2) servicePoint else minePoint)
-                "meeting_point" -> pointJson(meetingPoint)
+                "workplace" -> pointJson(workplaceOf(id))
+                "meeting_point" -> pointJson(topology.meeting)
                 "routine_slot" -> JsonPrimitive(routineSlots[id] ?: 0)
                 "day_minute" -> JsonPrimitive((config.human.startMinute + (elapsedSeconds / 60).toLong()) % 1440)
                 "depot" -> pointJson(depotOf(instance))
@@ -180,10 +202,11 @@ class WorldKernel(
                 "passenger_capacity" -> JsonPrimitive(config.transport.passengerCapacity)
                 "transport_ready" -> JsonPrimitive(transportReady(id))
                 "transport_target" -> pointJson(transportDestination(id) ?: depotOf(instance))
-                "available_vehicles" -> targets(id, availableTransportVehicles(id))
+                "boarding_pending" -> JsonPrimitive(seatedWalkers(id).size)
+                "available_vehicles" -> targets(id, availableTransportVehicles(id), if (squadOf(id) == null) config.transport.walkRadius else config.sight.sightRadius)
                 "in_vehicle" -> JsonPrimitive(id in passengerVehicle)
                 "dispatch_ready" -> JsonPrimitive(elapsedSeconds >= config.marine.responseDelaySeconds)
-                "visible_xenomorphs" -> targets(id, listOfNotNull(squadTarget(id)), limitToSight = false)
+                "visible_xenomorphs" -> targets(id, listOfNotNull(squadTarget(id)), radius = null)
                 "squad_size" -> JsonPrimitive(marineSquad(id).count { !isBroken(it.id) })
                 "squad_leader" -> JsonPrimitive(isMarineLeader(id))
                 "squad_ready" -> JsonPrimitive(squadReady(id))
@@ -214,7 +237,7 @@ class WorldKernel(
         ?.params?.get("squad")?.jsonPrimitive?.contentOrNull
 
     private fun availableTransportVehicles(passengerId: String): List<String> {
-        val squad = squadOf(passengerId)
+        val squad = squadOf(passengerId) ?: return vehiclesForResident(passengerId)
         val members = marineSquad(passengerId).filter { !isBroken(it.id) }
         if (squad != null && (members.size !in config.marine.minSquadSize..config.marine.maxSquadSize ||
                     members.size > config.transport.passengerCapacity)) return emptyList()
@@ -224,9 +247,41 @@ class WorldKernel(
             val riders = vehiclePassengers[rover.id].orEmpty()
             !isBroken(rover.id) && riders.size < config.transport.passengerCapacity &&
                 (reserved == null || reserved == rover.id) &&
-                if (riders.isEmpty()) positionOf(rover.id).distanceTo(depotOf(rover)) <= config.transport.boardRadius
-                else squad != null && riders.all { squadOf(it) == squad } && !transportReady(rover.id)
+                if (riders.isEmpty()) atDepot(rover)
+                else riders.all { squadOf(it) == squad } && !transportReady(rover.id)
         }.map { it.id }
+    }
+
+    private fun atDepot(rover: Instance) = positionOf(rover.id).distanceTo(depotOf(rover)) <= config.transport.boardRadius
+
+    /**
+     * A resident is offered a rover waiting at its depot that still has a seat for them and, if others are
+     * already aboard, goes to the same workplace. Seats go to the residents already walking to it, nearest first,
+     * so a crowd that sees one rover settles in a single step instead of racing for it.
+     */
+    private fun vehiclesForResident(residentId: String): List<String> {
+        val workplace = workplaceOf(residentId)
+        return people.rovers.filter { rover ->
+            val riders = vehiclePassengers[rover.id].orEmpty()
+            !isBroken(rover.id) && atDepot(rover) && riders.none { squadOf(it) != null } &&
+                (riders.isEmpty() || vehicleRouteTarget[rover.id]?.distanceTo(workplace)?.let { it <= 1e-6 } == true && !transportReady(rover.id)) &&
+                hasSeatFor(rover.id, residentId)
+        }.map { it.id }
+    }
+
+    private fun hasSeatFor(roverId: String, residentId: String): Boolean {
+        val seated = seatedWalkers(roverId)
+        return residentId in seated || seated.size < freeSeats(roverId)
+    }
+
+    private fun freeSeats(roverId: String) = config.transport.passengerCapacity - (vehiclePassengers[roverId]?.size ?: 0)
+
+    /** Residents walking to this rover in the latest step who hold one of its free seats, nearest first. */
+    private fun seatedWalkers(roverId: String): List<String> {
+        val here = positionOf(roverId)
+        return walkersOf[roverId].orEmpty().filter { it !in passengerVehicle && !isBroken(it) }
+            .sortedWith(compareBy({ positionOf(it).distanceTo(here) }, { it }))
+            .take(freeSeats(roverId).coerceAtLeast(0))
     }
 
     private fun marineSquad(marineId: String): List<Instance> {
@@ -248,7 +303,8 @@ class WorldKernel(
 
     private fun squadTarget(marineId: String): String? {
         val squad = squadOf(marineId) ?: return null
-        squadTargets[squad]?.let { return it.takeUnless(::isBroken) }
+        // A pinned target that has died no longer holds the squad: it takes the nearest one its leader sees.
+        squadTargets[squad]?.takeUnless(::isBroken)?.let { return it }
         val leader = marineSquad(marineId).filter { !isBroken(it.id) }
             .sortedWith(compareBy({ !isMarineLeader(it.id) }, { it.id })).firstOrNull() ?: return null
         return nearestVisibleXenomorph(leader.id)
@@ -277,7 +333,10 @@ class WorldKernel(
             if (members.size !in config.marine.minSquadSize..config.marine.maxSquadSize ||
                 members.any { it.id !in passengers }) return false
         }
-        return true
+        if (marineGroups.isNotEmpty() || passengers.size >= config.transport.passengerCapacity) return true
+        // Residents leave together: the rover waits for those still walking to it, but not for ever.
+        val waited = elapsedSeconds - (boardingSince[vehicleId] ?: elapsedSeconds)
+        return seatedWalkers(vehicleId).isEmpty() || waited >= config.transport.boardingWaitSeconds
     }
 
     private fun transportDestination(vehicleId: String): Point? {
@@ -295,6 +354,7 @@ class WorldKernel(
     private fun unboard(vehicleId: String, events: MutableList<KernelEvent>, reason: String? = null, ref: String? = null) {
         val passengers = vehiclePassengers.remove(vehicleId).orEmpty().toList()
         vehicleRouteTarget.remove(vehicleId)
+        boardingSince.remove(vehicleId)
         for (passenger in passengers) {
             passengerVehicle.remove(passenger)
             events += KernelEvent(
@@ -337,6 +397,7 @@ class WorldKernel(
                 )
                 continue
             }
+            boardingSince.putIfAbsent(request.vehicleId, elapsedSeconds)
             vehiclePassengers.getOrPut(request.vehicleId) { LinkedHashSet() }.add(request.passengerId)
             passengerVehicle[request.passengerId] = request.vehicleId
             position[request.passengerId] = positionOf(request.vehicleId)
@@ -350,10 +411,7 @@ class WorldKernel(
         }
     }
 
-    /** Routine destinations: mine outside the housing area, services and a meeting place in the colony. */
-    private val minePoint = Point(people.houses.maxOf { it.x } + 120.0, people.houses.map { it.y }.average())
-    private val servicePoint = Point(people.houses.map { it.x }.average(), people.houses.minOf { it.y } - 90.0)
-    private val meetingPoint = Point(servicePoint.x, servicePoint.y + 45.0)
+    private fun workplaceOf(id: String): Point = if ((routineSlots[id] ?: 0) % 4 == 2) topology.services else topology.mine
 
     /** A crew returns to where its manifest put it. */
     private fun depotOf(instance: Instance): Point = Point(instance.x, instance.y)
@@ -363,17 +421,21 @@ class WorldKernel(
         return people.appliances.filter { !isBroken(it.id) && positionOf(it.id).distanceTo(here) <= config.human.vandalRadius }.map { it.id }
     }
 
-    /** Observed objects within sight, ordered by distance and then by id, as the contract requires. */
-    private fun targets(observerId: String, candidates: List<String>, limitToSight: Boolean = true): JsonArray {
+    /**
+     * Observed objects within [radius] (no limit when null), ordered by distance and then by id, as the contract
+     * requires. A fence segment is seen at its point nearest to the observer: that is where one reaches it.
+     */
+    private fun targets(observerId: String, candidates: List<String>, radius: Double? = config.sight.sightRadius): JsonArray {
         val here = positionOf(observerId)
         return JsonArray(candidates.asSequence()
-            .map { it to positionOf(it).distanceTo(here) }
-            .filter { !limitToSight || it.second <= config.sight.sightRadius }
-            .sortedWith(compareBy({ it.second }, { it.first }))
+            .map { id -> id to (topology.byId[id]?.takeIf { it.kind == FixtureKind.FENCE }?.nearestPointTo(here) ?: positionOf(id)) }
+            .map { (id, at) -> Triple(id, at, at.distanceTo(here)) }
+            .filter { radius == null || it.third <= radius }
+            .sortedWith(compareBy({ it.third }, { it.first }))
             .take(config.sight.listLimit)
-            .map { (id, distance) ->
+            .map { (id, at, distance) ->
                 buildJsonObject {
-                    put("id", id); put("kind", kindOf(id)); put("position", pointJson(positionOf(id)))
+                    put("id", id); put("kind", kindOf(id)); put("position", pointJson(at))
                     put("distance", distance); put("health", healthOf(id))
                 }
             }.toList())
@@ -383,23 +445,88 @@ class WorldKernel(
         people.byId[id]?.kind ?: topology.byId[id]?.kind?.name?.lowercase()?.replaceFirstChar(Char::uppercase) ?: "Unknown"
 
     /**
-     * Each patroller walks a lap of the settlement: four corners in turn. Arriving moves it on to the next one,
-     * which is what the specification means by a waypoint that updates on ArrivalConfirmed.
+     * Where each hunter roams. Outside the fence (or around the settlement when it has none) each leg takes it
+     * a random stretch along the perimeter, either way round and stopping at a corner, so the hunters wander
+     * apart instead of marching in file, and a leg never cuts across the fenced area. Inside the fence it prowls between random points. The choice
+     * depends only on the seed, the hunter and the leg, never on the order in which observations are computed.
      */
-    private val patrolCorners: List<Point> = run {
-        val minX = topology.fixtures.minOf { it.at.x } - PATROL_MARGIN
-        val maxX = topology.fixtures.maxOf { it.at.x } + PATROL_MARGIN
-        val minY = topology.fixtures.minOf { it.at.y } - PATROL_MARGIN
-        val maxY = topology.fixtures.maxOf { it.at.y } + PATROL_MARGIN
-        listOf(Point(minX, minY), Point(maxX, minY), Point(maxX, maxY), Point(minX, maxY))
-    }
+    private val roamBox: Box = topology.fenceBox ?: Box(
+        topology.fixtures.minOf { it.at.x }, topology.fixtures.minOf { it.at.y },
+        topology.fixtures.maxOf { it.at.x }, topology.fixtures.maxOf { it.at.y },
+    )
+    private val roamDistance = if (topology.fenceBox != null) config.fence.roamingDistance else PATROL_MARGIN
     private val patrolLeg = HashMap<String, Int>()
+    private val patrolAlong = HashMap<String, Double>()
 
-    private fun patrolPoint(id: String): Point =
-        patrolCorners[Math.floorMod(patrolLeg.getOrPut(id) { Math.floorMod(id.hashCode(), patrolCorners.size) }, patrolCorners.size)]
+    private fun roll(id: String, leg: Int, salt: Int): Double =
+        java.util.SplittableRandom(manifest.seed * 1_000_003L + id.hashCode() * 7_919L + leg * 131L + salt).nextDouble()
+
+    private fun patrolPoint(id: String): Point {
+        val leg = patrolLeg.getOrDefault(id, 0)
+        val fence = topology.fenceBox
+        if (fence != null && fence.contains(positionOf(id))) {
+            val inset = minOf(10.0, (fence.maxX - fence.minX) / 4, (fence.maxY - fence.minY) / 4)
+            return Point(fence.minX + inset + (fence.maxX - fence.minX - 2 * inset) * roll(id, leg, 1),
+                fence.minY + inset + (fence.maxY - fence.minY - 2 * inset) * roll(id, leg, 2))
+        }
+        return roamingPoint(id)
+    }
+
+    private fun roamingPoint(id: String): Point {
+        val leg = patrolLeg.getOrDefault(id, 0)
+        val along = patrolAlong.getOrPut(id) { roll(id, 0, 0) * perimeter() }
+        return perimeterPoint(along, roamDistance * (0.4 + 0.6 * roll(id, leg, 3)))
+    }
 
     private fun advancePatrol(id: String) {
-        patrolLeg[id] = Math.floorMod(patrolLeg.getOrDefault(id, 0) + 1, patrolCorners.size)
+        val leg = patrolLeg.getOrDefault(id, 0) + 1
+        patrolLeg[id] = leg
+        val box = topology.fenceBox
+        if (box != null && box.contains(positionOf(id))) return
+        val along = patrolAlong.getOrPut(id) { roll(id, 0, 0) * perimeter() }
+        val step = (0.03 + 0.12 * roll(id, leg, 4)) * perimeter()
+        val stops = listOf(0.0) + corners() + perimeter()
+        patrolAlong[id] = if (roll(id, leg, 5) < 0.5) {
+            minOf(along + step, stops.first { it > along + 1e-6 }) % perimeter()
+        } else {
+            val from = if (along <= 1e-6) perimeter() else along
+            maxOf(from - step, stops.last { it < from - 1e-6 })
+        }
+    }
+
+    private fun perimeter() = 2 * ((roamBox.maxX - roamBox.minX) + (roamBox.maxY - roamBox.minY))
+    private fun corners(): List<Double> {
+        val w = roamBox.maxX - roamBox.minX
+        val h = roamBox.maxY - roamBox.minY
+        return listOf(w, w + h, 2 * w + h)
+    }
+
+    /** A point [offset] metres outside the box, [along] metres clockwise from its north-west corner. */
+    private fun perimeterPoint(along: Double, offset: Double): Point {
+        val b = roamBox
+        val w = b.maxX - b.minX
+        val h = b.maxY - b.minY
+        val t = ((along % perimeter()) + perimeter()) % perimeter()
+        return when {
+            t == 0.0 -> Point(b.minX - offset, b.minY - offset)
+            t < w -> Point(b.minX + t, b.minY - offset)
+            t == w -> Point(b.maxX + offset, b.minY - offset)
+            t < w + h -> Point(b.maxX + offset, b.minY + (t - w))
+            t == w + h -> Point(b.maxX + offset, b.maxY + offset)
+            t < 2 * w + h -> Point(b.maxX - (t - w - h), b.maxY + offset)
+            t == 2 * w + h -> Point(b.minX - offset, b.maxY + offset)
+            else -> Point(b.minX - offset, b.maxY - (t - 2 * w - h))
+        }
+    }
+
+    init {
+        // Xenomorphs come from the wilds: with a fence they appear outside it, each at its own place.
+        if (topology.fenceBox != null) {
+            for (xenomorph in people.byId.values.filter { it.kind == "Xenomorph" }) {
+                position[xenomorph.id] = roamingPoint(xenomorph.id)
+                advancePatrol(xenomorph.id)
+            }
+        }
     }
 
     private fun pointJson(point: Point) = buildJsonObject { put("x", point.x); put("y", point.y) }
@@ -420,6 +547,9 @@ class WorldKernel(
         val poweredBefore = poweredNow
         val waterBefore = waterNow
 
+        // A sortie ends when its target is dead or the whole squad is back at its base; the next one picks anew.
+        squadTargets.entries.removeIf { (squad, target) -> isBroken(target) || squadAtBase(squad) }
+        walkersOf = walkersFrom(intents, accepted)
         // Freeze each route to the same world state the VM observed before this step's movement.
         for (vehicleId in vehicleRouteTarget.keys.toList()) {
             transportDestination(vehicleId)?.let { vehicleRouteTarget[vehicleId] = it }
@@ -440,6 +570,26 @@ class WorldKernel(
         lastPostings = if (postings.size > postedBefore) postings.subList(postedBefore, postings.size).toList() else emptyList()
         elapsedSeconds += dt
         return events
+    }
+
+    private fun squadAtBase(squad: String): Boolean = people.marines
+        .filter { it.params["squad"]?.jsonPrimitive?.contentOrNull == squad && !isBroken(it.id) }
+        .all { it.id !in passengerVehicle && positionOf(it.id).distanceTo(depotOf(it)) <= config.transport.boardRadius }
+
+    /** Residents who ask to walk to where a rover stands at its depot are walking to that rover. */
+    private fun walkersFrom(intents: List<VmIntent>, accepted: Set<String>): Map<String, List<String>> {
+        val waiting = people.rovers.filter { !isBroken(it.id) && atDepot(it) }
+        if (waiting.isEmpty()) return emptyMap()
+        val out = LinkedHashMap<String, MutableList<String>>()
+        for (intent in intents) {
+            if (intent.operation != Op.MOTION_REQUEST || intent.source !in accepted) continue
+            if (people.byId[intent.source]?.kind != "Human" || intent.source in passengerVehicle || isBroken(intent.source)) continue
+            val target = intent.arguments[0].jsonObject
+            val goal = Point(target.getValue("x").jsonPrimitive.double, target.getValue("y").jsonPrimitive.double)
+            val rover = waiting.firstOrNull { positionOf(it.id).distanceTo(goal) <= 1e-6 } ?: continue
+            out.getOrPut(rover.id) { ArrayList() }.add(intent.source)
+        }
+        return out
     }
 
     /** Phase 2. Simultaneous attacks are summed against the health at the start of the step. */
@@ -509,7 +659,7 @@ class WorldKernel(
             val done = job.done + dt
             if (done < job.duration) { jobs[target] = job.copy(done = done); continue }
             jobs.remove(target)
-            health[target] = if (topology.byId[target]?.kind == FixtureKind.POLE) config.power.poleHealth else 100.0
+            health[target] = fullHealth(target)
             frostExposure[target]?.let { frostExposure[target] = 0.0 }
             val cost = config.repair.partsOf(job.kind) + Math.round(config.repair.hourlyRate * job.duration / 3600.0)
             post(tick, ownerOf(target) ?: "settlement", "repair", cost, target)
@@ -650,6 +800,7 @@ class WorldKernel(
             if (passengers.isEmpty()) {
                 vehiclePassengers.remove(vehicleId)
                 vehicleRouteTarget.remove(vehicleId)
+                boardingSince.remove(vehicleId)
             } else if (passengers.any { passenger ->
                     squadOf(passenger) != null && (marineSquad(passenger).count { !isBroken(it.id) } < config.marine.minSquadSize ||
                         squadTarget(passenger) == null)
@@ -680,9 +831,16 @@ class WorldKernel(
             val speed = if (isRover) minOf(requestedSpeed, config.repair.roverSpeed) else requestedSpeed
             val here = positionOf(intent.source)
             val distance = here.distanceTo(goal)
-            if (distance <= 1e-9) continue
-            val ratio = minOf(1.0, speed * dt / distance)
-            val newPosition = Point(here.x + (goal.x - here.x) * ratio, here.y + (goal.y - here.y) * ratio)
+            if (distance <= 1e-9) {
+                // A patroller already standing on its waypoint is sent on, or it would wait there for ever.
+                if (people.byId[intent.source]?.kind == "Xenomorph" && goal.distanceTo(patrolPoint(intent.source)) < 1.0) advancePatrol(intent.source)
+                continue
+            }
+            var ratio = minOf(1.0, speed * dt / distance)
+            var newPosition = if (ratio >= 1.0) goal else Point(here.x + (goal.x - here.x) * ratio, here.y + (goal.y - here.y) * ratio)
+            if (people.byId[intent.source]?.kind == "Xenomorph") {
+                fenceStop(intent.source, here, newPosition)?.let { stop -> newPosition = stop; ratio = 0.0 }
+            }
             position[intent.source] = newPosition
 
             // Riders occupy the rover's physical position, not their previous world coordinates.
@@ -699,6 +857,37 @@ class WorldKernel(
                 if (people.byId[intent.source]?.kind == "Xenomorph" && goal.distanceTo(patrolPoint(intent.source)) < 1.0) advancePatrol(intent.source)
             }
         }
+    }
+
+    /**
+     * A xenomorph that would cross a closed fence segment stops half a metre short of it and remembers the
+     * segment, which then shows among what it can attack. Anything else, and a broken segment, lets it through.
+     */
+    private fun fenceStop(id: String, from: Point, to: Point): Point? {
+        val box = topology.fenceBox ?: return null
+        if (box.contains(from) == box.contains(to)) { blockedBy.remove(id); return null }
+        val crossing = borderCrossing(box, from, to)
+        val segment = topology.fence.minWith(compareBy({ it.nearestPointTo(crossing).distanceTo(crossing) }, { it.id }))
+        if (isBroken(segment.id)) { blockedBy.remove(id); return null }
+        blockedBy[id] = segment.id
+        val length = from.distanceTo(crossing)
+        val keep = if (length <= 0.0) 0.0 else ((length - FENCE_GAP) / length).coerceAtLeast(0.0)
+        return Point(from.x + (crossing.x - from.x) * keep, from.y + (crossing.y - from.y) * keep)
+    }
+
+    /** Where the segment from [p] to [q] meets the border of [box], one end being inside and the other outside. */
+    private fun borderCrossing(box: Box, p: Point, q: Point): Point {
+        val dx = q.x - p.x
+        val dy = q.y - p.y
+        var enter = 0.0
+        var exit = 1.0
+        for ((along, room) in listOf(-dx to p.x - box.minX, dx to box.maxX - p.x, -dy to p.y - box.minY, dy to box.maxY - p.y)) {
+            if (along == 0.0) continue
+            val t = room / along
+            if (along < 0) enter = maxOf(enter, t) else exit = minOf(exit, t)
+        }
+        val t = if (box.contains(p)) exit else enter
+        return Point(p.x + dx * t, p.y + dy * t)
     }
 
     private fun recomputeOccupants() {
@@ -771,6 +960,8 @@ class WorldKernel(
         const val HOUSE_ZONE = 25.0
         /** How far outside the settlement a patrol route runs. */
         const val PATROL_MARGIN = 30.0
+        /** How far short of a closed fence a xenomorph stops. */
+        const val FENCE_GAP = 0.5
         const val BUS = "grid/bus"
         const val PUMP = "water/pump"
         const val MAX_POSTINGS = 20_000

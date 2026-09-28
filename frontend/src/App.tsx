@@ -1,22 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
-import { MockDataGenerator } from './domain/mockGenerator';
 import { StateManager } from './domain/stateManager';
 import type { EntityLog, EntityState, Posting, WorldEvent } from './domain/types';
 import type { CausalChainStep } from './domain/types';
-import { createCausalChain } from './domain/causalChain';
 import { createLiveCausalChain } from './domain/liveCausalChain';
-import { LiveBrokerSource, type BrokerHealth, type DataSourceMode } from './domain/dataSource';
+import { LiveBrokerSource, type BrokerHealth } from './domain/dataSource';
 import { SettlementMap } from './components/SettlementMap';
 import { NetworkTopology } from './components/NetworkTopology';
 import { Sidebar } from './components/Sidebar';
-import { SourceSwitcher } from './components/SourceSwitcher';
+import { BrokerConnection } from './components/BrokerConnection';
 import { TrendPanel } from './components/TrendPanel';
 import type { TrendSample } from './domain/trend';
 import { RunControls, type RunCommand } from './components/RunControls';
 
 export function App(): JSX.Element {
   const managerRef = useRef(new StateManager());
-  const generatorRef = useRef(new MockDataGenerator());
   const [entities, setEntities] = useState<readonly EntityState[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
   const [logs, setLogs] = useState<readonly EntityLog[]>([]);
@@ -25,25 +22,22 @@ export function App(): JSX.Element {
     { postings: [], spendByOwner: new Map() });
   const [tab, setTab] = useState<'map' | 'topology' | 'trend'>('map');
   const [trend, setTrend] = useState<readonly TrendSample[]>([]);
-  const [sourceMode, setSourceMode] = useState<DataSourceMode>('mock');
   const [brokerHealth, setBrokerHealth] = useState<BrokerHealth>();
   const [streamConnected, setStreamConnected] = useState(false);
-  const brokerAvailable = sourceMode === 'live' ? streamConnected : brokerHealth !== undefined;
   const [sourceWarning, setSourceWarning] = useState<string>();
   const [historyWarning, setHistoryWarning] = useState<string>();
-  const [tickId, setTickId] = useState(0);
-  const [runMeta, setRunMeta] = useState({ revision: 0, seed: '', runtimeMode: 'mock' });
+  const [tickId, setTickId] = useState(-1);
+  const [runMeta, setRunMeta] = useState<{ runId: string; seed: string; runtimeMode: string | null }>({ runId: '', seed: '', runtimeMode: null });
   const mapFocusRef = useRef<((entityId: string) => void) | undefined>(undefined);
   const graphFocusRef = useRef<((entityId: string) => void) | undefined>(undefined);
   const liveSourceRef = useRef<LiveBrokerSource | null>(null);
 
   useEffect(() => {
     const manager = managerRef.current;
-    const generator = generatorRef.current;
     const unsubscribeGraphics = manager.subscribe((snapshot) => {
       setEntities([...snapshot.entities.values()]);
       setTickId(snapshot.tickId);
-      setRunMeta({ revision: snapshot.revision, seed: snapshot.seed, runtimeMode: snapshot.runtimeMode });
+      setRunMeta({ runId: snapshot.runId, seed: snapshot.seed, runtimeMode: snapshot.runtimeMode });
       setWorldEvents((previous) => previous.length === snapshot.events.length && previous.at(-1)?.id === snapshot.events.at(-1)?.id
         ? previous : [...snapshot.events]);
     }, { animationFrame: true });
@@ -52,12 +46,7 @@ export function App(): JSX.Element {
       setMoney({ postings: [...snapshot.postings], spendByOwner: new Map(snapshot.spendByOwner) });
       setTrend([...snapshot.trend]);
     }, { throttleMs: 200 });
-    const unsubscribeGenerator = generator.subscribe((batch) => manager.ingest(batch));
-    manager.ingest(generator.getInitialBatch());
-    const stop = generator.start(300);
     return () => {
-      stop();
-      unsubscribeGenerator();
       unsubscribeGraphics();
       unsubscribeSidebar();
     };
@@ -76,7 +65,10 @@ export function App(): JSX.Element {
       onGap: () => setHistoryWarning('Часть истории недоступна: события, графики и суммы расходов могут быть неполными.'),
       onBatch: (batch) => {
         setSourceWarning(undefined);
-        if (batch.tickId === 0) setHistoryWarning(undefined);
+        if (managerRef.current.snapshot().runId !== batch.runId) {
+          setSelectedId(undefined);
+          setHistoryWarning(undefined);
+        }
         managerRef.current.ingest(batch);
       },
       onError: (message) => {
@@ -84,33 +76,12 @@ export function App(): JSX.Element {
       },
     });
     liveSourceRef.current = live;
-    const stopHealth = live.startHealthCheck();
+    live.connect();
     return () => {
-      stopHealth();
       live.disconnect();
       liveSourceRef.current = null;
     };
   }, []);
-
-  const switchSource = (requested: DataSourceMode): void => {
-    // An unavailable broker means "stay on (or fall back to) the mock"; the full switch below
-    // also closes a live stream that may still be reconnecting, so the two sources never mix.
-    const mode: DataSourceMode = requested === 'live' && !brokerAvailable ? 'mock' : requested;
-    setSourceWarning(mode !== requested ? 'Live Broker недоступен: продолжаем работу в режиме Mock' : undefined);
-    if (mode === sourceMode) return;
-    setSourceMode(mode);
-    setHistoryWarning(undefined);
-    managerRef.current.reset();
-    setSelectedId(undefined);
-    if (mode === 'mock') {
-      liveSourceRef.current?.disconnect();
-      managerRef.current.ingest(generatorRef.current.getInitialBatch());
-      generatorRef.current.start(300);
-    } else {
-      generatorRef.current.stop();
-      liveSourceRef.current?.connect();
-    }
-  };
 
   const runControl = async (command: RunCommand): Promise<void> => {
     const live = liveSourceRef.current;
@@ -129,8 +100,8 @@ export function App(): JSX.Element {
     [entities, selected],
   );
   const causalChain = useMemo(
-    () => sourceMode === 'mock' ? createCausalChain(entities) : createLiveCausalChain(worldEvents),
-    [entities, sourceMode, worldEvents],
+    () => createLiveCausalChain(worldEvents),
+    [worldEvents],
   );
   const selectEntity = (entityId: string): void => {
     setSelectedId(entityId);
@@ -173,15 +144,15 @@ export function App(): JSX.Element {
 
   return (
     <main className="shell">
-      <header className="topbar"><div><span className="eyebrow">WORLD KERNEL / LV-426</span><h1>Settlement monitor</h1><div className="run-meta">seed: <strong>{runMeta.seed || '—'}</strong> · tick: <strong>{tickId}</strong></div></div><div className="topbar-right">{sourceMode === 'live' && <RunControls health={brokerHealth} currentTick={tickId} onControl={(command) => void runControl(command)} />}<SourceSwitcher mode={sourceMode} brokerAvailable={brokerAvailable} warning={[sourceWarning, historyWarning].filter(Boolean).join(" ") || undefined} onChange={switchSource} /><div className="live-indicator"><span /> {sourceMode === 'live' ? runMeta.runtimeMode.toUpperCase() : 'MOCK'} · {entities.length} entities</div></div></header>
+      <header className="topbar"><div><span className="eyebrow">WORLD KERNEL / LV-426</span><h1>Settlement monitor</h1><div className="run-meta">seed: <strong>{runMeta.seed || '—'}</strong> · tick: <strong>{tickId < 0 ? '—' : tickId}</strong></div></div><div className="topbar-right"><RunControls health={brokerHealth} currentTick={tickId} onControl={(command) => void runControl(command)} /><BrokerConnection connected={streamConnected} warning={[sourceWarning, historyWarning].filter(Boolean).join(' ') || undefined} /><div className="run-entity-count">{runMeta.runtimeMode?.toUpperCase() ?? 'ОЖИДАНИЕ'} · {entities.length} объектов</div></div></header>
       <div className="content">
         <section className="workspace">
           <nav className="tabs"><button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>2D карта</button><button className={tab === 'topology' ? 'active' : ''} onClick={() => setTab('topology')}>Топология сетей</button><button className={tab === 'trend' ? 'active' : ''} onClick={() => setTab('trend')}>Графики</button></nav>
-          {tab === 'map' && <SettlementMap key={runMeta.revision} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { mapFocusRef.current = focus; }} />}
-          {tab === 'topology' && <NetworkTopology key={runMeta.revision} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { graphFocusRef.current = focus; }} />}
+          {tab === 'map' && <SettlementMap key={runMeta.runId} entities={entities} selectedId={selectedId} onSelect={selectEntity} onClearSelection={() => setSelectedId(undefined)} onRegisterFocus={(focus) => { mapFocusRef.current = focus; }} />}
+          {tab === 'topology' && <NetworkTopology key={runMeta.runId} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { graphFocusRef.current = focus; }} />}
           {tab === 'trend' && <div className="visualization-shell"><TrendPanel trend={trend} /></div>}
         </section>
-        <Sidebar selected={selected} devices={devices} logs={logs} causalChain={causalChain} postings={money.postings} spendByOwner={money.spendByOwner} causalEmptyText={sourceMode === 'live' ? 'Поломок и гибели пока не было. Цепочка причин появится после первой.' : undefined} onFocusCausalStep={focusCausalStep} onExportCsv={exportCsv} />
+        <Sidebar selected={selected} devices={devices} logs={logs} causalChain={causalChain} postings={money.postings} spendByOwner={money.spendByOwner} causalEmptyText="Поломок и гибели пока не было. Цепочка причин появится после первой." onFocusCausalStep={focusCausalStep} onExportCsv={exportCsv} />
       </div>
     </main>
   );

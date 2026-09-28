@@ -1,6 +1,7 @@
 // Programs of the settlement when the world computes the physics.
 // The house decides the heating, the appliances ask for power, the resident lives a day, the crew repairs
-// what breaks, and the xenomorph attacks the grid. Nothing here touches the physical state directly.
+// what breaks, marines hunt, and the xenomorph breaks through the fence to the grid and the people.
+// Nothing here touches the physical state directly.
 
 event HeatingDemand { enabled: Bool; }
 event PowerLost {}
@@ -113,9 +114,9 @@ behavior Resident for Human {
             shift_end = 0;
         }
 
-        // Injured residents stay home. A subset of working residents uses the rover fleet when one is nearby;
-        // everyone else keeps the existing walking behavior. A transport request is deliberately sent only when
-        // the resident has reached the rover's boarding radius, so the world remains responsible for boarding.
+        // Injured residents stay home. On the way to work a resident takes a rover when the world offers one:
+        // it stands at its depot within walking distance and still has a seat for them. A transport request is
+        // sent only within the rover's boarding radius, so the world remains responsible for boarding.
         if view.health <= 0hp {
             activity = Dead;
         } else if view.in_vehicle {
@@ -127,7 +128,7 @@ behavior Resident for Human {
         } else if minute >= shift_start && minute < shift_end {
             if view.position == view.workplace {
                 if occupation == Miner { activity = Mining; } else { activity = Working; }
-            } else if view.routine_slot % 5 == 0 {
+            } else {
                 if let vehicle = nearest(view.available_vehicles) {
                     if vehicle.distance <= view.boarding_radius {
                         send VehicleTransportRequest { destination: view.workplace } to vehicle.id;
@@ -140,9 +141,6 @@ behavior Resident for Human {
                     activity = GoingToWork;
                     motion.request(view.workplace, 1.4mps);
                 }
-            } else {
-                activity = GoingToWork;
-                motion.request(view.workplace, 1.4mps);
             }
         } else if (occupation == HomeResident && minute >= 660 + offset && minute < 720 + offset)
             || (occupation != HomeResident && minute >= shift_end + 60 && minute < shift_end + 105) {
@@ -153,23 +151,8 @@ behavior Resident for Human {
                 motion.request(view.meeting_point, 1.2mps);
             }
         } else if view.position != view.home {
-            if view.routine_slot % 5 == 0 {
-                if let vehicle = nearest(view.available_vehicles) {
-                    if vehicle.distance <= view.boarding_radius {
-                        send VehicleTransportRequest { destination: view.home } to vehicle.id;
-                        activity = ReturningHome;
-                    } else {
-                        activity = ReturningHome;
-                        motion.request(vehicle.position, 1.4mps);
-                    }
-                } else {
-                    activity = ReturningHome;
-                    motion.request(view.home, 1.4mps);
-                }
-            } else {
-                activity = ReturningHome;
-                motion.request(view.home, 1.4mps);
-            }
+            activity = ReturningHome;
+            motion.request(view.home, 1.4mps);
         } else {
             activity = Resting;
         }
@@ -204,9 +187,9 @@ behavior RepairCrew for Rover {
     on RepairCompleted(m) as finished { repaired = repaired + 1; }
 
     every 1s as work {
-        // Passenger transport has priority. The kernel accepts boarding requests and exposes the resulting
-        // route and readiness; the rover itself only decides whether to move there.
-        if view.passenger_count > 0 {
+        // Passenger transport has priority, including residents still walking to their seats. The kernel accepts
+        // boarding requests and exposes the resulting route and readiness; the rover only decides whether to move.
+        if view.passenger_count > 0 || view.boarding_pending > 0 {
             if view.transport_ready {
                 mode = Driving;
                 motion.request(view.transport_target, view.speed_eff);
@@ -234,7 +217,7 @@ behavior PassengerRover for Rover {
     state mode: Mode = Idle;
 
     every 1s as transport {
-        if view.passenger_count > 0 {
+        if view.passenger_count > 0 || view.boarding_pending > 0 {
             if view.transport_ready {
                 mode = Driving;
                 motion.request(view.transport_target, view.speed_eff);
@@ -249,7 +232,7 @@ behavior PassengerRover for Rover {
 }
 
 behavior MarineSquad for Marine {
-    enum Activity { Guard, GoingToVehicle, WaitingForSquad, Transporting, Engaging, ReturningHome, Dead }
+    enum Activity { Guard, Rearming, GoingToVehicle, WaitingForSquad, Transporting, Engaging, ReturningHome, Dead }
     enum DamageCause { MarineAssault }
     param squad: String;
     param leader: Bool;
@@ -257,17 +240,23 @@ behavior MarineSquad for Marine {
 
     state activity: Activity = Guard;
     state attempted: Bool = false;
+    state ready_at: Duration = 0s;
 
     every 1s as mission {
+        // One assault per sortie. The squad then walks back to base, rearms and is ready for the next sortie.
         if view.health <= 0hp {
             activity = Dead;
         } else if attempted {
-            activity = ReturningHome;
-            if view.position != view.depot && !view.in_vehicle {
-                motion.request(view.depot, 1.5mps);
+            if view.position == view.depot {
+                attempted = false;
+                activity = Rearming;
+                ready_at = time + 2min;
+            } else {
+                activity = ReturningHome;
+                if !view.in_vehicle { motion.request(view.depot, 1.5mps); }
             }
-        } else if !view.dispatch_ready {
-            activity = Guard;
+        } else if !view.dispatch_ready || time < ready_at {
+            if activity != Rearming { activity = Guard; }
         } else if let target = nearest(view.visible_xenomorphs) {
             if view.squad_ready {
                 activity = Engaging;
@@ -298,24 +287,46 @@ behavior MarineSquad for Marine {
 }
 
 behavior Xenomorph for Xenomorph {
-    enum Mode { Patrol, Chase, Attack }
+    enum Mode { Patrol, Chase, Hunt, Attack, Bite }
     enum DamageCause { XenomorphAttack }
     state mode: Mode = Patrol;
+    state sated_until: Duration = 0s;
 
     every 1s as decide {
-        if let target = nearest(view.visible_infrastructure) {
-            if target.distance > 3m {
+        // What is within reach comes first: the fence segment it ran into or a pole next to it. Then people in the
+        // open, then the grid, then the next point of its round. A closed fence stops it until it is broken.
+        // After a bite the hunter leaves people alone for a while, so the bitten one can get home.
+        let hungry = time >= sated_until;
+        mode = Patrol;
+        if let near = nearest(view.visible_infrastructure) {
+            if near.distance <= 3m {
+                mode = Attack;
+                if hazard(0.5per_s, "strike") {
+                    damage.request(near.id, 40hp, XenomorphAttack);
+                }
+            }
+        }
+        if mode == Patrol && hungry {
+            if let prey = nearest(view.visible_humans) {
+                if prey.distance > 2m {
+                    mode = Hunt;
+                    motion.request(prey.position, 6mps);
+                } else {
+                    mode = Bite;
+                    if hazard(0.5per_s, "bite") {
+                        damage.request(prey.id, 35hp, XenomorphAttack);
+                        sated_until = time + 5min;
+                    }
+                }
+            }
+        }
+        if mode == Patrol {
+            if let target = nearest(view.visible_infrastructure) {
                 mode = Chase;
                 motion.request(target.position, 6mps);
             } else {
-                mode = Attack;
-                if hazard(0.5per_s, "strike") {
-                    damage.request(target.id, 40hp, XenomorphAttack);
-                }
+                motion.request(view.patrol_waypoint, 3mps);
             }
-        } else {
-            mode = Patrol;
-            motion.request(view.patrol_waypoint, 3mps);
         }
     }
 }

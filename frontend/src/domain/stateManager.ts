@@ -46,13 +46,13 @@ export class StateManager {
   private readonly postings: Posting[] = [];
   private readonly spendByOwner = new Map<string, number>();
   private readonly trend: TrendSample[] = [];
-  private tickId = 0;
+  private tickId = -1;
   private timestamp = 0;
   private nextLogId = 1;
   private runId = '';
   private revision = 0;
   private seed = '';
-  private runtimeMode: StateSnapshot['runtimeMode'] = 'mock';
+  private runtimeMode: StateSnapshot['runtimeMode'] = null;
 
   public reset(): void {
     this.entities.clear();
@@ -65,6 +65,7 @@ export class StateManager {
     this.timestamp = 0;
     this.runId = '';
     this.seed = '';
+    this.runtimeMode = null;
     this.revision += 1;
     for (const record of this.listeners) {
       if (record.timer !== undefined) clearTimeout(record.timer);
@@ -81,13 +82,13 @@ export class StateManager {
 
   public ingest(batch: TickBatch): void {
     let topologyChanged = false;
-    const incomingRun = batch.runId ?? 'mock';
+    const incomingRun = batch.runId ?? 'reference';
     if (incomingRun !== this.runId) {
       this.reset();
       this.runId = incomingRun;
     } else if (batch.tickId <= this.tickId) return;
-    this.seed = batch.seed ?? 'lv426-demo-2026';
-    this.runtimeMode = batch.runtimeMode ?? 'mock';
+    this.seed = batch.seed ?? '';
+    this.runtimeMode = batch.runtimeMode ?? 'reference';
     if (batch.full) {
       const present = new Set(batch.entities.map((entity) => entity.id));
       let removed = false;
@@ -126,20 +127,18 @@ export class StateManager {
       if (changed || connectionsChanged) deltas.push({ entity: existing, connectionsChanged });
     }
     if (topologyChanged) this.revision += 1;
-    // The mock generator has no real events; only observed runs feed the log and the event history.
-    if (this.runtimeMode !== 'mock') {
-      const now = Date.now();
-      for (const draft of describeEvents(batch, now)) this.appendLog(draft);
-      this.events.push(...(batch.events ?? []));
-      if (this.events.length > MAX_EVENTS) this.events.splice(0, this.events.length - MAX_EVENTS);
-      for (const posting of batch.postings ?? []) {
-        this.postings.push(posting);
-        this.spendByOwner.set(posting.owner, (this.spendByOwner.get(posting.owner) ?? 0) + posting.amount);
-      }
-      if (this.postings.length > MAX_POSTINGS) this.postings.splice(0, this.postings.length - MAX_POSTINGS);
-      // The charts read the settlement from the snapshot the world just committed.
-      pushTrend(this.trend, sampleTrend(batch, this.spendByOwner));
+    // Every frame comes from the simulation; retain its events, ledger and trends.
+    const now = Date.now();
+    for (const draft of describeEvents(batch, now)) this.appendLog(draft);
+    this.events.push(...(batch.events ?? []));
+    if (this.events.length > MAX_EVENTS) this.events.splice(0, this.events.length - MAX_EVENTS);
+    for (const posting of batch.postings ?? []) {
+      this.postings.push(posting);
+      this.spendByOwner.set(posting.owner, (this.spendByOwner.get(posting.owner) ?? 0) + posting.amount);
     }
+    if (this.postings.length > MAX_POSTINGS) this.postings.splice(0, this.postings.length - MAX_POSTINGS);
+    // The charts read the settlement from the snapshot the world just committed.
+    pushTrend(this.trend, sampleTrend(batch, this.spendByOwner));
     this.tickId = batch.tickId;
     this.timestamp = batch.timestamp;
     const snapshot = this.snapshot();

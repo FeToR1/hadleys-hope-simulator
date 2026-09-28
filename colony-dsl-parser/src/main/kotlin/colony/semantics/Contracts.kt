@@ -7,7 +7,7 @@ import colony.ast.SourceSpan
  * version (docs/simulation/trigger-conditions.md, section 6), and compiled artifacts record the version
  * they were built against so that a kernel or VM can refuse a mismatch.
  */
-const val CONTRACT_VERSION = 5
+const val CONTRACT_VERSION = 6
 
 /** Entity-kind contract supplied by runtime/simulation owners (Role #7). */
 data class KindContract(
@@ -141,6 +141,8 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
             "passenger_capacity" to Type.Int64,
             "transport_ready" to Type.Bool,
             "transport_target" to Type.Kind("Position"),
+            // Residents walking to this rover who hold a seat; a crew that leaves now strands them.
+            "boarding_pending" to Type.Int64,
         ),
         capabilities = setOf(Capability.MOTION_REQUEST, Capability.REPAIR_REQUEST),
     ),

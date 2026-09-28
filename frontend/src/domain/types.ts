@@ -1,4 +1,4 @@
-export const KNOWN_ENTITY_TYPES = ['house', 'heater', 'kettle', 'civilian', 'xenomorph', 'rover', 'marine', 'power_node'] as const;
+export const KNOWN_ENTITY_TYPES = ['house', 'mine', 'heater', 'kettle', 'civilian', 'xenomorph', 'rover', 'marine', 'power_node', 'fence'] as const;
 /** Kinds the observer may add later are shown generically instead of invalidating the whole snapshot. */
 export type EntityType = (typeof KNOWN_ENTITY_TYPES)[number] | 'other';
 
@@ -17,6 +17,7 @@ export interface EntityMetrics {
   passenger_count?: number;
   passenger_capacity?: number;
   squad_size?: number;
+  workers?: number;
 }
 
 /** One line of the world's ledger: who was charged, what for, and how much. */
@@ -37,7 +38,7 @@ export interface EntityState {
   connectedTo: string[];
   coordinates: { x: number; y: number };
   parentId?: string;
-  /** Private state of the entity's VM (behavior variables); absent in mock data. */
+  /** Behavior variables, or descriptive state for a world-owned site. */
   vmState?: Record<string, unknown>;
 }
 
@@ -64,7 +65,7 @@ export interface WorldEvent {
 export interface TickBatch {
   version?: 1;
   runId?: string;
-  runtimeMode?: 'reference' | 'process' | 'mock';
+  runtimeMode?: 'reference' | 'process';
   seed?: string;
   full?: boolean;
   tickId: number;
@@ -93,7 +94,7 @@ export interface StateSnapshot {
   runId: string;
   revision: number;
   seed: string;
-  runtimeMode: 'reference' | 'process' | 'mock';
+  runtimeMode: 'reference' | 'process' | null;
   tickId: number;
   timestamp: number;
   entities: ReadonlyMap<string, EntityState>;

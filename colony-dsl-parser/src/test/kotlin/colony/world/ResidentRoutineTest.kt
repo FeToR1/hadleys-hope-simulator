@@ -33,6 +33,14 @@ class ResidentRoutineTest {
             assertEquals(4, humans.count { it.vmState.getValue("activity").jsonPrimitive.content == "Resting" })
             assertEquals(4, last.entities.filter { it.type == "house" }.sumOf { it.metrics.getValue("occupants").jsonPrimitive.int })
             assertTrue(last.effects.none { it.source == resident && it.operation == "MOTION_REQUEST" }, "a worker stops on arrival")
+            val mine = last.entities.single { it.type == "mine" }
+            assertEquals("site/mine", mine.id)
+            assertNull(mine.pid, "the mine is a physical site, not an additional VM")
+            assertEquals(2, mine.metrics.getValue("workers").jsonPrimitive.int)
+            val working = humans.filter { it.vmState.getValue("activity").jsonPrimitive.content == "Mining" }
+            assertEquals(working.map { it.id }.toSet(), mine.connectedTo.toSet())
+            assertTrue(working.all { it.coordinates == mine.coordinates }, "the mine must stand at the actual workplace")
+            assertEquals(0, first.entities.single { it.type == "mine" }.metrics.getValue("workers").jsonPrimitive.int)
         }
     }
 
@@ -53,6 +61,7 @@ class ResidentRoutineTest {
             assertEquals("Resting", human.vmState.getValue("activity").jsonPrimitive.content)
             assertEquals(home.coordinates, human.coordinates)
             assertEquals(1, home.metrics.getValue("occupants").jsonPrimitive.int)
+            assertEquals(0, last.entities.single { it.type == "mine" }.metrics.getValue("workers").jsonPrimitive.int)
         }
     }
 

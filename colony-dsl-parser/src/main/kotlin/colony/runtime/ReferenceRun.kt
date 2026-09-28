@@ -344,18 +344,37 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
             // The grid and the water network have no program of their own, but an observer has to see them.
             val fixtures = kernel?.fixtureState().orEmpty().map { fixture ->
                 EntitySnapshot(
-                    id = fixture.id, pid = null, type = "power_node",
+                    id = fixture.id, pid = null, type = if (fixture.kind == "fence") "fence" else "power_node",
                     status = if (fixture.health <= 0) "dead" else if (!fixture.powered) "warning" else "nominal",
                     metrics = buildJsonObject {
                         put("health", fixture.health)
                         if (fixture.id == "water/pump") put("power_consumption", kernel!!.grantedOf(fixture.id))
                     },
                     connectedTo = fixture.feeds, coordinates = Coordinates(fixture.at.x, fixture.at.y),
-                    parentId = null, vmState = buildJsonObject { put("kind", fixture.kind) },
+                    parentId = null, vmState = buildJsonObject {
+                        put("kind", fixture.kind)
+                        // A fence segment is a line; the observer draws it between its ends.
+                        fixture.from?.let { put("from", buildJsonObject { put("x", it.x); put("y", it.y) }) }
+                        fixture.to?.let { put("to", buildJsonObject { put("x", it.x); put("y", it.y) }) }
+                    },
                 )
             }
+            val sites = kernel?.let { world ->
+                val at = world.minePosition
+                val workers = entities.filter { entity ->
+                    entity.type == "civilian" && entity.metrics["health"]?.jsonPrimitive?.double?.let { it > 0 } == true &&
+                        entity.vmState["activity"]?.jsonPrimitive?.content == "Mining" && world.vehicleOf(entity.id) == null &&
+                        hypot(entity.coordinates.x - at.x, entity.coordinates.y - at.y) < 1.0
+                }
+                listOf(EntitySnapshot(
+                    id = "site/mine", pid = null, type = "mine", status = "nominal",
+                    metrics = buildJsonObject { put("workers", workers.size) },
+                    connectedTo = workers.map { it.id }, coordinates = Coordinates(at.x, at.y),
+                    vmState = buildJsonObject { put("shift", if (workers.isEmpty()) "Idle" else "Working") },
+                ))
+            }.orEmpty()
             return TickSnapshot(runId = runId, runtimeMode = fleet.mode, seed = prepared.scenario.seed.toString(), tickId = tick,
-                timestamp = ((tick + 1) * dt * 1000).toLong(), entities = entities + fixtures,
+                timestamp = ((tick + 1) * dt * 1000).toLong(), entities = entities + fixtures + sites,
                 effects = intents.mapIndexed { index, it -> TraceEvent(it.source, it.operation.name, it.arguments, it.source in ableToAct, refs[index]) },
                 events = changeEvents + events, postings = kernel?.lastPostings.orEmpty(),
                 deliveredEvents = delivered).also { tick++ }

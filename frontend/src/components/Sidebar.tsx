@@ -30,13 +30,18 @@ export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText,
       {activeTab === 'causal' ? <CausalChainTracker steps={causalChain} emptyText={causalEmptyText} onFocus={onFocusCausalStep} /> : <>
       <button type="button" className="export-button" onClick={onExportCsv}>Экспорт отчета в CSV</button>
       <div className="sidebar-heading">
-        <div><span className="eyebrow">{selected.type}</span><h2>{selected.id}</h2></div>
+        <div><span className="eyebrow">{selected.type === 'mine' ? 'Место работы' : selected.type}</span><h2>{selected.type === 'mine' ? 'Шахта' : selected.id}</h2></div>
         <span className={`status status-${selected.status}`}>{selected.status}</span>
       </div>
+      {selected.type === 'mine' ? <section className="mine-details"><h3>Рабочая смена</h3>
+        <Metric label="Шахтёров на работе" value={selected.metrics.workers} digits={0} />
+        <p className="muted">{(selected.metrics.workers ?? 0) > 0 ? 'Шахтёры прибыли и работают внутри шахты.' : 'Шахта ожидает следующую смену.'}</p>
+      </section> : <>
       <p className="pid">PID процесса: <strong>{selected.pid ?? '—'}</strong></p>
       <section><h3>Метрики</h3><Metric label="Температура" value={selected.metrics.temperature} suffix=" °C" /><Metric label="Потребление" value={selected.metrics.power_consumption} suffix=" W" /><Metric label="Вода" value={selected.metrics.water_level} suffix=" %" /><Metric label="Жильцов" value={selected.metrics.occupants} digits={0} /><Metric label="Стресс" value={selected.metrics.stress} /><Metric label="Здоровье" value={selected.metrics.health} suffix=" hp" />
       {selected.metrics.spend !== undefined && <div className="metric"><span>Начислено</span><strong>{formatMoney(selected.metrics.spend)}</strong></div>}</section>
       <VmState state={selected.vmState} />
+      </>}
       {selected.type === 'rover' && <section><h3>Перевозка</h3><Metric label="Пассажиры" value={selected.metrics.passenger_count} digits={0} /><Metric label="Вместимость" value={selected.metrics.passenger_capacity} digits={0} /></section>}
       {selected.type === 'marine' && <section><h3>Отряд</h3><Metric label="Живых бойцов" value={selected.metrics.squad_size} digits={0} /></section>}
       {devices.length > 0 && <section><h3>Приборы</h3>{devices.map((device) => <div className="device" key={device.id}><strong>{device.type}</strong><span>PID {device.pid ?? '—'}</span><span>{device.metrics.power_consumption ?? 0} W</span></div>)}</section>}

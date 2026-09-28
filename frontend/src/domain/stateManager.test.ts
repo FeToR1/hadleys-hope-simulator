@@ -1,17 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { MockDataGenerator } from './mockGenerator';
 import { StateManager } from './stateManager';
 import type { TickBatch } from './types';
+
+const initial = (): TickBatch => ({
+  runId: 'r1', runtimeMode: 'reference', seed: '426', full: true, tickId: 0, timestamp: 1000,
+  entities: ['house-1', 'house-2'].map((id) => ({ id, pid: null, type: 'house', status: 'nominal',
+    metrics: { temperature: 20 }, connectedTo: [], coordinates: { x: 0, y: 0 } })),
+});
 
 describe('StateManager', () => {
   it('keeps entity references stable while ingesting updates', () => {
     const manager = new StateManager();
-    const generator = new MockDataGenerator(() => 0.5);
-    manager.ingest(generator.getInitialBatch());
+    manager.ingest(initial());
     const before = manager.getEntity('house-1');
     expect(before).toBeDefined();
-    manager.ingest({ ...generator.step(), entities: [generator.getInitialBatch().entities[0]] });
+    manager.ingest({ ...initial(), tickId: 1, entities: [{ ...initial().entities[0], metrics: { temperature: 15 } }] });
     expect(manager.getEntity('house-1')).toBe(before);
+    expect(before?.metrics.temperature).toBe(15);
   });
 
   it('retains a bounded log buffer', () => {
@@ -22,13 +27,11 @@ describe('StateManager', () => {
     expect(manager.snapshot().logs).toHaveLength(200);
   });
 
-  it('replaces mock data on live run, ignores old ticks and removes absent entities', () => {
+  it('replaces data on a new run, ignores old ticks and removes absent entities', () => {
     const manager = new StateManager();
-    const mock = new MockDataGenerator().getInitialBatch();
-    manager.ingest(mock);
-    manager.appendLog({ timestamp: 1, entityId: 'house-1', level: 'info', message: 'mock' });
-    const live = { ...mock, runId: 'live-1', full: true, tickId: 10, seed: '426', runtimeMode: 'reference' as const,
-      entities: mock.entities.slice(0, 2) };
+    manager.ingest(initial());
+    manager.appendLog({ timestamp: 1, entityId: 'house-1', level: 'info', message: 'previous run' });
+    const live = { ...initial(), runId: 'live-1', tickId: 10 };
     manager.ingest(live);
     expect(manager.snapshot().entities.size).toBe(2);
     expect(manager.snapshot().logs).toHaveLength(0);
@@ -94,29 +97,10 @@ describe('observed run log', () => {
     expect(manager.snapshot().spendByOwner.size).toBe(0);
   });
 
-  it('keeps the VM state of stored entities current and stays silent for mock data', () => {
+  it('keeps the VM state of stored entities current', () => {
     const manager = new StateManager();
     manager.ingest(tick(0, 'nominal'));
     manager.ingest({ ...tick(1, 'nominal'), entities: [{ ...entity('nominal'), vmState: { demand: false } }] });
     expect(manager.getEntity('home-1/heater')?.vmState).toEqual({ demand: false });
-    const mock = new StateManager();
-    mock.ingest(new MockDataGenerator().getInitialBatch());
-    expect(mock.snapshot().logs).toHaveLength(0);
-    expect(mock.snapshot().events).toHaveLength(0);
-  });
-});
-
-describe('MockDataGenerator', () => {
-  it('creates the requested settlement scale and a deterministic failure', () => {
-    const generator = new MockDataGenerator(() => 0);
-    const initial = generator.getInitialBatch();
-    expect(initial.entities.filter((entity) => entity.type === 'house')).toHaveLength(300);
-    expect(initial.entities.some((entity) => entity.type === 'xenomorph')).toBe(true);
-    let failed = false;
-    for (let index = 0; index < 60; index += 1) {
-      failed = generator.step().entities.some((entity) => entity.id === 'power-1' && entity.status === 'dead');
-      if (failed) break;
-    }
-    expect(failed).toBe(true);
   });
 });

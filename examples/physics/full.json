@@ -84,18 +84,22 @@
     },
     "transport": {
       "boardRadius": 6.0,
-      "passengerCapacity": 5
+      "passengerCapacity": 5,
+      "walkRadius": 120.0,
+      "boardingWaitSeconds": 90.0
     },
     "repair": {
       "duration": {
         "pole": 300.0,
         "pipe": 600.0,
-        "device": 180.0
+        "device": 180.0,
+        "fence": 240.0
       },
       "parts": {
         "pole": 120000,
         "pipe": 80000,
-        "device": 40000
+        "device": 40000,
+        "fence": 30000
       },
       "hourlyRate": 150000,
       "workRadius": 6.0,
@@ -112,7 +116,15 @@
     "sight": {
       "sightRadius": 2000.0,
       "listLimit": 16,
-      "attackRadius": 3.0
+      "attackRadius": 3.0,
+      "xenomorphRadius": 150.0
+    },
+    "fence": {
+      "enabled": true,
+      "margin": 40.0,
+      "segmentLength": 60.0,
+      "health": 400.0,
+      "roamingDistance": 60.0
     }
   }
 }

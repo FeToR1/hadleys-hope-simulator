@@ -1,5 +1,5 @@
 {
-    "contractVersion": 5,
+    "contractVersion": 6,
     "units": {
         "degC": {
             "quantity": "Temperature",
@@ -191,7 +191,8 @@
                 "passenger_count": "Int64",
                 "passenger_capacity": "Int64",
                 "transport_ready": "Bool",
-                "transport_target": "Position"
+                "transport_target": "Position",
+                "boarding_pending": "Int64"
             },
             "capabilities": [
                 "MOTION_REQUEST",

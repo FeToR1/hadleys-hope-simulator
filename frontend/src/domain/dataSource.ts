@@ -1,7 +1,5 @@
 import { KNOWN_ENTITY_TYPES, type EntityType, type Posting, type TickBatch, type TraceEffect, type WorldEvent } from './types';
 
-export type DataSourceMode = 'mock' | 'live';
-
 export type RunStatus = 'waiting' | 'running' | 'paused' | 'completed' | 'failed';
 
 /** State of the observed run as reported by the gateway; undefined means the gateway is unreachable. */

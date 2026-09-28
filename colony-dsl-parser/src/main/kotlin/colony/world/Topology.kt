@@ -10,13 +10,35 @@ import kotlinx.serialization.Serializable
 }
 
 /** Kinds of object the world owns without giving them a program of their own. */
-enum class FixtureKind(val repairKey: String) { REACTOR("device"), SOLAR("device"), UPS("device"), PUMP("device"), POLE("pole"), PIPE("pipe") }
+enum class FixtureKind(val repairKey: String) {
+    REACTOR("device"), SOLAR("device"), UPS("device"), PUMP("device"), POLE("pole"), PIPE("pipe"), FENCE("fence")
+}
+
+/** An axis-aligned rectangle; the fence runs along its border. */
+@Serializable data class Box(val minX: Double, val minY: Double, val maxX: Double, val maxY: Double) {
+    fun contains(p: Point): Boolean = p.x > minX && p.x < maxX && p.y > minY && p.y < maxY
+}
 
 /**
  * An object of the settlement that has no VM: a pole, a pipe, a source. It has a position, health and, for
  * the grid, the node it feeds from (docs/simulation/interaction-overview.md, section 1).
  */
-@Serializable data class Fixture(val id: String, val kind: FixtureKind, val at: Point, val feedsFrom: String? = null, val serves: String? = null)
+@Serializable data class Fixture(
+    val id: String, val kind: FixtureKind, val at: Point, val feedsFrom: String? = null, val serves: String? = null,
+    /** The ends of a fence segment; [at] is its middle. */
+    val from: Point? = null, val to: Point? = null,
+) {
+    /** The point of the object nearest to [p]: the object itself, or the nearest point along a segment. */
+    fun nearestPointTo(p: Point): Point {
+        val a = from ?: return at
+        val b = to ?: return at
+        val dx = b.x - a.x
+        val dy = b.y - a.y
+        val length = dx * dx + dy * dy
+        val t = if (length == 0.0) 0.0 else (((p.x - a.x) * dx + (p.y - a.y) * dy) / length).coerceIn(0.0, 1.0)
+        return Point(a.x + dx * t, a.y + dy * t)
+    }
+}
 
 /**
  * Where everything stands and what feeds what. The power grid is a tree from the sources through poles to the
@@ -30,9 +52,16 @@ enum class FixtureKind(val repairKey: String) { REACTOR("device"), SOLAR("device
     val waterPipe: Map<String, String>,
     val houses: List<String>,
     val sources: List<String>,
+    /** Routine destinations: the mine outside the housing area, services and a meeting place in the colony. */
+    val mine: Point,
+    val services: Point,
+    val meeting: Point,
+    /** The fenced area, when the settlement has a fence. */
+    val fenceBox: Box? = null,
 ) {
     val byId: Map<String, Fixture> = fixtures.associateBy { it.id }
     val poles: List<Fixture> = fixtures.filter { it.kind == FixtureKind.POLE }
+    val fence: List<Fixture> = fixtures.filter { it.kind == FixtureKind.FENCE }
 }
 
 /**
@@ -74,12 +103,39 @@ fun buildTopology(manifest: RunManifest, config: WorldConfig): Topology {
             waterPipe[house] = pipe.id
         }
     }
+    val housePoints = houses.map(positions::getValue)
+    val mine = Point(housePoints.maxOf { it.x } + 120.0, housePoints.map { it.y }.average())
+    val services = Point(housePoints.map { it.x }.average(), housePoints.minOf { it.y } - 90.0)
+    val meeting = Point(services.x, services.y + 45.0)
+
+    // The fence encloses everything the colony owns and uses; the xenomorphs are the ones it keeps out.
+    val fenceBox = if (!config.fence.enabled) null else {
+        val enclosed = fixtures.map { it.at } + listOf(mine, services, meeting) +
+            manifest.instances.filter { it.kind != "Xenomorph" }.map { Point(it.x, it.y) }
+        val margin = config.fence.margin
+        Box(enclosed.minOf { it.x } - margin, enclosed.minOf { it.y } - margin,
+            enclosed.maxOf { it.x } + margin, enclosed.maxOf { it.y } + margin).also { box ->
+            val corners = listOf(Point(box.minX, box.minY), Point(box.maxX, box.minY), Point(box.maxX, box.maxY), Point(box.minX, box.maxY))
+            var index = 0
+            for (side in corners.indices) {
+                val a = corners[side]
+                val b = corners[(side + 1) % corners.size]
+                val pieces = maxOf(1, kotlin.math.ceil(a.distanceTo(b) / config.fence.segmentLength).toInt())
+                for (piece in 0 until pieces) {
+                    val from = Point(a.x + (b.x - a.x) * piece / pieces, a.y + (b.y - a.y) * piece / pieces)
+                    val to = Point(a.x + (b.x - a.x) * (piece + 1) / pieces, a.y + (b.y - a.y) * (piece + 1) / pieces)
+                    fixtures += Fixture("fence/${++index}", FixtureKind.FENCE, Point((from.x + to.x) / 2, (from.y + to.y) / 2), from = from, to = to)
+                }
+            }
+        }
+    }
+
     // An appliance draws through the house it belongs to.
     for (instance in manifest.instances) {
         val parent = instance.parent ?: continue
         if (parent in powerFeed) powerFeed[instance.id] = powerFeed.getValue(parent)
     }
-    return Topology(fixtures, powerFeed, waterPipe, houses, sources.map { it.id })
+    return Topology(fixtures, powerFeed, waterPipe, houses, sources.map { it.id }, mine, services, meeting, fenceBox)
 }
 
 /** Instances by id, with the roles the kernel needs to find quickly. */

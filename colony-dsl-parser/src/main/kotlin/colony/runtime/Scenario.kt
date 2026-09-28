@@ -145,7 +145,7 @@ internal object HarnessObservations {
         ),
         "Rover" to mapOf(
             "passenger_count" to JsonPrimitive(0), "passenger_capacity" to JsonPrimitive(5),
-            "transport_ready" to JsonPrimitive(false),
+            "transport_ready" to JsonPrimitive(false), "boarding_pending" to JsonPrimitive(0),
             "work_radius" to JsonPrimitive(6.0),
         ),
         "Marine" to mapOf(
