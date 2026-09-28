@@ -2,6 +2,8 @@ package colony.world
 
 import colony.runtime.ReferenceRun
 import colony.runtime.prepareScenario
+import colony.semantics.SemanticEnvironment
+import colony.semantics.Type
 import kotlinx.serialization.json.*
 import java.nio.file.Path
 import kotlin.math.abs
@@ -13,6 +15,21 @@ import kotlin.test.*
  */
 class WorldKernelTest {
     private fun cascade() = prepareScenario(Path.of("../examples/physics/cascade.json"))
+
+    @Test fun aContractObservationTheWorldCannotComputeStopsTheRunBeforeTheFirstTick() {
+        // docs/simulation/calculations.md, section 1: a mismatch is a binding error, not a mid-tick crash.
+        val prepared = cascade()
+        val house = SemanticEnvironment().kindContracts.getValue("House")
+        val broken = SemanticEnvironment().kindContracts +
+            ("House" to house.copy(viewFields = house.viewFields + ("telepathy" to Type.Bool)))
+        val failure = assertFailsWith<IllegalStateException> { ReferenceRun(prepared, "test", kindContracts = broken) }
+        assertTrue(failure.message!!.contains("telepathy"), failure.message)
+    }
+
+    @Test fun theDefaultContractIsFullyComputableByTheWorld() {
+        // The guard for contract/kernel drift: constructing the run validates every declared observation.
+        cascade().let { prepared -> ReferenceRun(prepared, "test").use { } }
+    }
 
     @Test fun aHouseFollowsTheClosedFormOfItsThermalModel() {
         val prepared = cascade()
