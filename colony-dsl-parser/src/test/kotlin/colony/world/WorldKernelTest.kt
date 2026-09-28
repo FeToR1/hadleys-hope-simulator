@@ -69,10 +69,36 @@ class WorldKernelTest {
 
         assertEquals("XenomorphAttack", broken.second.fields.getValue("reason").jsonPrimitive.content)
         assertEquals("freezing", frozen.second.fields.getValue("reason").jsonPrimitive.content)
+        // docs/simulation/trigger-conditions.md, section 3: ObjectBroken reaches the owner and every crew,
+        // so a crew can react to the event instead of polling active_jobs.
+        val crews = prepared.manifest.instances.filter { it.kind == "Rover" }.map { it.id }
+        assertTrue(crews.isNotEmpty() && crews.all { it in broken.second.recipients },
+            "every crew hears about the pole break")
+        val pipeHouse = kernel.topology.waterPipe.entries.first { it.value == frozen.second.entityId }.key
+        assertTrue(pipeHouse in frozen.second.recipients, "the served house hears about its frozen pipe")
         assertTrue(dark.first == broken.first, "power goes in the step the pole breaks")
+        // docs/simulation/trigger-conditions.md, section 3: a house power event reaches the house and its appliances.
+        val humans = prepared.manifest.instances.filter { it.kind == "Human" }.map { it.id }
+        val appliances = prepared.manifest.instances.filter { it.kind == "Heater" || it.kind == "Kettle" }.map { it.id }
+        assertTrue(appliances.any { it in dark.second.recipients }, "the appliances of the darkened houses hear about the power loss")
+        assertTrue(humans.none { it in dark.second.recipients }, "residents do not receive the house power event")
         assertTrue(frozen.first > dark.first, "the pipe freezes after the power is gone, not before")
-        assertTrue(dry.first == frozen.first, "water goes with the pipe")
+        // docs/simulation/calculations.md, section 2: freezing is found in phase 4, so the water goes only with the next step.
+        assertTrue(dry.first == frozen.first + 1, "water is lost the step after the pipe freezes, not with it")
         assertTrue(repaired.first > broken.first, "a repair comes after the break")
+        // docs/simulation/trigger-conditions.md, section 8: the journal chains the attack to both breaks, the
+        // losses of power and water, and the repairs that end them.
+        assertEquals(broken.second.id, dark.second.causationId, "the power loss chains to the pole break")
+        val frozenCause = frozen.second.causationId
+        assertTrue(frozenCause != null && history.any { it.second.id == frozenCause && it.second.type == "PowerLost" },
+            "the frozen pipe chains to the power loss of the house it serves")
+        assertEquals(frozen.second.id, dry.second.causationId, "the water loss chains to the frozen pipe")
+        val poleRepair = assertNotNull(firstOf("RepairCompleted") { it.startsWith("grid/pole") }, "the crew repairs the pole")
+        assertEquals(broken.second.id, poleRepair.second.causationId, "the repair chains to the break that opened the job")
+        val restored = assertNotNull(firstOf("PowerRestored"), "power comes back")
+        assertEquals(poleRepair.second.id, restored.second.causationId, "the restoration chains to the repair")
+        val pipeRepair = assertNotNull(firstOf("RepairCompleted") { it.startsWith("water/pipe") }, "the crew repairs the pipe")
+        assertEquals(frozen.second.id, pipeRepair.second.causationId, "the pipe repair chains to the freeze")
         assertTrue(spend.any { it.kind == "electricity" }, "the houses are billed for what they used")
         assertTrue(kernel.spentBy("settlement") > 0, "the settlement pays for the grid repairs")
     }
@@ -126,10 +152,13 @@ class WorldKernelTest {
         val electricity = postings.filter { it.kind == "electricity" }
         assertTrue(electricity.isNotEmpty(), "an hour of consumption is posted")
         assertTrue(electricity.all { it.amount > 0 }, "a posting is never zero or negative")
-        val perHouse = electricity.groupBy { it.owner }.mapValues { it.value.sumOf { p -> p.amount } }
-        assertTrue(perHouse.keys.all { it.endsWith("/house") }, "the bill goes to the house that used it")
-        assertEquals(perHouse.values.sum() + kernel.spentBy("settlement"),
-            kernel.monthlyReport().values.sum() - postings.filter { it.kind == "water" }.sumOf { it.amount },
-            "the report adds up to the postings behind it")
+        // docs/simulation/calculations.md, section 10.4: the reports add up to the postings behind them. Every
+        // owner's monthly total is exactly the sum of the captured postings, repairs included, water included.
+        val byOwner = postings.groupBy { it.owner }.mapValues { (_, own) -> own.sumOf { p -> p.amount } }
+        assertEquals(byOwner, kernel.monthlyReport(), "the report adds up to the postings behind it")
+        // An indoor pipe belongs to the house it serves, so the house pays for its repair (section 6.2 and 10.3).
+        assertTrue(postings.any { it.kind == "repair" && it.owner.endsWith("/house") },
+            "the house pays for the repair of its own pipe")
+        assertTrue(kernel.spentBy("settlement") > 0, "the settlement pays for the grid repairs")
     }
 }

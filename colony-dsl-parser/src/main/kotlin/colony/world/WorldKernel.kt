@@ -247,7 +247,8 @@ class WorldKernel(
         integrate(tick, events)
         applyMovement(intents, accepted, events)
         recomputeOccupants()
-        recomputeNetworks()
+        // No second network pass here: a pipe frozen in phase 4 reaches the water network with the next
+        // step, as the phase order fixes (docs/simulation/calculations.md, section 2).
         reportChanges(poweredBefore, waterBefore, events)
         bill(tick, events)
         lastPostings = if (postings.size > postedBefore) postings.subList(postedBefore, postings.size).toList() else emptyList()
@@ -281,8 +282,10 @@ class WorldKernel(
             return KernelEvent("EntityDied", target, actor, buildJsonObject { put("entity", target) })
         }
         openJob(target)
+        // docs/simulation/trigger-conditions.md, section 3: the owner and every crew hear about a break.
+        val recipients = (listOfNotNull(ownerOf(target)) + people.rovers.map { it.id }).distinct()
         return KernelEvent("ObjectBroken", target, actor,
-            buildJsonObject { put("object", target); put("reason", reason) }, listOfNotNull(ownerOf(target)))
+            buildJsonObject { put("object", target); put("reason", reason) }, recipients)
     }
 
     private fun openJob(target: String) {
@@ -291,8 +294,11 @@ class WorldKernel(
         jobs[target] = RepairJob("job/${jobs.size + 1}", target, kind, positionOf(target), 0.0, config.repair.durationOf(kind))
     }
 
-    /** The house that pays for an object: its own house for an appliance, the settlement for the grid. */
-    private fun ownerOf(target: String): String? = people.byId[target]?.parent ?: people.byId[target]?.id?.takeIf { people.byId[it]?.kind == "House" }
+    /** The house that pays for an object: its own house for an entity, the served house for a pipe; the grid itself has none. */
+    private fun ownerOf(target: String): String? =
+        people.byId[target]?.parent
+            ?: people.byId[target]?.id?.takeIf { people.byId[it]?.kind == "House" }
+            ?: topology.byId[target]?.serves
 
     /** Phase 2. A crew makes progress while it stands next to the object it asked to repair. */
     private fun applyRepairs(tick: Long, intents: List<VmIntent>, accepted: Set<String>, events: MutableList<KernelEvent>) {
@@ -484,7 +490,8 @@ class WorldKernel(
             val had = id in poweredBefore
             val has = id in poweredNow
             if (had != has) {
-                val recipients = listOf(id) + people.childrenOf[id].orEmpty().map { it.id }
+                // docs/simulation/trigger-conditions.md, section 3: the house and its appliances hear about it.
+                val recipients = listOf(id) + people.appliances.filter { it.parent == id }.map { it.id }
                 events += KernelEvent(if (has) "PowerRestored" else "PowerLost", id, null, JsonObject(emptyMap()), recipients)
             }
             val hadWater = id in waterBefore

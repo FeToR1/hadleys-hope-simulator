@@ -168,15 +168,46 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
 
     /**
      * Kernel facts become journal entries. A break that follows damage in the same step is linked to the hit
-     * that caused it; frost and other causes outside a request have no cause inside the world.
+     * that caused it; cold and freezing have no request behind them, so [chainedCause] supplies the cause from
+     * the journal's memory of what the world did to the same object before.
      */
     private fun convert(facts: List<KernelEvent>): List<WorldEvent> {
         val lastDamage = HashMap<String, String>()
         return facts.map { fact ->
-            val event = worldEvent(fact.type, fact.entityId, fact.actorId, fact.causeRef ?: lastDamage[fact.entityId],
-                fact.fields, fact.recipients)
+            val event = worldEvent(fact.type, fact.entityId, fact.actorId,
+                fact.causeRef ?: lastDamage[fact.entityId] ?: chainedCause(fact), fact.fields, fact.recipients)
             if (fact.type == "DamageApplied") lastDamage[fact.entityId] = event.id
+            when (fact.type) {
+                "ObjectBroken" -> lastBreakEvent[fact.entityId] = event.id
+                "PowerLost" -> lastPowerLossEvent[fact.entityId] = event.id
+                "RepairCompleted" -> lastRepairEvent[fact.entityId] = event.id
+            }
             event
+        }
+    }
+
+    /** The journal's long-range memory: which break, power loss and repair an object saw last. */
+    private val lastBreakEvent = HashMap<String, String>()
+    private val lastPowerLossEvent = HashMap<String, String>()
+    private val lastRepairEvent = HashMap<String, String>()
+
+    /**
+     * The cause of a world-internal transition (docs/simulation/trigger-conditions.md, section 8): a frozen pipe
+     * or a cold death traces to the power loss of the house it belongs to; a power or water loss traces to the
+     * break that severed the network; a repair and the restoration it brings trace to the break they answer.
+     */
+    private fun chainedCause(fact: KernelEvent): String? {
+        val world = kernel ?: return null
+        val reason = fact.fields["reason"]?.jsonPrimitive?.content
+        return when {
+            fact.type == "PowerLost" -> world.topology.powerFeed[fact.entityId]?.let { lastBreakEvent[it] }
+            fact.type == "WaterLost" -> world.topology.waterPipe[fact.entityId]?.let { lastBreakEvent[it] }
+            fact.type == "ObjectBroken" && reason == "freezing" ->
+                world.topology.waterPipe.entries.firstOrNull { it.value == fact.entityId }?.key?.let { lastPowerLossEvent[it] }
+            fact.type == "EntityDied" -> objects.getValue(fact.entityId).parent?.let { lastPowerLossEvent[it] }
+            fact.type == "RepairCompleted" -> lastBreakEvent[fact.entityId] ?: lastRepairEvent[fact.entityId]
+            fact.type == "PowerRestored" -> world.topology.powerFeed[fact.entityId]?.let { lastRepairEvent[it] }
+            else -> null
         }
     }
 
@@ -200,8 +231,9 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
             if (on == powerBefore.getValue(id)) continue
             val parent = instance.parent
             if (parent != null && powerOn(parent) != powerBefore.getValue(parent)) continue // covered by the house event
+            // docs/simulation/trigger-conditions.md, section 3: the house and its appliances, not the residents.
             val recipients = if (instance.kind == "House") {
-                listOf(id) + childrenOf[id].orEmpty().filter { it.kind == "Human" || powerOn(it.id) != powerBefore.getValue(it.id) }.map { it.id }
+                listOf(id) + childrenOf[id].orEmpty().filter { it.kind in APPLIANCES }.map { it.id }
             } else listOf(id)
             events += worldEvent(if (on) "PowerRestored" else "PowerLost", id, null, null, JsonObject(emptyMap()), recipients)
         }
