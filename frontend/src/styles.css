@@ -41,3 +41,42 @@ section { margin-bottom: 26px; } .metric, .device { display: flex; justify-conte
 .trend-table-wrap { flex: 1; min-height: 0; overflow: auto; padding: 0 16px 16px; }
 .trend-table { width: 100%; border-collapse: collapse; font-size: 11px; } .trend-table th { position: sticky; top: 0; background: #0d1a2b; color: #7f94af; font-weight: 500; text-align: left; padding: 8px 10px; border-bottom: 1px solid #203149; }
 .trend-table td { padding: 6px 10px; border-bottom: 1px solid #16273c; color: #c5d5e8; font-variant-numeric: tabular-nums; }
+.network-panel { display: flex; flex-direction: column; overflow: hidden; }
+.network-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid #203149; }
+.network-panel button, .network-toolbar > input { border: 1px solid #2d435e; border-radius: 6px; background: #102238; color: #c5d5e8; font: inherit; font-size: 12px; }
+.network-panel button { cursor: pointer; padding: 8px 12px; }
+.network-panel button:hover:not(:disabled), .network-panel button.is-selected { border-color: #48d597; background: #17372f; }
+.network-panel button:focus-visible, .network-toolbar input:focus-visible { outline: 2px solid #73baff; outline-offset: 2px; }
+.network-panel button:disabled { cursor: default; opacity: .4; }
+.network-switch { display: flex; gap: 4px; }
+.network-switch button[aria-pressed="true"] { background: #174034; color: #76e8b7; border-color: #338565; }
+.network-toolbar > input { padding: 8px 10px; min-width: 150px; flex: 1; }
+.network-filter { display: flex; align-items: center; gap: 6px; color: #9fb1c9; font-size: 12px; white-space: nowrap; }
+.network-filter input { accent-color: #48d597; }
+.network-summary { display: flex; flex-wrap: wrap; gap: 20px; padding: 12px 18px; background: #0b192a; color: #91a8c2; font-size: 12px; }
+.network-summary strong { color: #e0ebf8; font-size: 17px; margin-right: 4px; }
+.network-alert, .network-summary .network-alert strong { color: #ff8e83; }
+.network-scroll { flex: 1; min-height: 0; overflow: auto; padding: 18px; scrollbar-gutter: stable; }
+.network-panel h2 { font-size: 14px; font-weight: 600; color: #dbe8f6; margin: 0 0 12px; }
+.network-equipment { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+.network-equipment-card { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid #24384f; border-radius: 8px; background: #0b1929; }
+.network-equipment-card small { padding-left: 8px; font-size: 10px; color: #9aaec7; }
+.network-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.network-section-heading span, .network-help { font-size: 12px; color: #8197b1; }
+.network-help { margin: 0 0 16px; line-height: 1.5; }
+.network-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.network-panel .network-group { text-align: left; padding: 16px; display: flex; flex-direction: column; gap: 10px; background: #102136; border-color: #294258; border-radius: 8px; }
+.network-group strong { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; overflow-wrap: anywhere; }
+.network-group > span, .network-group small { font-size: 11px; color: #8fa6c2; }
+.network-group small.network-alert { color: #ff8e83; }
+.network-panel .has-problem { border-color: #914d4a; }
+.network-meter { height: 4px; background: #285746; border-radius: 4px; overflow: hidden; }
+.network-meter i { display: block; height: 100%; background: #ff786e; }
+.network-connections { display: flex; flex-direction: column; gap: 8px; }
+.network-connection { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border: 1px solid #243a50; border-radius: 8px; background: #0d1c2e; }
+.network-route, .network-hop { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #738ca9; }
+.network-panel .network-entity { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; overflow-wrap: anywhere; text-align: left; padding: 6px 8px; font-size: 11px; }
+.network-dot { width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: currentColor; }
+.network-connection-status { font-size: 10px; color: #8da5bf; }
+.network-connection-status.network-alert { color: #ff8e83; }
+.network-pagination { display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 18px; font-size: 12px; color: #a6bbd3; }

@@ -122,13 +122,18 @@ data class HouseConfig(
 
 @Serializable
 data class HumanConfig(
+    /** Local time at the start of the residents' daily routine, in minutes after midnight. */
+    val startMinute: Int = 480,
     /** A resident starts losing health below this temperature. */
     val harmThreshold: Double = 5.0,
     /** Hit points per kelvin per hour of exposure. */
     val harmPerKelvinHour: Double = 0.5,
     val vandalRadius: Double = 12.0,
 ) {
-    fun validate() { require(harmPerKelvinHour >= 0 && vandalRadius >= 0) { "Bad exposure parameters" } }
+    fun validate() {
+        require(startMinute in 0..1439) { "Human startMinute must be in 0..1439" }
+        require(harmPerKelvinHour >= 0 && vandalRadius >= 0) { "Bad exposure parameters" }
+    }
 
     val harmPerKelvinSecond: Double get() = harmPerKelvinHour / 3600.0
 }
