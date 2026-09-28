@@ -5,6 +5,7 @@ import type { CausalChainStep } from '../domain/types';
 import { formatVmValue } from '../domain/format';
 import { CausalChainTracker } from './CausalChainTracker';
 import { SpendPanel, formatMoney } from './SpendPanel';
+import { AttractorRadar } from './AttractorRadar';
 
 interface SidebarProps {
   selected: EntityState | undefined;
@@ -32,14 +33,14 @@ export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText,
   const [activeTab, setActiveTab] = useState<'details' | 'causal'>('details');
   const newestFirst = useMemo(() => [...logs].reverse(), [logs]);
   if (selected === undefined) {
-    return <aside className="sidebar"><AttractorWidget mode={attractorMode} points={attractorHistory.length} onExport={onExportAttractorCsv} /><button type="button" className="export-button" onClick={onExportCsv}>Экспорт отчета в CSV</button><CausalChainTracker steps={causalChain} emptyText={causalEmptyText} onFocus={onFocusCausalStep} /><SpendPanel postings={postings} spendByOwner={spendByOwner} /><p className="muted">Выберите дом или узел на карте.</p><LogList logs={newestFirst} /></aside>;
+    return <aside className="sidebar"><AttractorWidget mode={attractorMode} history={attractorHistory} points={attractorHistory.length} onExport={onExportAttractorCsv} /><button type="button" className="export-button" onClick={onExportCsv}>Экспорт отчета в CSV</button><CausalChainTracker steps={causalChain} emptyText={causalEmptyText} onFocus={onFocusCausalStep} /><SpendPanel postings={postings} spendByOwner={spendByOwner} /><p className="muted">Выберите дом или узел на карте.</p><LogList logs={newestFirst} /></aside>;
   }
   return (
     <aside className="sidebar">
       <nav className="sidebar-tabs"><button type="button" className={activeTab === 'details' ? 'active' : ''} onClick={() => setActiveTab('details')}>Сущность</button><button type="button" className={activeTab === 'causal' ? 'active' : ''} onClick={() => setActiveTab('causal')}>Логика каскада событий</button></nav>
       {activeTab === 'causal' ? <CausalChainTracker steps={causalChain} emptyText={causalEmptyText} onFocus={onFocusCausalStep} /> : <>
       <button type="button" className="export-button" onClick={onExportCsv}>Экспорт отчета в CSV</button>
-      <AttractorWidget mode={attractorMode} points={attractorHistory.length} onExport={onExportAttractorCsv} />
+      <AttractorWidget mode={attractorMode} history={attractorHistory} points={attractorHistory.length} onExport={onExportAttractorCsv} />
       <div className="sidebar-heading">
         <div><span className="eyebrow">{selected.type}</span><h2>{selected.id}</h2></div>
         <span className={`status status-${selected.status}`}>{selected.status}</span>
@@ -55,8 +56,8 @@ export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText,
   );
 }
 
-function AttractorWidget({ mode, points, onExport }: { mode: AttractorMode; points: number; onExport: () => void }): JSX.Element {
-  return <section className={`attractor-widget attractor-${mode}`}><div className="attractor-heading"><h3>Динамика системы (Аттрактор)</h3><span>{points} точек</span></div><strong>{attractorLabels[mode]}</strong><button type="button" className="export-button" onClick={onExport}>Экспорт аттрактора в CSV</button></section>;
+function AttractorWidget({ mode, history, points, onExport }: { mode: AttractorMode; history: readonly PhasePoint[]; points: number; onExport: () => void }): JSX.Element {
+  return <section className={`attractor-widget attractor-${mode}`}><div className="attractor-heading"><h3>Динамика системы (Аттрактор)</h3><span>{points} точек</span></div><strong>{attractorLabels[mode]}</strong><AttractorRadar history={history} mode={mode} /><button type="button" className="export-button" onClick={onExport}>Экспорт аттрактора в CSV</button></section>;
 }
 
 function Metric({ label, value, suffix = '', digits = 1 }: { label: string; value: number | undefined; suffix?: string; digits?: number }): JSX.Element {
