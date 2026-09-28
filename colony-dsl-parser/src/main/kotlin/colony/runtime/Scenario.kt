@@ -137,7 +137,7 @@ internal object HarnessObservations {
         "House" to mapOf("power_connected" to JsonPrimitive(true), "water_available" to JsonPrimitive(true)),
         "Heater" to mapOf("broken" to JsonPrimitive(false), "power_connected" to JsonPrimitive(true)),
         "Kettle" to mapOf("broken" to JsonPrimitive(false), "power_connected" to JsonPrimitive(true)),
-        "Xenomorph" to mapOf("visible_humans" to JsonArray(emptyList())),
+        "Xenomorph" to mapOf("visible_humans" to JsonArray(emptyList()), "routed" to JsonPrimitive(false)),
         "Human" to mapOf(
             "routine_slot" to JsonPrimitive(0), "day_minute" to JsonPrimitive(480),
             "available_vehicles" to JsonArray(emptyList()), "in_vehicle" to JsonPrimitive(false),

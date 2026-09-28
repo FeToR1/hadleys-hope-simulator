@@ -80,7 +80,8 @@
       "responseDelaySeconds": 300.0,
       "assaultRadius": 4.0,
       "minSquadSize": 4,
-      "maxSquadSize": 5
+      "maxSquadSize": 5,
+      "routSeconds": 600.0
     },
     "transport": {
       "boardRadius": 6.0,
@@ -124,7 +125,7 @@
       "margin": 40.0,
       "segmentLength": 60.0,
       "health": 400.0,
-      "roamingDistance": 60.0
+      "roamingDistance": 120.0
     }
   }
 }

@@ -204,7 +204,8 @@
                 "position": "Position",
                 "visible_infrastructure": "List<Target>",
                 "visible_humans": "List<Target>",
-                "patrol_waypoint": "Position"
+                "patrol_waypoint": "Position",
+                "routed": "Bool"
             },
             "capabilities": [
                 "DAMAGE_REQUEST",

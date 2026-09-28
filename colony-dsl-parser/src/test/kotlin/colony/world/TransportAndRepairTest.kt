@@ -271,4 +271,46 @@ class TransportAndRepairTest {
         assertEquals("rover", k.vehicleOf("marine-1"), "the sortie goes on")
         assertEquals("alien-2", k.field(m, "marine-1", "visible_xenomorphs").jsonArray.single().jsonObject.getValue("id").jsonPrimitive.content)
     }
+
+    private fun point(value: JsonElement) = value.jsonObject.let { Point(it.getValue("x").jsonPrimitive.double, it.getValue("y").jsonPrimitive.double) }
+
+    @Test fun aSquadThatGathersAtItsTargetDrivesItOff() {
+        val m = squadManifest()
+        val k = world(m)
+        k.advance(0, m, requests = (1..5).map { request("marine-$it", 36.0) })
+        for (tick in 1L..4L) k.advance(tick, m, listOf(motion("rover", 36.0)))
+        assertTrue(k.field(m, "marine-1", "squad_ready").jsonPrimitive.boolean)
+        assertFalse(k.field(m, "alien", "routed").jsonPrimitive.boolean)
+        k.advance(5, m)
+        assertTrue(k.field(m, "alien", "routed").jsonPrimitive.boolean, "gathering routs it, whatever the shot does")
+        assertTrue(k.field(m, "marine-1", "visible_xenomorphs").jsonArray.isEmpty(), "a routed xenomorph is no longer a target")
+        repeat(WorldConfig().marine.routSeconds.toInt()) { k.advance(6L + it, m, (1..5).map { index -> motion("marine-$index", 0.0, 1.5) }) }
+        assertFalse(k.field(m, "alien", "routed").jsonPrimitive.boolean, "once the squad has gone home, it recovers after its time")
+    }
+
+    @Test fun behindAFenceSquadsHuntIntrudersAndDriveThemOutThroughABreach() {
+        val base = squadManifest()
+        val m = base.copy(instances = base.instances.map { if (it.kind == "Marine") it.copy(x = -30.0, y = -30.0) else it })
+        val k = world(m, WorldConfig(fence = FenceConfig(enabled = true, margin = 10.0, segmentLength = 20.0)))
+        val box = assertNotNull(k.topology.fenceBox)
+        assertTrue(k.field(m, "marine-1", "visible_xenomorphs").jsonArray.isEmpty(), "what roams outside is not a target")
+
+        val inside = VmIntent("alien", Op.MOTION_REQUEST, listOf(buildJsonObject { put("x", -30.0); put("y", -30.0) }, JsonPrimitive(1000.0)))
+        k.advance(0, m, listOf(inside))
+        val segment = k.field(m, "alien", "visible_infrastructure").jsonArray.first().jsonObject.getValue("id").jsonPrimitive.content
+        k.advance(1, m, listOf(VmIntent("alien", Op.DAMAGE_REQUEST, listOf(JsonPrimitive(segment), JsonPrimitive(1000.0), JsonPrimitive("test")))))
+        k.advance(2, m, listOf(inside))
+        assertTrue(box.contains(k.positionOf("alien")))
+        assertEquals("alien", k.field(m, "marine-1", "visible_xenomorphs").jsonArray.single().jsonObject.getValue("id").jsonPrimitive.content)
+
+        k.advance(3, m)
+        assertTrue(k.field(m, "alien", "routed").jsonPrimitive.boolean)
+        var tick = 4L
+        while (box.contains(k.positionOf("alien")) && tick < 60) {
+            val exit = point(k.field(m, "alien", "patrol_waypoint"))
+            k.advance(tick++, m, listOf(VmIntent("alien", Op.MOTION_REQUEST, listOf(buildJsonObject { put("x", exit.x); put("y", exit.y) }, JsonPrimitive(100.0)))))
+        }
+        assertFalse(box.contains(k.positionOf("alien")), "it leaves through the breach it came in by")
+        assertTrue(k.field(m, "alien", "routed").jsonPrimitive.boolean, "and keeps away for a while")
+    }
 }

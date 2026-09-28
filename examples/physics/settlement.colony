@@ -243,7 +243,9 @@ behavior MarineSquad for Marine {
     state ready_at: Duration = 0s;
 
     every 1s as mission {
-        // One assault per sortie. The squad then walks back to base, rearms and is ready for the next sortie.
+        // The squads go after xenomorphs inside the fence. Gathering at one drives it off; the leader may also
+        // kill it. One assault per sortie: the squad then walks back to base, rearms and is ready again.
+        // With nothing to go after, a squad walks back to base instead of standing where it was left.
         if view.health <= 0hp {
             activity = Dead;
         } else if attempted {
@@ -282,50 +284,67 @@ behavior MarineSquad for Marine {
             }
         } else {
             activity = Guard;
+            if view.position != view.depot && !view.in_vehicle { motion.request(view.depot, 1.5mps); }
         }
     }
 }
 
 behavior Xenomorph for Xenomorph {
-    enum Mode { Patrol, Chase, Hunt, Attack, Bite }
+    enum Mode { Patrol, Chase, Hunt, Attack, Bite, Flee }
     enum DamageCause { XenomorphAttack }
     state mode: Mode = Patrol;
     state sated_until: Duration = 0s;
 
     every 1s as decide {
-        // What is within reach comes first: the fence segment it ran into or a pole next to it. Then people in the
-        // open, then the grid, then the next point of its round. A closed fence stops it until it is broken.
-        // After a bite the hunter leaves people alone for a while, so the bitten one can get home.
-        let hungry = time >= sated_until;
         mode = Patrol;
-        if let near = nearest(view.visible_infrastructure) {
-            if near.distance <= 3m {
-                mode = Attack;
-                if hazard(0.5per_s, "strike") {
-                    damage.request(near.id, 40hp, XenomorphAttack);
-                }
-            }
-        }
-        if mode == Patrol && hungry {
-            if let prey = nearest(view.visible_humans) {
-                if prey.distance > 2m {
-                    mode = Hunt;
-                    motion.request(prey.position, 6mps);
+        if view.routed {
+            // Marines drove it off: it runs for the wilds through a breach, or breaks the fence in its way.
+            mode = Flee;
+            if let near = nearest(view.visible_infrastructure) {
+                if near.kind == "Fence" && near.distance <= 3m {
+                    if hazard(0.5per_s, "strike") {
+                        damage.request(near.id, 40hp, XenomorphAttack);
+                    }
                 } else {
-                    mode = Bite;
-                    if hazard(0.5per_s, "bite") {
-                        damage.request(prey.id, 35hp, XenomorphAttack);
-                        sated_until = time + 5min;
+                    motion.request(view.patrol_waypoint, 6mps);
+                }
+            } else {
+                motion.request(view.patrol_waypoint, 6mps);
+            }
+        } else {
+            // What is within reach comes first: the fence segment it ran into or a pole next to it. Then people
+            // in the open, then the grid, then the next point of its round. A closed fence stops it until broken.
+            // After a bite the hunter leaves people alone for a while, so the bitten one can get home.
+            let hungry = time >= sated_until;
+            if let near = nearest(view.visible_infrastructure) {
+                if near.distance <= 3m {
+                    mode = Attack;
+                    if hazard(0.5per_s, "strike") {
+                        damage.request(near.id, 40hp, XenomorphAttack);
                     }
                 }
             }
-        }
-        if mode == Patrol {
-            if let target = nearest(view.visible_infrastructure) {
-                mode = Chase;
-                motion.request(target.position, 6mps);
-            } else {
-                motion.request(view.patrol_waypoint, 3mps);
+            if mode == Patrol && hungry {
+                if let prey = nearest(view.visible_humans) {
+                    if prey.distance > 2m {
+                        mode = Hunt;
+                        motion.request(prey.position, 6mps);
+                    } else {
+                        mode = Bite;
+                        if hazard(0.5per_s, "bite") {
+                            damage.request(prey.id, 35hp, XenomorphAttack);
+                            sated_until = time + 5min;
+                        }
+                    }
+                }
+            }
+            if mode == Patrol {
+                if let target = nearest(view.visible_infrastructure) {
+                    mode = Chase;
+                    motion.request(target.position, 6mps);
+                } else {
+                    motion.request(view.patrol_waypoint, 3mps);
+                }
             }
         }
     }

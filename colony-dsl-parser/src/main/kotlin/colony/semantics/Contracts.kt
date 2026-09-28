@@ -170,6 +170,8 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
             "visible_infrastructure" to Type.List(Type.Kind("Target")),
             "visible_humans" to Type.List(Type.Kind("Target")),
             "patrol_waypoint" to Type.Kind("Position"),
+            // Marines drove it off: until it is out and keeps away, the waypoint leads out of the settlement.
+            "routed" to Type.Bool,
         ),
         capabilities = setOf(Capability.DAMAGE_REQUEST, Capability.MOTION_REQUEST),
     ),

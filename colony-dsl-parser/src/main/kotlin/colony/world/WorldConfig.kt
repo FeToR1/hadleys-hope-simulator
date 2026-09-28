@@ -147,10 +147,13 @@ data class MarineConfig(
     /** A squad is expected to contain four or five living members. */
     val minSquadSize: Int = 4,
     val maxSquadSize: Int = 5,
+    /** How long a xenomorph that a squad drove off keeps away once it is out of the settlement. */
+    val routSeconds: Double = 600.0,
 ) {
     fun validate() {
         require(responseDelaySeconds >= 0.0) { "Marine response delay cannot be negative" }
         require(assaultRadius > 0.0) { "Marine assault radius must be positive" }
+        require(routSeconds >= 0.0) { "Rout time cannot be negative" }
         require(minSquadSize in 1..maxSquadSize) { "Bad marine squad size limits" }
         require(maxSquadSize <= 32) { "Marine squad is too large" }
     }

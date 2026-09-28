@@ -77,6 +77,8 @@ class WorldKernel(
     private val boardingSince = HashMap<String, Double>()
     /** The closed fence segment a xenomorph last ran into. */
     private val blockedBy = HashMap<String, String>()
+    /** Xenomorphs a squad has driven off, and until when they keep away. */
+    private val routedUntil = HashMap<String, Double>()
     private var nextJobId = 0L
     private var upsCharge = config.power.upsCapacity
     private var poweredNow = emptySet<String>()
@@ -187,6 +189,7 @@ class WorldKernel(
                         positionOf(resident.id).distanceTo(positionOf(resident.parent ?: resident.id)) > HOUSE_ZONE
                 }.map { it.id }, config.sight.xenomorphRadius)
                 "patrol_waypoint" -> pointJson(patrolPoint(id))
+                "routed" -> JsonPrimitive(isRouted(id))
                 "home" -> pointJson(positionOf(instance.parent ?: id))
                 "workplace" -> pointJson(workplaceOf(id))
                 "meeting_point" -> pointJson(topology.meeting)
@@ -303,8 +306,8 @@ class WorldKernel(
 
     private fun squadTarget(marineId: String): String? {
         val squad = squadOf(marineId) ?: return null
-        // A pinned target that has died no longer holds the squad: it takes the nearest one its leader sees.
-        squadTargets[squad]?.takeUnless(::isBroken)?.let { return it }
+        // A pinned target that has died or been driven off no longer holds the squad: it takes the nearest one.
+        squadTargets[squad]?.takeUnless { isBroken(it) || isRouted(it) }?.let { return it }
         val leader = marineSquad(marineId).filter { !isBroken(it.id) }
             .sortedWith(compareBy({ !isMarineLeader(it.id) }, { it.id })).firstOrNull() ?: return null
         return nearestVisibleXenomorph(leader.id)
@@ -313,7 +316,8 @@ class WorldKernel(
     private fun nearestVisibleXenomorph(marineId: String): String? {
         val here = positionOf(marineId)
         return people.byId.values.asSequence()
-            .filter { it.kind == "Xenomorph" && !isBroken(it.id) }
+            // Behind a fence the squads defend the colony: they go after intruders, not what roams outside.
+            .filter { it.kind == "Xenomorph" && !isBroken(it.id) && !isRouted(it.id) && topology.fenceBox?.contains(positionOf(it.id)) != false }
             .map { it.id to here.distanceTo(positionOf(it.id)) }
             .filter { it.second <= config.sight.sightRadius }
             .sortedWith(compareBy({ it.second }, { it.first }))
@@ -461,7 +465,67 @@ class WorldKernel(
     private fun roll(id: String, leg: Int, salt: Int): Double =
         java.util.SplittableRandom(manifest.seed * 1_000_003L + id.hashCode() * 7_919L + leg * 131L + salt).nextDouble()
 
+    /** Inside the fence, or inside the settlement itself when it has none. */
+    private val settlementArea: Box get() = topology.fenceBox ?: roamBox
+
+    /** A routed xenomorph runs until it is out of the settlement and its time to keep away has passed. */
+    private fun isRouted(id: String): Boolean {
+        val until = routedUntil[id] ?: return false
+        return !isBroken(id) && (settlementArea.contains(positionOf(id)) || elapsedSeconds < until)
+    }
+
+    /**
+     * Where a routed xenomorph runs from inside: through the nearest breach, first to its inner side and then
+     * straight out, or else to the nearest stretch of the fence, which it breaks through.
+     */
+    private fun exitPoint(id: String): Point {
+        val here = positionOf(id)
+        val gap = topology.fence.filter { isBroken(it.id) }.minWithOrNull(compareBy({ it.nearestPointTo(here).distanceTo(here) }, { it.id }))
+        if (gap != null) {
+            val out = outwardOf(gap.at)
+            val inner = Point(gap.at.x - out.x * EXIT_STEP, gap.at.y - out.y * EXIT_STEP)
+            if (here.distanceTo(inner) > 1.0) return inner
+            return Point(gap.at.x + out.x * EXIT_RUN, gap.at.y + out.y * EXIT_RUN)
+        }
+        val box = settlementArea
+        val out = outwardOf(here)
+        val border = when (out) {
+            Point(-1.0, 0.0) -> Point(box.minX, here.y)
+            Point(1.0, 0.0) -> Point(box.maxX, here.y)
+            Point(0.0, -1.0) -> Point(here.x, box.minY)
+            else -> Point(here.x, box.maxY)
+        }
+        return Point(border.x + out.x * EXIT_RUN, border.y + out.y * EXIT_RUN)
+    }
+
+    /** The outward direction of the side of the settlement nearest to [p]. */
+    private fun outwardOf(p: Point): Point {
+        val box = settlementArea
+        return listOf(
+            Math.abs(p.x - box.minX) to Point(-1.0, 0.0), Math.abs(box.maxX - p.x) to Point(1.0, 0.0),
+            Math.abs(p.y - box.minY) to Point(0.0, -1.0), Math.abs(box.maxY - p.y) to Point(0.0, 1.0),
+        ).minBy { it.first }.second
+    }
+
+    /** How far along the roaming perimeter, clockwise from its north-west corner, the point nearest to [p] lies. */
+    private fun perimeterAlong(p: Point): Double {
+        val b = roamBox
+        val w = b.maxX - b.minX
+        val h = b.maxY - b.minY
+        val x = p.x.coerceIn(b.minX, b.maxX)
+        val y = p.y.coerceIn(b.minY, b.maxY)
+        val side = listOf(Math.abs(y - b.minY) to 0, Math.abs(b.maxX - x) to 1, Math.abs(b.maxY - y) to 2, Math.abs(x - b.minX) to 3)
+            .minBy { it.first }.second
+        return when (side) {
+            0 -> x - b.minX
+            1 -> w + (y - b.minY)
+            2 -> w + h + (b.maxX - x)
+            else -> 2 * w + h + (b.maxY - y)
+        }
+    }
+
     private fun patrolPoint(id: String): Point {
+        if (isRouted(id) && settlementArea.contains(positionOf(id))) return exitPoint(id)
         val leg = patrolLeg.getOrDefault(id, 0)
         val fence = topology.fenceBox
         if (fence != null && fence.contains(positionOf(id))) {
@@ -548,7 +612,13 @@ class WorldKernel(
         val waterBefore = waterNow
 
         // A sortie ends when its target is dead or the whole squad is back at its base; the next one picks anew.
-        squadTargets.entries.removeIf { (squad, target) -> isBroken(target) || squadAtBase(squad) }
+        // A squad that has gathered at its target drives it off, whatever the leader's shot does.
+        for (squad in people.marines.mapNotNull { squadOf(it.id) }.distinct()) {
+            val member = people.marines.firstOrNull { squadOf(it.id) == squad && !isBroken(it.id) } ?: continue
+            if (squadReady(member.id)) squadTarget(member.id)?.let { routedUntil[it] = elapsedSeconds + config.marine.routSeconds }
+        }
+        routedUntil.keys.removeIf { !isRouted(it) }
+        squadTargets.entries.removeIf { (squad, target) -> isBroken(target) || isRouted(target) || squadAtBase(squad) }
         walkersOf = walkersFrom(intents, accepted)
         // Freeze each route to the same world state the VM observed before this step's movement.
         for (vehicleId in vehicleRouteTarget.keys.toList()) {
@@ -841,6 +911,10 @@ class WorldKernel(
             if (people.byId[intent.source]?.kind == "Xenomorph") {
                 fenceStop(intent.source, here, newPosition)?.let { stop -> newPosition = stop; ratio = 0.0 }
             }
+            // One that has left the settlement roams on from where it came out, not from where it went in.
+            if (people.byId[intent.source]?.kind == "Xenomorph" && settlementArea.contains(here) && !settlementArea.contains(newPosition)) {
+                patrolAlong[intent.source] = perimeterAlong(newPosition)
+            }
             position[intent.source] = newPosition
 
             // Riders occupy the rover's physical position, not their previous world coordinates.
@@ -962,6 +1036,9 @@ class WorldKernel(
         const val PATROL_MARGIN = 30.0
         /** How far short of a closed fence a xenomorph stops. */
         const val FENCE_GAP = 0.5
+        /** A routed xenomorph lines up this far inside a breach and runs this far beyond the fence. */
+        const val EXIT_STEP = 5.0
+        const val EXIT_RUN = 25.0
         const val BUS = "grid/bus"
         const val PUMP = "water/pump"
         const val MAX_POSTINGS = 20_000

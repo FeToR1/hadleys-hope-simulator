@@ -13,7 +13,7 @@ class ContractAlignmentTest {
         "Heater" to setOf("home_occupants", "power_connected", "broken", "power_granted"),
         "Kettle" to setOf("home_occupants", "power_connected", "broken", "power_granted", "water_temperature"),
         "Human" to setOf("position", "health", "cold", "reachable_breakables", "home", "workplace", "meeting_point", "routine_slot", "day_minute", "available_vehicles", "in_vehicle", "boarding_radius"),
-        "Xenomorph" to setOf("position", "visible_infrastructure", "visible_humans", "patrol_waypoint"),
+        "Xenomorph" to setOf("position", "visible_infrastructure", "visible_humans", "patrol_waypoint", "routed"),
         // The crew of a rover: the spec adds materials and speed on top of the jobs it can see.
         "Rover" to setOf("position", "speed_eff", "active_jobs", "materials_remaining", "depot", "work_radius", "passenger_count", "passenger_capacity", "transport_ready", "transport_target", "boarding_pending"),
         "Marine" to setOf("position", "health", "visible_xenomorphs", "available_vehicles", "in_vehicle", "boarding_radius", "dispatch_ready", "squad_ready", "squad_size", "squad_leader", "depot"),
