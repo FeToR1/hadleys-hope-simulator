@@ -6,6 +6,7 @@ import { formatVmValue } from '../domain/format';
 import { CausalChainTracker } from './CausalChainTracker';
 import { SpendPanel, formatMoney } from './SpendPanel';
 import { AttractorRadar } from './AttractorRadar';
+import { AttractorVortex3D } from './AttractorVortex3D';
 
 interface SidebarProps {
   selected: EntityState | undefined;
@@ -57,7 +58,8 @@ export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText,
 }
 
 function AttractorWidget({ mode, history, points, onExport }: { mode: AttractorMode; history: readonly PhasePoint[]; points: number; onExport: () => void }): JSX.Element {
-  return <section className={`attractor-widget attractor-${mode}`}><div className="attractor-heading"><h3>Динамика системы (Аттрактор)</h3><span>{points} точек</span></div><strong>{attractorLabels[mode]}</strong><AttractorRadar history={history} mode={mode} /><button type="button" className="export-button" onClick={onExport}>Экспорт аттрактора в CSV</button></section>;
+  const [showVortex, setShowVortex] = useState(false);
+  return <section className={`attractor-widget attractor-${mode}`}><div className="attractor-heading"><h3>Динамика системы (Аттрактор)</h3><span>{points} точек</span></div><strong>{attractorLabels[mode]}</strong><AttractorRadar history={history} mode={mode} /><button type="button" className="export-button" onClick={() => setShowVortex((visible) => !visible)}>{showVortex ? 'Скрыть 3D вихрь' : 'Открыть 3D вихрь'}</button>{showVortex && <AttractorVortex3D history={history} mode={mode} />}<button type="button" className="export-button" onClick={onExport}>Экспорт аттрактора в CSV</button></section>;
 }
 
 function Metric({ label, value, suffix = '', digits = 1 }: { label: string; value: number | undefined; suffix?: string; digits?: number }): JSX.Element {
