@@ -1,6 +1,7 @@
 import { describeEvents } from './effectLog';
+import { classifyAttractor, createPhasePoint, MAX_ATTRACTOR_HISTORY } from './attractor';
 import { pushTrend, sampleTrend, type TrendSample } from './trend';
-import type { EntityDelta, EntityLog, EntityState, Posting, StateSnapshot, TickBatch, WorldEvent } from './types';
+import type { AttractorMode, EntityDelta, EntityLog, EntityState, PhasePoint, Posting, StateSnapshot, TickBatch, WorldEvent } from './types';
 
 const MAX_EVENTS = 500;
 const MAX_POSTINGS = 500;
@@ -20,8 +21,7 @@ interface ListenerRecord {
 }
 
 const copyEntityInto = (target: EntityState, source: EntityState): boolean => {
-  const connectionsChanged =
-    target.connectedTo.length !== source.connectedTo.length ||
+  const connectionsChanged = target.connectedTo.length !== source.connectedTo.length ||
     target.connectedTo.some((connection, index) => connection !== source.connectedTo[index]);
   target.pid = source.pid;
   target.type = source.type;
@@ -46,13 +46,16 @@ export class StateManager {
   private readonly postings: Posting[] = [];
   private readonly spendByOwner = new Map<string, number>();
   private readonly trend: TrendSample[] = [];
-  private tickId = 0;
+  private readonly attractorHistory: PhasePoint[] = [];
+  private attractorMode: AttractorMode = 'stationary';
+  private tickId = -1;
   private timestamp = 0;
   private nextLogId = 1;
   private runId = '';
   private revision = 0;
   private seed = '';
   private runtimeMode: StateSnapshot['runtimeMode'] = 'mock';
+  private scenario: TickBatch['scenario'];
 
   public reset(): void {
     this.entities.clear();
@@ -61,11 +64,109 @@ export class StateManager {
     this.postings.length = 0;
     this.spendByOwner.clear();
     this.trend.length = 0;
+    this.attractorHistory.length = 0;
+    this.attractorMode = 'stationary';
+    this.scenario = undefined;
     this.tickId = -1;
     this.timestamp = 0;
     this.runId = '';
     this.seed = '';
     this.revision += 1;
+    this.notifyReset();
+  }
+
+  public ingest(batch: TickBatch): void {
+    const incomingRun = batch.runId ?? 'mock';
+    if (incomingRun !== this.runId && this.runId !== '') {
+      this.reset();
+    } else if (batch.tickId <= this.tickId) {
+      return;
+    }
+    this.runId = incomingRun;
+    this.seed = batch.seed ?? 'lv426-demo-2026';
+    this.runtimeMode = batch.runtimeMode ?? 'mock';
+    this.scenario = batch.scenario ?? this.scenario;
+    if (batch.full) {
+      const present = new Set(batch.entities.map((entity) => entity.id));
+      for (const id of this.entities.keys()) {
+        if (!present.has(id)) this.entities.delete(id);
+      }
+    }
+    const deltas: EntityDelta[] = [];
+    let topologyChanged = false;
+    for (const incoming of batch.entities) {
+      const existing = this.entities.get(incoming.id);
+      if (existing === undefined) {
+        const stored = { ...incoming, metrics: incoming.metrics, connectedTo: [...incoming.connectedTo], coordinates: { ...incoming.coordinates } };
+        this.entities.set(incoming.id, stored);
+        deltas.push({ entity: stored, connectionsChanged: true });
+        topologyChanged = true;
+        continue;
+      }
+      const changed = existing.status !== incoming.status || existing.pid !== incoming.pid ||
+        existing.coordinates.x !== incoming.coordinates.x || existing.coordinates.y !== incoming.coordinates.y ||
+        existing.metrics !== incoming.metrics || existing.vmState !== incoming.vmState || existing.parentId !== incoming.parentId;
+      const connectionsChanged = copyEntityInto(existing, incoming);
+      if (connectionsChanged || changed) deltas.push({ entity: existing, connectionsChanged });
+      if (connectionsChanged) topologyChanged = true;
+    }
+    if (topologyChanged) this.revision += 1;
+    if (this.runtimeMode !== 'mock') {
+      const now = Date.now();
+      for (const draft of describeEvents(batch, now)) this.appendLog(draft);
+      this.events.push(...(batch.events ?? []));
+      if (this.events.length > MAX_EVENTS) this.events.splice(0, this.events.length - MAX_EVENTS);
+      pushTrend(this.trend, sampleTrend(batch, this.spendByOwner));
+    }
+    for (const posting of batch.postings ?? []) {
+      this.postings.push(posting);
+      this.spendByOwner.set(posting.owner, (this.spendByOwner.get(posting.owner) ?? 0) + posting.amount);
+    }
+    if (this.postings.length > MAX_POSTINGS) this.postings.splice(0, this.postings.length - MAX_POSTINGS);
+    this.tickId = batch.tickId;
+    this.timestamp = batch.timestamp;
+    const point = createPhasePoint(this.tickId, [...this.entities.values()], this.postings);
+    this.attractorHistory.push(point);
+    if (this.attractorHistory.length > MAX_ATTRACTOR_HISTORY) this.attractorHistory.shift();
+    if (this.attractorHistory.length === 1 || this.tickId % 10 === 0) {
+      this.attractorMode = classifyAttractor(this.attractorHistory, this.scenario);
+    }
+    this.publish({ snapshot: this.snapshot(), deltas });
+  }
+
+  public appendLog(log: Omit<EntityLog, 'id'>): void {
+    this.logs.push({ ...log, id: this.nextLogId++ });
+    if (this.logs.length > 200) this.logs.shift();
+  }
+
+  public getEntity(id: string): EntityState | undefined {
+    return this.entities.get(id);
+  }
+
+  public subscribe(listener: StateListener, options: StateSubscriptionOptions = {}): () => void {
+    const record: ListenerRecord = { listener, options };
+    this.listeners.add(record);
+    return () => {
+      if (record.timer !== undefined) clearTimeout(record.timer);
+      if (record.frame !== undefined) {
+        if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(record.frame);
+        else clearTimeout(record.frame);
+      }
+      this.listeners.delete(record);
+    };
+  }
+
+  public snapshot(): StateSnapshot {
+    return {
+      runId: this.runId, revision: this.revision, seed: this.seed, runtimeMode: this.runtimeMode,
+      tickId: this.tickId, timestamp: this.timestamp, entities: this.entities, logs: this.logs,
+      events: this.events, postings: this.postings, spendByOwner: this.spendByOwner, trend: this.trend,
+      attractorHistory: this.attractorHistory, attractorMode: this.attractorMode,
+    };
+  }
+
+  private notifyReset(): void {
+    const snapshot = this.snapshot();
     for (const record of this.listeners) {
       if (record.timer !== undefined) clearTimeout(record.timer);
       if (record.frame !== undefined) {
@@ -75,76 +176,12 @@ export class StateManager {
       record.timer = undefined;
       record.frame = undefined;
       record.latest = undefined;
-      record.listener(this.snapshot(), []);
+      record.listener(snapshot, []);
     }
   }
 
-  public ingest(batch: TickBatch): void {
-    let topologyChanged = false;
-    const incomingRun = batch.runId ?? 'mock';
-    if (incomingRun !== this.runId) {
-      this.reset();
-      this.runId = incomingRun;
-    } else if (batch.tickId <= this.tickId) return;
-    this.seed = batch.seed ?? 'lv426-demo-2026';
-    this.runtimeMode = batch.runtimeMode ?? 'mock';
-    if (batch.full) {
-      const present = new Set(batch.entities.map((entity) => entity.id));
-      let removed = false;
-      for (const id of this.entities.keys()) {
-        if (!present.has(id)) { this.entities.delete(id); removed = true; }
-      }
-      if (removed) topologyChanged = true;
-    }
-    const deltas: EntityDelta[] = [];
-    for (const incoming of batch.entities) {
-      const existing = this.entities.get(incoming.id);
-      if (existing === undefined) {
-        topologyChanged = true;
-        const stored: EntityState = {
-          ...incoming,
-          metrics: incoming.metrics,
-          connectedTo: [...incoming.connectedTo],
-          coordinates: { ...incoming.coordinates },
-        };
-        this.entities.set(incoming.id, stored);
-        deltas.push({ entity: stored, connectionsChanged: true });
-        continue;
-      }
-      const changed =
-        existing.type !== incoming.type ||
-        existing.status !== incoming.status ||
-        existing.pid !== incoming.pid ||
-        existing.coordinates.x !== incoming.coordinates.x ||
-        existing.coordinates.y !== incoming.coordinates.y ||
-        existing.metrics !== incoming.metrics ||
-        existing.vmState !== incoming.vmState ||
-        existing.parentId !== incoming.parentId;
-      if (existing.type !== incoming.type) topologyChanged = true;
-      const connectionsChanged = copyEntityInto(existing, incoming);
-      if (connectionsChanged) topologyChanged = true;
-      if (changed || connectionsChanged) deltas.push({ entity: existing, connectionsChanged });
-    }
-    if (topologyChanged) this.revision += 1;
-    // The mock generator has no real events; only observed runs feed the log and the event history.
-    if (this.runtimeMode !== 'mock') {
-      const now = Date.now();
-      for (const draft of describeEvents(batch, now)) this.appendLog(draft);
-      this.events.push(...(batch.events ?? []));
-      if (this.events.length > MAX_EVENTS) this.events.splice(0, this.events.length - MAX_EVENTS);
-      for (const posting of batch.postings ?? []) {
-        this.postings.push(posting);
-        this.spendByOwner.set(posting.owner, (this.spendByOwner.get(posting.owner) ?? 0) + posting.amount);
-      }
-      if (this.postings.length > MAX_POSTINGS) this.postings.splice(0, this.postings.length - MAX_POSTINGS);
-      // The charts read the settlement from the snapshot the world just committed.
-      pushTrend(this.trend, sampleTrend(batch, this.spendByOwner));
-    }
-    this.tickId = batch.tickId;
-    this.timestamp = batch.timestamp;
-    const snapshot = this.snapshot();
+  private publish(payload: { snapshot: StateSnapshot; deltas: readonly EntityDelta[] }): void {
     for (const record of this.listeners) {
-      const payload = { snapshot, deltas };
       if (record.options.animationFrame) {
         record.latest = payload;
         if (record.frame === undefined) {
@@ -167,34 +204,8 @@ export class StateManager {
           }, record.options.throttleMs);
         }
       } else {
-        record.listener(snapshot, deltas);
+        record.listener(payload.snapshot, payload.deltas);
       }
     }
-  }
-
-  public appendLog(log: Omit<EntityLog, 'id'>): void {
-    this.logs.push({ ...log, id: this.nextLogId++ });
-    if (this.logs.length > 200) this.logs.shift();
-  }
-
-  public getEntity(id: string): EntityState | undefined {
-    return this.entities.get(id);
-  }
-
-  public subscribe(listener: StateListener, options: StateSubscriptionOptions = {}): () => void {
-    const record: ListenerRecord = { listener, options };
-    this.listeners.add(record);
-    return () => {
-      if (record.timer !== undefined) clearTimeout(record.timer);
-      if (record.frame !== undefined && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(record.frame);
-      else if (record.frame !== undefined) clearTimeout(record.frame);
-      this.listeners.delete(record);
-    };
-  }
-
-  public snapshot(): StateSnapshot {
-    return { runId: this.runId, revision: this.revision, seed: this.seed, runtimeMode: this.runtimeMode,
-      tickId: this.tickId, timestamp: this.timestamp, entities: this.entities, logs: this.logs, events: this.events,
-      postings: this.postings, spendByOwner: this.spendByOwner, trend: this.trend };
   }
 }
