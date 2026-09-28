@@ -66,6 +66,7 @@ class ResidentRoutineTest {
                 put("home", point(0)); put("workplace", point(100)); put("meeting_point", point(50))
                 put("position", point(position)); put("health", health)
                 put("cold", false); put("reachable_breakables", JsonArray(emptyList()))
+                put("in_vehicle", false); put("available_vehicles", JsonArray(emptyList())); put("boarding_radius", 6.0)
             }))
         }
         fun assertActivity(expected: String, result: VmResult, destination: Int? = null) {

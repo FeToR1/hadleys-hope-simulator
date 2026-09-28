@@ -38,6 +38,50 @@ class ProcessFleetTest {
 
     @Test fun deadVmAbortsBarrierAndCleansUpTheWholeRun() = failedProcess(false)
 
+    @Test fun roverTransportsTheWholeSquadAndNativeSnapshotsMatchReference() {
+        val base = prepareScenario(Path.of("../examples/physics/cascade.json"))
+        val world = base.scenario.world!!
+        val p = base.copy(
+            scenario = base.scenario.copy(world = world.copy(
+                marine = world.marine.copy(responseDelaySeconds = 0.0),
+                repair = world.repair.copy(dispatchDelaySeconds = 10000.0),
+                sight = world.sight.copy(sightRadius = 2000.0))),
+            manifest = base.manifest.copy(instances = base.manifest.instances.filter {
+                it.kind in setOf("Rover", "Marine", "Xenomorph") || it.id.startsWith("home-1/")
+            }.map { instance -> when (instance.kind) {
+                "Rover" -> instance.copy(behavior = "PassengerRover", x = 0.0, y = 0.0)
+                "Marine" -> instance.copy(x = instance.id.last().digitToInt() * 5.0, y = 0.0,
+                    params = JsonObject(instance.params + ("success_probability" to JsonPrimitive(1.0))))
+                "Xenomorph" -> instance.copy(x = 200.0, y = 0.0)
+                else -> instance
+            } }),
+        )
+        val boarded = mutableSetOf<String>()
+        val alighted = mutableSetOf<String>()
+        var assault = false
+        ReferenceRun(p, "transport", fleet(p)).use { native ->
+            ReferenceRun(p, "transport").use { reference ->
+                repeat(240) { tick ->
+                    val actual = native.step().let { s -> s.copy(runtimeMode = "reference", entities = s.entities.map { it.copy(pid = null) }) }
+                    assertTrue(jsonEquivalent(brokerJson.encodeToJsonElement(reference.step()), brokerJson.encodeToJsonElement(actual)),
+                        "Transport snapshot differs at tick $tick")
+                    actual.events.forEach { event ->
+                        if (event.entityId.startsWith("marines-")) {
+                            when (event.fields["action"]?.jsonPrimitive?.content) {
+                                "transport.board" -> boarded += event.entityId
+                                "transport.alight" -> alighted += event.entityId
+                            }
+                        }
+                        if (event.type == "DamageApplied" && event.fields["reason"]?.jsonPrimitive?.content == "MarineAssault") assault = true
+                    }
+                }
+            }
+        }
+        assertEquals(5, boarded.size, "the complete squad boards, including late arrivals")
+        assertEquals(boarded, alighted, "all marines reach the destination")
+        assertTrue(assault, "the delivered squad gets one assault attempt")
+    }
+
     @Test fun residentRoutineMovesIdenticallyThroughTheBroker() {
         val base = prepareScenario(Path.of("../examples/physics/cascade.json"))
         val p = base.copy(manifest = base.manifest.copy(instances = base.manifest.instances.filter {

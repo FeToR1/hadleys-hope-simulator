@@ -70,6 +70,17 @@ export class MockDataGenerator {
       id: 'power-2', pid: 90_002, type: 'power_node', status: 'nominal',
       metrics: { power_consumption: 0 }, connectedTo: ['power-1'], coordinates: { x: 770, y: 700 },
     });
+    this.entities.set('rover-1', {
+      id: 'rover-1', pid: 50_001, type: 'rover', status: 'nominal',
+      metrics: { health: 100, passenger_count: 0, passenger_capacity: 5 }, connectedTo: [], coordinates: { x: 90, y: 90 },
+    });
+    for (let index = 0; index < 5; index += 1) {
+      this.entities.set(`marine-${index + 1}`, {
+        id: `marine-${index + 1}`, pid: 60_000 + index, type: 'marine', status: 'nominal',
+        metrics: { health: 100, squad_size: 5 }, connectedTo: ['rover-1'],
+        coordinates: { x: 110 + index * 5, y: 90 },
+      });
+    }
   }
 
   public subscribe(listener: (batch: TickBatch) => void): () => void {
@@ -87,9 +98,12 @@ export class MockDataGenerator {
       (this.tickId % 60 === 0 || this.random() > 0.97);
     if (shouldFail) this.failureTick = this.tickId;
     for (const entity of this.entities.values()) {
-      if (entity.type === 'civilian' || entity.type === 'xenomorph') {
+      if (entity.type === 'civilian' || entity.type === 'xenomorph' || entity.type === 'marine') {
         entity.coordinates.x += (this.random() - 0.5) * 5;
         entity.coordinates.y += (this.random() - 0.5) * 5;
+      }
+      if (entity.type === 'rover' && this.tickId % 50 === 0) {
+        entity.coordinates.x += 10;
       }
       if (entity.type === 'house') {
         const powerFailed = this.failureTick > 0 && this.tickId - this.failureTick < 18;

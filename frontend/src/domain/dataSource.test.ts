@@ -126,11 +126,15 @@ describe('observer protocol v1', () => {
     expect(parseTickBatch(batch).entities[0].parentId).toBeUndefined();
     expect(parseTickBatch(batch).entities[0].pid).toBeNull();
   });
+  it.each(['rover', 'marine'])('preserves the live %s type and transport metrics', (type) => {
+    const entity = { ...batch.entities[0], type, metrics: { passenger_count: 4, passenger_capacity: 5, squad_size: 5 } };
+    expect(parseTickBatch({ ...batch, entities: [entity] }).entities[0]).toMatchObject({ type, metrics: entity.metrics });
+  });
   it('keeps VM state and effects, and shows kinds it does not know as generic objects', () => {
     const parsed = parseTickBatch({
       ...batch,
       effects: [{ source: 'a', operation: 'DAMAGE_REQUEST', arguments: ['b', 5, 'x'], accepted: false }, { source: 'a', operation: 'POWER_REQUEST', arguments: [1] }],
-      entities: [{ ...batch.entities[0], type: 'rover', vmState: { mode: 'Patrol' } }],
+      entities: [{ ...batch.entities[0], type: 'future_vehicle', vmState: { mode: 'Patrol' } }],
     });
     expect(parsed.entities[0].type).toBe('other');
     expect(parsed.entities[0].vmState).toEqual({ mode: 'Patrol' });

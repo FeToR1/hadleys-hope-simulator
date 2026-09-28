@@ -138,7 +138,23 @@ internal object HarnessObservations {
         "Heater" to mapOf("broken" to JsonPrimitive(false), "power_connected" to JsonPrimitive(true)),
         "Kettle" to mapOf("broken" to JsonPrimitive(false), "power_connected" to JsonPrimitive(true)),
         "Xenomorph" to mapOf("visible_humans" to JsonArray(emptyList())),
-        "Human" to mapOf("routine_slot" to JsonPrimitive(0), "day_minute" to JsonPrimitive(480)),
+        "Human" to mapOf(
+            "routine_slot" to JsonPrimitive(0), "day_minute" to JsonPrimitive(480),
+            "available_vehicles" to JsonArray(emptyList()), "in_vehicle" to JsonPrimitive(false),
+            "boarding_radius" to JsonPrimitive(6.0),
+        ),
+        "Rover" to mapOf(
+            "passenger_count" to JsonPrimitive(0), "passenger_capacity" to JsonPrimitive(5),
+            "transport_ready" to JsonPrimitive(false),
+            "work_radius" to JsonPrimitive(6.0),
+        ),
+        "Marine" to mapOf(
+            "visible_xenomorphs" to JsonArray(emptyList()), "available_vehicles" to JsonArray(emptyList()),
+            "in_vehicle" to JsonPrimitive(false), "dispatch_ready" to JsonPrimitive(false),
+            "squad_ready" to JsonPrimitive(false), "squad_size" to JsonPrimitive(0),
+            "squad_leader" to JsonPrimitive(false),
+            "boarding_radius" to JsonPrimitive(6.0),
+        ),
     )
 
     fun computed(kind: String): Set<String> = computed[kind].orEmpty()
@@ -146,9 +162,9 @@ internal object HarnessObservations {
 
     /** Observations a catalog may omit: the run overwrites them every step or supplies a default. */
     fun derived(instance: Instance): Set<String> = buildSet {
-        if (instance.kind == "Human" || instance.kind == "Xenomorph" || instance.kind == "Rover") add("position")
+        if (instance.kind == "Human" || instance.kind == "Xenomorph" || instance.kind == "Rover" || instance.kind == "Marine") add("position")
         // Places the settlement decides: the harness puts them where the manifest does.
-        addAll(listOf("home", "workplace", "meeting_point", "depot").filter { it in fieldsOf(instance.kind) })
+        addAll(listOf("home", "workplace", "meeting_point", "depot", "transport_target").filter { it in fieldsOf(instance.kind) })
         if ((instance.kind == "Heater" || instance.kind == "Kettle") && instance.parent != null) add("home_occupants")
         addAll(defaults(instance.kind).keys)
     }

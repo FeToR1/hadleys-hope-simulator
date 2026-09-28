@@ -7,7 +7,7 @@ import colony.ast.SourceSpan
  * version (docs/simulation/trigger-conditions.md, section 6), and compiled artifacts record the version
  * they were built against so that a kernel or VM can refuse a mismatch.
  */
-const val CONTRACT_VERSION = 4
+const val CONTRACT_VERSION = 5
 
 /** Entity-kind contract supplied by runtime/simulation owners (Role #7). */
 data class KindContract(
@@ -46,13 +46,18 @@ class SemanticEnvironment(
     fun kindContract(kind: String): KindContract? = kindContracts[kind]
 
     /** Record types a program can name and read fields of. */
-    val recordNames: List<String> = listOf("Position", "Target", "Device", "Job")
+    val recordNames: List<String> = listOf("Position", "Target", "VehicleTarget", "Device", "Job")
 
     fun recordFields(name: String): Map<String, Type>? = when (name) {
         "Position" -> mapOf("x" to Type.Physical(PhysicalKind.DISTANCE), "y" to Type.Physical(PhysicalKind.DISTANCE))
         // An observed object: sorted by (distance, id) in observation lists; health is its current H.
         "Target" -> mapOf(
             "id" to Type.String, "kind" to Type.String, "position" to Type.Kind("Position"),
+            "distance" to Type.Physical(PhysicalKind.DISTANCE), "health" to Type.Physical(PhysicalKind.HEALTH),
+        )
+        // A rover observed as a possible transport target; its id is a typed Ref so it can be used directly by send.
+        "VehicleTarget" -> mapOf(
+            "id" to Type.Ref("Rover"), "kind" to Type.String, "position" to Type.Kind("Position"),
             "distance" to Type.Physical(PhysicalKind.DISTANCE), "health" to Type.Physical(PhysicalKind.HEALTH),
         )
         // One of the appliances of a house, as the house sees it.
@@ -117,6 +122,9 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
             "meeting_point" to Type.Kind("Position"),
             "routine_slot" to Type.Int64,
             "day_minute" to Type.Int64,
+            "available_vehicles" to Type.List(Type.Kind("VehicleTarget")),
+            "in_vehicle" to Type.Bool,
+            "boarding_radius" to Type.Physical(PhysicalKind.DISTANCE),
         ),
         capabilities = setOf(Capability.DAMAGE_REQUEST, Capability.MOTION_REQUEST),
     ),
@@ -125,11 +133,33 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
         viewFields = mapOf(
             "position" to Type.Kind("Position"),
             "speed_eff" to Type.Physical(PhysicalKind.SPEED),
+            "work_radius" to Type.Physical(PhysicalKind.DISTANCE),
             "active_jobs" to Type.List(Type.Kind("Job")),
             "materials_remaining" to Type.Int64,
             "depot" to Type.Kind("Position"),
+            "passenger_count" to Type.Int64,
+            "passenger_capacity" to Type.Int64,
+            "transport_ready" to Type.Bool,
+            "transport_target" to Type.Kind("Position"),
         ),
         capabilities = setOf(Capability.MOTION_REQUEST, Capability.REPAIR_REQUEST),
+    ),
+    KindContract(
+        kind = "Marine",
+        viewFields = mapOf(
+            "position" to Type.Kind("Position"),
+            "health" to Type.Physical(PhysicalKind.HEALTH),
+            "visible_xenomorphs" to Type.List(Type.Kind("Target")),
+            "available_vehicles" to Type.List(Type.Kind("VehicleTarget")),
+            "in_vehicle" to Type.Bool,
+            "boarding_radius" to Type.Physical(PhysicalKind.DISTANCE),
+            "dispatch_ready" to Type.Bool,
+            "squad_ready" to Type.Bool,
+            "squad_size" to Type.Int64,
+            "squad_leader" to Type.Bool,
+            "depot" to Type.Kind("Position"),
+        ),
+        capabilities = setOf(Capability.DAMAGE_REQUEST, Capability.MOTION_REQUEST),
     ),
     KindContract(
         kind = "Xenomorph",
@@ -162,12 +192,14 @@ object KernelEvents {
         "RepairCompleted" to mapOf("object" to Type.String),
         "RepairRejected" to mapOf("reason" to Type.String),
         "ArrivalConfirmed" to mapOf("point" to Type.Kind("Position")),
+        // A language-level request consumed by the world; its SEND payload is also a fixed schema.
+        "VehicleTransportRequest" to mapOf("destination" to Type.Kind("Position")),
     )
 }
 
 /** Records an observation list can hold; `nearest` orders any of them by distance and then by id. */
 private val observableRecords: Map<String, Map<String, Type>> =
-    listOf("Target", "Job").associateWith { SemanticEnvironment().recordFields(it)!! }
+    listOf("Target", "VehicleTarget", "Job").associateWith { SemanticEnvironment().recordFields(it)!! }
 
 object Intrinsics {
     private val contracts: Map<String, IntrinsicContract> = mapOf(
@@ -229,7 +261,7 @@ object Intrinsics {
                 when {
                     args.size != 1 -> "nearest expects one list"
                     fields == null -> "nearest expects a list of observed records"
-                    fields["id"] != Type.String -> "${element.name} has no id"
+                    fields["id"] != Type.String && fields["id"] !is Type.Ref -> "${element.name} has no id"
                     fields["position"] != Type.Kind("Position") -> "${element.name} has no position"
                     fields["distance"] != Type.Physical(PhysicalKind.DISTANCE) -> "${element.name} has no distance"
                     else -> null

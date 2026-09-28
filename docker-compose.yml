@@ -3,7 +3,7 @@ services:
     build:
       context: .
       target: backend
-    command: ["serve-native", "examples/physics/cascade.json", "8080"]
+    command: ["serve-native", "${HH_SCENARIO:-examples/physics/cascade.json}", "8080"]
     environment:
       HH_BIND_HOST: 0.0.0.0
       HH_ALLOWED_HOSTS: backend
@@ -29,6 +29,6 @@ services:
     build:
       context: .
       target: backend
-    command: ["run-native", "examples/physics/cascade.json", "/results/cascade.jsonl"]
+    command: ["run-native", "${HH_SCENARIO:-examples/physics/cascade.json}", "/results/${HH_OUTPUT:-cascade.jsonl}"]
     volumes:
       - ./results:/results

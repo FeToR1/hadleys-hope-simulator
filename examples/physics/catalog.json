@@ -1,36 +1,125 @@
 {
   "version": 1,
-  "sources": ["settlement.colony"],
+  "sources": [
+    "settlement.colony"
+  ],
   "templates": {
     "household": {
       "objects": {
         "house": {
-          "kind": "House", "behavior": "HouseControl",
-          "params": {"heater": "$instance/heater"}
+          "kind": "House",
+          "behavior": "HouseControl",
+          "params": {
+            "heater": "$instance/heater"
+          }
         },
         "heater": {
-          "kind": "Heater", "behavior": "HeaterControl", "parent": "$instance/house",
-          "params": {"rating": 8000},
-          "x": 6, "y": 6
+          "kind": "Heater",
+          "behavior": "HeaterControl",
+          "parent": "$instance/house",
+          "params": {
+            "rating": 8000
+          },
+          "x": 6,
+          "y": 6
         },
         "kettle": {
-          "kind": "Kettle", "behavior": "KettleControl", "parent": "$instance/house",
-          "x": 12, "y": 6
+          "kind": "Kettle",
+          "behavior": "KettleControl",
+          "parent": "$instance/house",
+          "x": 12,
+          "y": 6
         },
         "resident": {
-          "kind": "Human", "behavior": "Resident", "parent": "$instance/house",
-          "x": 8, "y": 14
+          "kind": "Human",
+          "behavior": "Resident",
+          "parent": "$instance/house",
+          "x": 8,
+          "y": 14
         }
       }
     },
     "crew": {
       "objects": {
-        "rover": {"kind": "Rover", "behavior": "RepairCrew"}
+        "rover": {
+          "kind": "Rover",
+          "behavior": "RepairCrew"
+        }
+      }
+    },
+    "transport": {
+      "objects": {
+        "rover": {
+          "kind": "Rover",
+          "behavior": "PassengerRover"
+        }
       }
     },
     "alien": {
       "objects": {
-        "xenomorph": {"kind": "Xenomorph", "behavior": "Xenomorph"}
+        "xenomorph": {
+          "kind": "Xenomorph",
+          "behavior": "Xenomorph"
+        }
+      }
+    },
+    "marine_squad": {
+      "objects": {
+        "marine1": {
+          "kind": "Marine",
+          "behavior": "MarineSquad",
+          "params": {
+            "squad": "$instance",
+            "leader": true,
+            "success_probability": 0.05
+          },
+          "x": 0,
+          "y": 0
+        },
+        "marine2": {
+          "kind": "Marine",
+          "behavior": "MarineSquad",
+          "params": {
+            "squad": "$instance",
+            "leader": false,
+            "success_probability": 0.05
+          },
+          "x": 3,
+          "y": 0
+        },
+        "marine3": {
+          "kind": "Marine",
+          "behavior": "MarineSquad",
+          "params": {
+            "squad": "$instance",
+            "leader": false,
+            "success_probability": 0.05
+          },
+          "x": 0,
+          "y": 3
+        },
+        "marine4": {
+          "kind": "Marine",
+          "behavior": "MarineSquad",
+          "params": {
+            "squad": "$instance",
+            "leader": false,
+            "success_probability": 0.05
+          },
+          "x": 3,
+          "y": 3
+        },
+        "marine5": {
+          "kind": "Marine",
+          "behavior": "MarineSquad",
+          "params": {
+            "squad": "$instance",
+            "leader": false,
+            "success_probability": 0.05
+          },
+          "x": 6,
+          "y": 1
+        }
       }
     }
   }

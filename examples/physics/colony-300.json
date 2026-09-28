@@ -1,9 +1,42 @@
 {
-  "version": 1, "catalog": "catalog.json", "seed": 426, "step": "1s", "ticks": 600,
+  "version": 1,
+  "catalog": "catalog.json",
+  "seed": 426,
+  "step": "1s",
+  "ticks": 600,
   "populations": [
-    {"template": "household", "count": 300, "prefix": "home"},
-    {"template": "crew", "count": 6, "prefix": "crew"},
-    {"template": "alien", "count": 12, "prefix": "alien"}
+    {
+      "template": "household",
+      "count": 300,
+      "prefix": "home"
+    },
+    {
+      "template": "crew",
+      "count": 6,
+      "prefix": "crew"
+    },
+    {
+      "template": "alien",
+      "count": 12,
+      "prefix": "alien"
+    },
+    {
+      "template": "marine_squad",
+      "count": 1,
+      "prefix": "marines"
+    }
   ],
-  "world": {}
+  "world": {
+    "marine": {
+      "responseDelaySeconds": 300.0,
+      "assaultRadius": 4.0
+    },
+    "transport": {
+      "boardRadius": 6.0,
+      "passengerCapacity": 5
+    },
+    "repair": {
+      "dispatchDelaySeconds": 120.0
+    }
+  }
 }

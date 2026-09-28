@@ -4,6 +4,8 @@ import colony.bytecode.Op
 import colony.semantics.Capability
 import colony.semantics.SemanticEnvironment
 import colony.world.KernelEvent
+import colony.world.Point
+import colony.world.TransportRequest
 import colony.world.WorldKernel
 import colony.world.buildTopology
 import kotlinx.serialization.Serializable
@@ -105,6 +107,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
         if ("workplace" in fields) view["workplace"] = positionJson(positions.getValue(instance.parent ?: id))
         if ("meeting_point" in fields) view["meeting_point"] = positionJson(positions.getValue(instance.parent ?: id))
         if ("depot" in fields) view["depot"] = positionJson(positions.getValue(id))
+        if ("transport_target" in fields) view["transport_target"] = positionJson(positions.getValue(id))
         if ("health" in fields) view["health"] = JsonPrimitive(health.getValue(id))
         if ("broken" in fields) view["broken"] = JsonPrimitive(effectivelyBroken(id))
         // The same rule that decides the PowerLost and PowerRestored events: an appliance follows its house.
@@ -164,6 +167,21 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                 fact.fields, fact.recipients)
             if (fact.type == "DamageApplied") lastDamage[fact.entityId] = event.id
             event
+        }
+    }
+
+    private fun transportRequests(outgoing: List<OutgoingEvent>): List<TransportRequest> {
+        val eventId = eventIds["VehicleTransportRequest"] ?: return emptyList()
+        return outgoing.filter { it.eventId == eventId }.map { event ->
+            val point = event.fields.getValue("destination").jsonObject
+            val x = number(point.getValue("x"))
+            val y = number(point.getValue("y"))
+            TransportRequest(
+                ref = "${event.sender}@$tick:event${event.sequence}",
+                passengerId = event.sender,
+                vehicleId = event.target,
+                destination = Point(x, y),
+            )
         }
     }
 
@@ -247,7 +265,9 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                 }
             }
             // With a world, every consequence of the step belongs to the kernel and its phases.
-            if (kernel != null) events += convert(kernel.step(tick, intents, refs, ableToAct))
+            if (kernel != null) {
+                events += convert(kernel.step(tick, intents, refs, ableToAct, transportRequests(outgoing)))
+            }
             // Damage phase first: simultaneous attacks are summed in stable executor order and clamped at zero.
             if (kernel == null) intents.forEachIndexed { index, intent ->
                 if (intent.source !in ableToAct || intent.operation != Op.DAMAGE_REQUEST) return@forEachIndexed
@@ -263,7 +283,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                 events += applied
                 if (before > 0 && health.getValue(target) <= 0) {
                     val kind = objects.getValue(target).kind
-                    events += if (kind == "Human" || kind == "Xenomorph") {
+                    events += if (kind in setOf("Human", "Marine", "Xenomorph")) {
                         worldEvent("EntityDied", target, intent.source, applied.id, obj("entity" to target), emptyList())
                     } else {
                         worldEvent("ObjectBroken", target, intent.source, applied.id, obj("object" to target, "reason" to reason), listOfNotNull(owner))
@@ -302,6 +322,14 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                                 put("occupants", kernel.occupants(id))
                                 put("spend", kernel.spentBy(id))
                             }
+                            if (instance.kind == "Rover") {
+                                val view = kernel.view(instance, setOf("passenger_count", "passenger_capacity"))
+                                view["passenger_count"]?.let { put("passenger_count", it) }
+                                view["passenger_capacity"]?.let { put("passenger_capacity", it) }
+                            }
+                            if (instance.kind == "Marine") {
+                                kernel.view(instance, setOf("squad_size"))["squad_size"]?.let { put("squad_size", it) }
+                            }
                         } else {
                             views.getValue(id)["temperature"]?.let { put("temperature", it) }
                             views.getValue(id)["water_temperature"]?.let { put("temperature", it) }
@@ -311,7 +339,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                         if (Capability.POWER_REQUEST in contracts.getValue(instance.kind).capabilities) {
                             put("power_consumption", kernel?.grantedOf(id) ?: power[id] ?: 0.0)
                         }
-                    }, connectedTo = listOfNotNull(instance.parent), coordinates = positionOf(id), parentId = instance.parent, vmState = state)
+                    }, connectedTo = listOfNotNull(instance.parent, kernel?.vehicleOf(id)), coordinates = positionOf(id), parentId = instance.parent, vmState = state)
             }
             // The grid and the water network have no program of their own, but an observer has to see them.
             val fixtures = kernel?.fixtureState().orEmpty().map { fixture ->
