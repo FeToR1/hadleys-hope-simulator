@@ -20,7 +20,7 @@ describe('attractor calculations', () => {
 
   it('serializes the required CSV header and rows', () => {
     expect(serializeAttractorCsv([{ tickId: 1, x: 20.5, y: 24, z: 100_000 }])).toBe(
-      'TickID,AvgTemperature,TotalPower,GlobalBudget\n1,20.500000,24.000000,100000.000000',
+      'TickID,X,Y,Z\n1,20.500000,24.000000,100000.000000',
     );
   });
 });

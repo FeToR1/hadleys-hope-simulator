@@ -3,15 +3,25 @@ import type { AttractorMode, EntityState, PhasePoint, Posting } from './types';
 export const MAX_ATTRACTOR_HISTORY = 10_000;
 
 export function createPhasePoint(tickId: number, entities: readonly EntityState[], postings: readonly Posting[]): PhasePoint {
-  const houses = entities.filter((entity) => entity.type === 'house' && entity.metrics.temperature !== undefined);
+  const houses = entities.filter((entity) => entity.type === 'house' && (entity.metrics.temperature !== undefined || entity.metrics.water_level !== undefined));
+
   const temperatureTotal = houses.reduce((sum, entity) => sum + (entity.metrics.temperature ?? 0), 0);
+  const waterLevelTotal = houses.reduce((sum, entity) => sum + (entity.metrics.water_level ?? 0), 0);
+  const avgTemp = houses.length === 0 ? 0 : temperatureTotal / houses.length;
+  const avgWater = houses.length === 0 ? 0 : waterLevelTotal / houses.length;
+
   const powerWatts = entities.reduce((sum, entity) => sum + (entity.metrics.power_consumption ?? 0), 0);
   const budget = -postings.reduce((sum, posting) => sum + posting.amount, 0);
+
+  const civilians = entities.filter((entity) => entity.type === 'civilian' || entity.metrics.stress !== undefined);
+  const stressTotal = civilians.reduce((sum, entity) => sum + (entity.metrics.stress ?? 0), 0);
+  const avgStress = civilians.length === 0 ? 0 : stressTotal / civilians.length;
+
   return {
     tickId,
-    x: houses.length === 0 ? 0 : temperatureTotal / houses.length,
+    x: avgTemp + avgWater,
     y: powerWatts / 1000,
-    z: budget,
+    z: budget + (avgStress * 1000), // Scale up stress to be noticeable in budget scale
   };
 }
 
@@ -72,7 +82,7 @@ function linearResidual(values: readonly number[]): number {
 }
 
 export function serializeAttractorCsv(history: readonly PhasePoint[]): string {
-  const rows = [['TickID', 'AvgTemperature', 'TotalPower', 'GlobalBudget']];
+  const rows = [['TickID', 'X', 'Y', 'Z']];
   for (const point of history) {
     rows.push([String(point.tickId), point.x.toFixed(6), point.y.toFixed(6), point.z.toFixed(6)]);
   }

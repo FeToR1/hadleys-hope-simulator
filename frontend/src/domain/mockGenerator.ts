@@ -87,16 +87,20 @@ export class MockDataGenerator {
       (this.tickId % 60 === 0 || this.random() > 0.97);
     if (shouldFail) this.failureTick = this.tickId;
     for (const entity of this.entities.values()) {
+      const powerFailed = this.failureTick > 0 && this.tickId - this.failureTick < 18;
       if (entity.type === 'civilian' || entity.type === 'xenomorph') {
         entity.coordinates.x += (this.random() - 0.5) * 5;
         entity.coordinates.y += (this.random() - 0.5) * 5;
+        if (entity.type === 'civilian') {
+            entity.metrics.stress = Math.max(0, Math.min(1, (entity.metrics.stress ?? 0.1) + (powerFailed ? 0.02 : -0.005)));
+        }
       }
       if (entity.type === 'house') {
-        const powerFailed = this.failureTick > 0 && this.tickId - this.failureTick < 18;
         const temperature = (entity.metrics.temperature ?? 20) + (powerFailed ? -0.8 : (this.random() - 0.5) * 0.5);
         entity.metrics.temperature = Math.max(-10, Math.min(24, temperature));
         entity.status = statusForTemperature(temperature);
-        entity.metrics.water_level = Math.max(0, (entity.metrics.water_level ?? 100) - (powerFailed ? 2 : 0.05));
+        entity.metrics.water_level = Math.max(0, (entity.metrics.water_level ?? 100) - (powerFailed ? 2 : -0.5 * this.random()));
+        if (entity.metrics.water_level > 100) entity.metrics.water_level = 100;
         if (powerFailed && temperature < 4) entity.metrics.repair_cost = 500;
       }
     }
