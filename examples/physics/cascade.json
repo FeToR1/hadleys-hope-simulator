@@ -19,6 +19,11 @@
       "template": "alien",
       "count": 1,
       "prefix": "alien"
+    },
+    {
+      "template": "marine_squad",
+      "count": 1,
+      "prefix": "marines"
     }
   ],
   "world": {
@@ -38,13 +43,22 @@
         "pole": 600.0,
         "pipe": 240.0,
         "device": 90.0
-      }
+      },
+      "dispatchDelaySeconds": 120.0
     },
     "sight": {
       "sightRadius": 400.0
     },
     "tariffs": {
       "billingIntervalSeconds": 600
+    },
+    "marine": {
+      "responseDelaySeconds": 300.0,
+      "assaultRadius": 4.0
+    },
+    "transport": {
+      "boardRadius": 6.0,
+      "passengerCapacity": 5
     }
   }
 }

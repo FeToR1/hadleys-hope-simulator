@@ -15,6 +15,8 @@ data class WorldConfig(
     val water: WaterConfig = WaterConfig(),
     val house: HouseConfig = HouseConfig(),
     val human: HumanConfig = HumanConfig(),
+    val marine: MarineConfig = MarineConfig(),
+    val transport: TransportConfig = TransportConfig(),
     val repair: RepairConfig = RepairConfig(),
     val tariffs: Tariffs = Tariffs(),
     val sight: SightConfig = SightConfig(),
@@ -22,7 +24,7 @@ data class WorldConfig(
     fun validate() {
         require(version == 1) { "Unsupported world version $version" }
         climate.validate(); power.validate(); water.validate(); house.validate()
-        human.validate(); repair.validate(); tariffs.validate(); sight.validate()
+        human.validate(); marine.validate(); transport.validate(); repair.validate(); tariffs.validate(); sight.validate()
     }
 }
 
@@ -136,6 +138,37 @@ data class HumanConfig(
 }
 
 @Serializable
+data class MarineConfig(
+    /** Seconds between a xenomorph appearing and a marine squad receiving a dispatch order. */
+    val responseDelaySeconds: Double = 300.0,
+    /** Marines must gather within this radius of the selected xenomorph before the leader attacks. */
+    val assaultRadius: Double = 4.0,
+    /** A squad is expected to contain four or five living members. */
+    val minSquadSize: Int = 4,
+    val maxSquadSize: Int = 5,
+) {
+    fun validate() {
+        require(responseDelaySeconds >= 0.0) { "Marine response delay cannot be negative" }
+        require(assaultRadius > 0.0) { "Marine assault radius must be positive" }
+        require(minSquadSize in 1..maxSquadSize) { "Bad marine squad size limits" }
+        require(maxSquadSize <= 32) { "Marine squad is too large" }
+    }
+}
+
+@Serializable
+data class TransportConfig(
+    /** Maximum distance at which a person can board a rover. */
+    val boardRadius: Double = 6.0,
+    /** Maximum number of passengers a rover can carry in the simulation. */
+    val passengerCapacity: Int = 5,
+) {
+    fun validate() {
+        require(boardRadius > 0.0) { "Transport board radius must be positive" }
+        require(passengerCapacity in 1..32) { "Bad transport passenger capacity" }
+    }
+}
+
+@Serializable
 data class RepairConfig(
     /** Seconds of work a repair of each kind of object takes. */
     val duration: Map<String, Double> = mapOf("pole" to 300.0, "pipe" to 600.0, "device" to 180.0),
@@ -144,13 +177,15 @@ data class RepairConfig(
     val hourlyRate: Long = 150_000,
     /** How close a crew has to be to work on an object. */
     val workRadius: Double = 6.0,
+    /** Delay between an object breaking and the repair job becoming dispatchable to a rover. */
+    val dispatchDelaySeconds: Double = 120.0,
     val materials: Int = 24,
     /** How fast a crew drives, in metres per second. */
     val roverSpeed: Double = 9.0,
 ) {
     fun validate() {
         require(duration.values.all { it > 0 } && parts.values.all { it >= 0 }) { "Bad repair parameters" }
-        require(hourlyRate >= 0 && workRadius > 0 && materials >= 0 && roverSpeed > 0) { "Bad crew parameters" }
+        require(hourlyRate >= 0 && workRadius > 0 && dispatchDelaySeconds >= 0 && materials >= 0 && roverSpeed > 0) { "Bad crew parameters" }
     }
 
     fun durationOf(kind: String): Double = duration[kind] ?: 300.0

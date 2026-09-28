@@ -27,7 +27,15 @@ data class KernelEvent(
 @Serializable data class Posting(val tick: Long, val owner: String, val kind: String, val amount: Long, val detail: String = "")
 
 /** Work the crews can take: an object that is broken and how far its repair has got. */
-@Serializable data class RepairJob(val id: String, val target: String, val kind: String, val at: Point, val done: Double, val duration: Double)
+@Serializable data class RepairJob(
+    val id: String, val target: String, val kind: String, val at: Point,
+    val done: Double, val duration: Double, val availableAtTick: Long = 0L,
+)
+
+/** A transport request extracted from the language-level SEND event by the reference runtime. */
+data class TransportRequest(
+    val ref: String, val passengerId: String, val vehicleId: String, val destination: Point,
+)
 
 /**
  * The single owner of the physical settlement (docs/simulation/calculations.md). Programs decide what they want;
@@ -43,6 +51,7 @@ class WorldKernel(
     private val people = Population(manifest)
     private val dt = stepSeconds
     private var elapsedSeconds = 0.0
+    private var currentTick = -1L
     private val routineSlots = people.residents.sortedBy { it.id }.mapIndexed { index, resident -> resident.id to index }.toMap()
 
     // --- state the kernel owns
@@ -57,6 +66,9 @@ class WorldKernel(
     private val waterMeter = HashMap<String, Double>()
     private val roundingCarry = HashMap<String, Double>()
     private val jobs = LinkedHashMap<String, RepairJob>()
+    private val passengerVehicle = LinkedHashMap<String, String>()
+    private val vehiclePassengers = LinkedHashMap<String, LinkedHashSet<String>>()
+    private val vehicleRouteTarget = LinkedHashMap<String, Point>()
     private var upsCharge = config.power.upsCapacity
     private var poweredNow = emptySet<String>()
     private var waterNow = emptySet<String>()
@@ -85,7 +97,7 @@ class WorldKernel(
                 listOfNotNull(fixture.serves)).distinct().sorted(),
         )
     }
-    val activeJobs: Collection<RepairJob> get() = jobs.values
+    val activeJobs: Collection<RepairJob> get() = jobs.values.filter { it.availableAtTick <= currentTick }
     /** Lines posted during the step that has just finished, for the journal and the dashboard. */
     var lastPostings: List<Posting> = emptyList()
         private set
@@ -159,6 +171,17 @@ class WorldKernel(
                 "active_jobs" -> jobList(id)
                 "materials_remaining" -> JsonPrimitive(config.repair.materials)
                 "speed_eff" -> JsonPrimitive(config.repair.roverSpeed)
+                "passenger_count" -> JsonPrimitive(vehiclePassengers[id]?.size ?: 0)
+                "passenger_capacity" -> JsonPrimitive(config.transport.passengerCapacity)
+                "transport_ready" -> JsonPrimitive(transportReady(id))
+                "transport_target" -> pointJson(vehicleRouteTarget[id] ?: depotOf(instance))
+                "available_vehicles" -> targets(id, availableTransportVehicles())
+                "in_vehicle" -> JsonPrimitive(id in passengerVehicle)
+                "dispatch_ready" -> JsonPrimitive(elapsedSeconds >= config.marine.responseDelaySeconds)
+                "visible_xenomorphs" -> targets(id, people.byId.values.filter { it.kind == "Xenomorph" && !isBroken(it.id) }.map { it.id })
+                "squad_size" -> JsonPrimitive(marineSquad(id).count { !isBroken(it.id) })
+                "squad_leader" -> JsonPrimitive(isMarineLeader(id))
+                "squad_ready" -> JsonPrimitive(squadReady(id))
                 else -> error("The world does not compute observation '$field'")
             }
             out[field] = value
@@ -170,6 +193,7 @@ class WorldKernel(
     private fun jobList(observerId: String): JsonArray {
         val here = positionOf(observerId)
         return JsonArray(jobs.values
+            .filter { it.availableAtTick <= currentTick }
             .sortedWith(compareBy({ here.distanceTo(it.at) }, { it.target }))
             .take(config.sight.listLimit)
             .map { job ->
@@ -179,6 +203,107 @@ class WorldKernel(
                     put("progress", job.done / job.duration)
                 }
             })
+    }
+
+    private fun availableTransportVehicles(): List<String> = people.rovers
+        .filter {
+            !isBroken(it.id) &&
+                (vehiclePassengers[it.id]?.isEmpty() != false) &&
+                positionOf(it.id).distanceTo(depotOf(it)) <= config.transport.boardRadius
+        }
+        .map { it.id }
+
+    private fun marineSquad(marineId: String): List<Instance> {
+        val marine = people.byId[marineId] ?: return emptyList()
+        if (marine.kind != "Marine") return emptyList()
+        val squad = marine.params["squad"]?.jsonPrimitive?.contentOrNull ?: return emptyList()
+        return people.marines.filter { it.params["squad"]?.jsonPrimitive?.contentOrNull == squad }
+    }
+
+    private fun isMarineLeader(marineId: String): Boolean =
+        people.byId[marineId]?.params?.get("leader")?.jsonPrimitive?.booleanOrNull ?: false
+
+    private fun squadReady(marineId: String): Boolean {
+        val target = nearestVisibleXenomorph(marineId) ?: return false
+        val squad = marineSquad(marineId).filter { !isBroken(it.id) }
+        if (squad.size !in config.marine.minSquadSize..config.marine.maxSquadSize) return false
+        return squad.all { positionOf(it.id).distanceTo(positionOf(target)) <= config.marine.assaultRadius }
+    }
+
+    private fun nearestVisibleXenomorph(marineId: String): String? {
+        val here = positionOf(marineId)
+        return people.byId.values.asSequence()
+            .filter { it.kind == "Xenomorph" && !isBroken(it.id) }
+            .map { it.id to here.distanceTo(positionOf(it.id)) }
+            .filter { it.second <= config.sight.sightRadius }
+            .sortedWith(compareBy({ it.second }, { it.first }))
+            .firstOrNull()?.first
+    }
+
+    private fun transportReady(vehicleId: String): Boolean {
+        val passengers = vehiclePassengers[vehicleId].orEmpty().filter { !isBroken(it) }
+        if (passengers.isEmpty()) return false
+        val marineGroups = passengers.mapNotNull { passenger ->
+            people.byId[passenger]?.takeIf { it.kind == "Marine" }?.params?.get("squad")?.jsonPrimitive?.contentOrNull
+        }.toSet()
+        for (group in marineGroups) {
+            val members = people.marines.filter {
+                it.params["squad"]?.jsonPrimitive?.contentOrNull == group && !isBroken(it.id)
+            }
+            if (members.size !in config.marine.minSquadSize..config.marine.maxSquadSize ||
+                members.any { it.id !in passengers }) return false
+        }
+        return true
+    }
+
+    private fun unboard(vehicleId: String, events: MutableList<KernelEvent>, reason: String? = null, ref: String? = null) {
+        val passengers = vehiclePassengers.remove(vehicleId).orEmpty().toList()
+        vehicleRouteTarget.remove(vehicleId)
+        for (passenger in passengers) {
+            passengerVehicle.remove(passenger)
+            events += KernelEvent(
+                "ActionSucceeded", passenger, vehicleId,
+                buildJsonObject { put("action", "transport.alight"); reason?.let { put("reason", it) } },
+                listOf(passenger, vehicleId), ref,
+            )
+        }
+    }
+
+    /** Apply language-level ride requests without adding a VM opcode: SEND remains the transport mechanism. */
+    private fun applyTransportRequests(requests: List<TransportRequest>, accepted: Set<String>, events: MutableList<KernelEvent>) {
+        for (request in requests) {
+            val passenger = people.byId[request.passengerId]
+            val vehicle = people.byId[request.vehicleId]
+            val reason = when {
+                passenger == null -> "unknown_passenger"
+                passenger.kind != "Human" && passenger.kind != "Marine" -> "passenger_not_transportable"
+                request.passengerId !in accepted || isBroken(request.passengerId) -> "passenger_unable"
+                vehicle == null -> "unknown_vehicle"
+                vehicle.kind != "Rover" -> "target_not_rover"
+                isBroken(request.vehicleId) -> "vehicle_broken"
+                passengerVehicle.containsKey(request.passengerId) -> "already_in_vehicle"
+                positionOf(request.passengerId).distanceTo(positionOf(request.vehicleId)) > config.transport.boardRadius -> "out_of_boarding_range"
+                (vehiclePassengers[request.vehicleId]?.size ?: 0) >= config.transport.passengerCapacity -> "vehicle_full"
+                vehicleRouteTarget[request.vehicleId]?.distanceTo(request.destination)?.let { it > 1e-6 } == true -> "vehicle_already_committed"
+                else -> null
+            }
+            if (reason != null) {
+                events += KernelEvent(
+                    "ActionRejected", request.passengerId, request.passengerId,
+                    buildJsonObject { put("action", "transport.board"); put("reason", reason) },
+                    listOf(request.passengerId), request.ref,
+                )
+                continue
+            }
+            vehiclePassengers.getOrPut(request.vehicleId) { LinkedHashSet() }.add(request.passengerId)
+            passengerVehicle[request.passengerId] = request.vehicleId
+            vehicleRouteTarget.putIfAbsent(request.vehicleId, request.destination)
+            events += KernelEvent(
+                "ActionSucceeded", request.passengerId, request.vehicleId,
+                buildJsonObject { put("action", "transport.board"); put("vehicle", request.vehicleId) },
+                listOf(request.passengerId, request.vehicleId), request.ref,
+            )
+        }
     }
 
     /** Routine destinations: mine outside the housing area, services and a meeting place in the colony. */
@@ -241,13 +366,18 @@ class WorldKernel(
      * Applies the requests of one step in the order the specification fixes and returns what the world
      * established. [accepted] names the entities that were able to act at the start of the step.
      */
-    fun step(tick: Long, intents: List<VmIntent>, refs: List<String>, accepted: Set<String>): List<KernelEvent> {
+    fun step(
+        tick: Long, intents: List<VmIntent>, refs: List<String>, accepted: Set<String>,
+        transportRequests: List<TransportRequest> = emptyList(),
+    ): List<KernelEvent> {
+        currentTick = tick
         val events = ArrayList<KernelEvent>()
         val postedBefore = postings.size
         val poweredBefore = poweredNow
         val waterBefore = waterNow
 
         applyDamage(tick, intents, refs, accepted, events)
+        applyTransportRequests(transportRequests, accepted, events)
         applyRepairs(tick, intents, accepted, events)
         recomputeNetworks()
         distributePower(intents, accepted)
@@ -278,7 +408,10 @@ class WorldKernel(
             events += KernelEvent("DamageApplied", target, intent.source,
                 buildJsonObject { put("target", target); put("amount", amount); put("reason", reason) },
                 listOfNotNull(intent.source, owner).distinct(), refs[index])
-            if (before > 0 && health.getValue(target) <= 0) events += breakOf(tick, target, reason, intent.source)
+            if (before > 0 && health.getValue(target) <= 0) {
+                events += breakOf(tick, target, reason, intent.source)
+                if (people.byId[target]?.kind == "Rover") unboard(target, events, reason = "vehicle_broken", ref = refs[index])
+            }
         }
     }
 
@@ -288,15 +421,19 @@ class WorldKernel(
         if (instance != null && (instance.kind == "Human" || instance.kind == "Xenomorph")) {
             return KernelEvent("EntityDied", target, actor, buildJsonObject { put("entity", target) })
         }
-        openJob(target)
+        openJob(target, tick)
         return KernelEvent("ObjectBroken", target, actor,
             buildJsonObject { put("object", target); put("reason", reason) }, listOfNotNull(ownerOf(target)))
     }
 
-    private fun openJob(target: String) {
+    private fun openJob(target: String, brokenAtTick: Long) {
         if (target in jobs) return
         val kind = topology.byId[target]?.kind?.repairKey ?: "device"
-        jobs[target] = RepairJob("job/${jobs.size + 1}", target, kind, positionOf(target), 0.0, config.repair.durationOf(kind))
+        val delayTicks = kotlin.math.ceil(config.repair.dispatchDelaySeconds / dt).toLong()
+        jobs[target] = RepairJob(
+            "job/${jobs.size + 1}", target, kind, positionOf(target), 0.0, config.repair.durationOf(kind),
+            availableAtTick = brokenAtTick + delayTicks,
+        )
     }
 
     /** The house that pays for an object: its own house for an appliance, the settlement for the grid. */
@@ -308,7 +445,7 @@ class WorldKernel(
             if (intent.operation != Op.REPAIR_REQUEST || intent.source !in accepted) continue
             val target = intent.arguments[0].jsonPrimitive.content
             val job = jobs[target]
-            if (job == null) {
+            if (job == null || job.availableAtTick > currentTick) {
                 events += KernelEvent("RepairRejected", intent.source, intent.source,
                     buildJsonObject { put("reason", "no_such_job") }, listOf(intent.source))
                 continue
@@ -442,7 +579,7 @@ class WorldKernel(
             energyMeter.merge(owner, grantedOf(appliance.id) * dt, Double::plus)
         }
         for (resident in people.residents) {
-            if (isBroken(resident.id)) continue
+            if (isBroken(resident.id) || resident.id in passengerVehicle) continue
             val inside = insideTemperature[resident.parent] ?: config.house.initialTemperature
             val deficit = config.human.harmThreshold - inside
             if (deficit <= 0) continue
@@ -455,6 +592,17 @@ class WorldKernel(
 
     /** Phase 5. Movement in a straight line at the speed asked for, then who is where. */
     private fun applyMovement(intents: List<VmIntent>, accepted: Set<String>, events: MutableList<KernelEvent>) {
+        val deadPassengers = passengerVehicle.keys.filter { isBroken(it) }.toList()
+        for (passenger in deadPassengers) passengerVehicle.remove(passenger)
+        vehiclePassengers.values.forEach { it.removeAll(deadPassengers.toSet()) }
+        people.rovers.forEach { rover ->
+            val route = vehicleRouteTarget[rover.id]
+            if (!isBroken(rover.id) && vehiclePassengers[rover.id]?.isNotEmpty() == true && route != null &&
+                route.distanceTo(positionOf(rover.id)) <= 1.0
+            ) {
+                unboard(rover.id, events)
+            }
+        }
         for (intent in intents) {
             if (intent.operation != Op.MOTION_REQUEST || intent.source !in accepted || isBroken(intent.source)) continue
             val target = intent.arguments[0].jsonObject
@@ -464,12 +612,22 @@ class WorldKernel(
             val distance = here.distanceTo(goal)
             if (distance <= 1e-9) continue
             val ratio = minOf(1.0, speed * dt / distance)
-            position[intent.source] = Point(here.x + (goal.x - here.x) * ratio, here.y + (goal.y - here.y) * ratio)
+            val newPosition = Point(here.x + (goal.x - here.x) * ratio, here.y + (goal.y - here.y) * ratio)
+            position[intent.source] = newPosition
+
+            // Riders occupy the rover's physical position, not their previous world coordinates.
+            if (people.rovers.any { it.id == intent.source }) {
+                vehiclePassengers[intent.source].orEmpty().forEach { passenger -> position[passenger] = newPosition }
+                val route = vehicleRouteTarget[intent.source]
+                if (ratio >= 1.0 && route != null && route.distanceTo(newPosition) <= 1.0) {
+                    unboard(intent.source, events)
+                }
+            }
             if (ratio >= 1.0) {
                 events += KernelEvent("ArrivalConfirmed", intent.source, intent.source,
                     buildJsonObject { put("point", pointJson(goal)) }, listOf(intent.source))
                 // A patroller that reached its corner is sent on to the next one.
-                if (goal.distanceTo(patrolPoint(intent.source)) < 1.0) advancePatrol(intent.source)
+                if (people.byId[intent.source]?.kind == "Xenomorph" && goal.distanceTo(patrolPoint(intent.source)) < 1.0) advancePatrol(intent.source)
             }
         }
     }

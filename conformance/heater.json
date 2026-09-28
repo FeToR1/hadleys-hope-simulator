@@ -1,6 +1,6 @@
 {
     "conformance": 1,
-    "contract": 4,
+    "contract": 5,
     "name": "heater",
     "source": "colony-dsl-parser/examples/heater.colony",
     "program": {
@@ -1077,7 +1077,7 @@
                 ]
             }
         ],
-        "contract": 4
+        "contract": 5
     },
     "cases": [
         {

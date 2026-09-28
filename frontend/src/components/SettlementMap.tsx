@@ -101,8 +101,17 @@ export function SettlementMap({ entities, onSelect, selectedId, onRegisterFocus 
               agentBadgesRef.current.set(entity.id, badge);
             }
           }
-          const radius = entity.type === 'house' ? 16 : entity.type === 'power_node' ? 10 : 5;
-          displayObject.clear().circle(0, 0, radius).fill({ color: colorForStatus(entity.status), alpha: entity.type === 'house' ? 0.55 : 0.9 });
+          const radius = entity.type === 'house' ? 16 : entity.type === 'power_node' ? 10 : entity.type === 'rover' ? 8 : 5;
+          displayObject.clear();
+          if (entity.type === 'rover') {
+            displayObject.roundRect(-9, -5, 18, 10, 3).fill({ color: colorForStatus(entity.status), alpha: 0.95 });
+            displayObject.circle(-5, 6, 2.5).fill({ color: 0x172236, alpha: 1 });
+            displayObject.circle(5, 6, 2.5).fill({ color: 0x172236, alpha: 1 });
+          } else if (entity.type === 'marine') {
+            displayObject.poly([-6, 0, 0, -7, 6, 0, 0, 7]).fill({ color: colorForStatus(entity.status), alpha: 0.95 });
+          } else {
+            displayObject.circle(0, 0, radius).fill({ color: colorForStatus(entity.status), alpha: entity.type === 'house' ? 0.55 : 0.9 });
+          }
           displayObject.position.set(entity.coordinates.x, entity.coordinates.y);
           const focused = selectedIdRef.current === undefined || entity.id === selectedIdRef.current ||
             entity.connectedTo.includes(selectedIdRef.current) ||
@@ -186,6 +195,8 @@ function EntityTooltip({ tooltip }: { tooltip: { entity: EntityState; x: number;
   const { entity } = tooltip;
   return <div className="entity-tooltip" style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}>
     <strong>{entity.id}</strong><span>{entity.type} · PID {entity.pid ?? '—'}</span>
+    {entity.type === 'rover' && <span>Пассажиры: {entity.metrics.passenger_count ?? 0}/{entity.metrics.passenger_capacity ?? 5}</span>}
+    {entity.type === 'marine' && <span>Группа: {entity.metrics.squad_size ?? '—'}</span>}
     <span>Температура: {entity.metrics.temperature?.toFixed(1) ?? '—'} °C</span>
     <span>Вода: {entity.metrics.water_level?.toFixed(1) ?? '—'} %</span>
     <span>Мощность: {entity.metrics.power_consumption?.toFixed(1) ?? '—'} W</span>

@@ -9,6 +9,7 @@ event WaterLost {}
 event ObjectBroken { object: String; reason: String; }
 event RepairCompleted { object: String; }
 event ArrivalConfirmed { point: Position; }
+event VehicleTransportRequest { destination: Position; }
 
 behavior HouseControl for House {
     param heater: Ref<Heater>;
@@ -112,16 +113,32 @@ behavior Resident for Human {
             shift_end = 0;
         }
 
-        // Injured residents stay home. Each request advances only one physical tick,
-        // so keep asking while travelling, and stop when the actual position reaches the destination.
+        // Injured residents stay home. A subset of working residents uses the rover fleet when one is nearby;
+        // everyone else keeps the existing walking behavior. A transport request is deliberately sent only when
+        // the resident has reached the rover's boarding radius, so the world remains responsible for boarding.
         if view.health <= 0hp {
             activity = Dead;
         } else if view.health < 40hp {
             activity = Injured;
-            if view.position != view.home { motion.request(view.home, 1.4mps); }
+            if view.position != view.home && !view.in_vehicle { motion.request(view.home, 1.4mps); }
         } else if minute >= shift_start && minute < shift_end {
             if view.position == view.workplace {
                 if occupation == Miner { activity = Mining; } else { activity = Working; }
+            } else if view.in_vehicle {
+                activity = GoingToWork;
+            } else if view.routine_slot % 5 == 0 {
+                if let vehicle = nearest(view.available_vehicles) {
+                    if vehicle.distance <= 6m {
+                        send VehicleTransportRequest { destination: view.workplace } to vehicle.id;
+                        activity = GoingToWork;
+                    } else {
+                        activity = GoingToWork;
+                        motion.request(vehicle.position, 1.4mps);
+                    }
+                } else {
+                    activity = GoingToWork;
+                    motion.request(view.workplace, 1.4mps);
+                }
             } else {
                 activity = GoingToWork;
                 motion.request(view.workplace, 1.4mps);
@@ -135,8 +152,25 @@ behavior Resident for Human {
                 motion.request(view.meeting_point, 1.2mps);
             }
         } else if view.position != view.home {
-            activity = ReturningHome;
-            motion.request(view.home, 1.4mps);
+            if view.in_vehicle {
+                activity = ReturningHome;
+            } else if view.routine_slot % 5 == 0 {
+                if let vehicle = nearest(view.available_vehicles) {
+                    if vehicle.distance <= 6m {
+                        send VehicleTransportRequest { destination: view.home } to vehicle.id;
+                        activity = ReturningHome;
+                    } else {
+                        activity = ReturningHome;
+                        motion.request(vehicle.position, 1.4mps);
+                    }
+                } else {
+                    activity = ReturningHome;
+                    motion.request(view.home, 1.4mps);
+                }
+            } else {
+                activity = ReturningHome;
+                motion.request(view.home, 1.4mps);
+            }
         } else {
             activity = Resting;
         }
@@ -171,8 +205,16 @@ behavior RepairCrew for Rover {
     on RepairCompleted(m) as finished { repaired = repaired + 1; }
 
     every 1s as work {
-        // Take the nearest job, drive to it, and work on it once close enough.
-        if let job = nearest(view.active_jobs) {
+        // Passenger transport has priority. The kernel accepts boarding requests and exposes the resulting
+        // route and readiness; the rover itself only decides whether to move there.
+        if view.passenger_count > 0 {
+            if view.transport_ready {
+                mode = Driving;
+                motion.request(view.transport_target, view.speed_eff);
+            } else {
+                mode = Idle;
+            }
+        } else if let job = nearest(view.active_jobs) {
             if job.distance > 5m {
                 mode = Driving;
                 motion.request(job.position, view.speed_eff);
@@ -183,6 +225,52 @@ behavior RepairCrew for Rover {
         } else {
             mode = Idle;
             motion.request(view.depot, view.speed_eff);
+        }
+    }
+}
+
+behavior MarineSquad for Marine {
+    enum Activity { Guard, GoingToVehicle, WaitingForSquad, Transporting, Engaging, ReturningHome, Dead }
+    enum DamageCause { MarineAssault }
+    param squad: String;
+    param leader: Bool;
+    param success_probability: Probability;
+
+    state activity: Activity = Guard;
+    state attempted: Bool = false;
+
+    every 1s as mission {
+        if view.health <= 0hp {
+            activity = Dead;
+        } else if attempted {
+            activity = ReturningHome;
+            if view.position != view.depot && !view.in_vehicle {
+                motion.request(view.depot, 1.5mps);
+            }
+        } else if !view.dispatch_ready {
+            activity = Guard;
+        } else if let target = nearest(view.visible_xenomorphs) {
+            if view.squad_ready {
+                activity = Engaging;
+                if view.squad_leader && chance(success_probability, "marine_assault") {
+                    damage.request(target.id, 100hp, MarineAssault);
+                }
+                attempted = true;
+            } else if view.in_vehicle {
+                activity = Transporting;
+            } else if let vehicle = nearest(view.available_vehicles) {
+                if vehicle.distance > 6m {
+                    activity = GoingToVehicle;
+                    motion.request(vehicle.position, 1.5mps);
+                } else {
+                    activity = GoingToVehicle;
+                    send VehicleTransportRequest { destination: target.position } to vehicle.id;
+                }
+            } else {
+                activity = WaitingForSquad;
+            }
+        } else {
+            activity = Guard;
         }
     }
 }

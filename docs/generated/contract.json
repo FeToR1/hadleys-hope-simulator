@@ -1,5 +1,5 @@
 {
-    "contractVersion": 4,
+    "contractVersion": 5,
     "units": {
         "degC": {
             "quantity": "Temperature",
@@ -86,6 +86,13 @@
             "distance": "Distance",
             "health": "Health"
         },
+        "VehicleTarget": {
+            "id": "Ref<Rover>",
+            "kind": "String",
+            "position": "Position",
+            "distance": "Distance",
+            "health": "Health"
+        },
         "Device": {
             "id": "String",
             "kind": "String",
@@ -132,7 +139,9 @@
                 "workplace": "Position",
                 "meeting_point": "Position",
                 "routine_slot": "Int64",
-                "day_minute": "Int64"
+                "day_minute": "Int64",
+                "available_vehicles": "List<VehicleTarget>",
+                "in_vehicle": "Bool"
             },
             "capabilities": [
                 "DAMAGE_REQUEST",
@@ -151,13 +160,35 @@
                 "POWER_REQUEST"
             ]
         },
+        "Marine": {
+            "view": {
+                "position": "Position",
+                "health": "Health",
+                "visible_xenomorphs": "List<Target>",
+                "available_vehicles": "List<VehicleTarget>",
+                "in_vehicle": "Bool",
+                "dispatch_ready": "Bool",
+                "squad_ready": "Bool",
+                "squad_size": "Int64",
+                "squad_leader": "Bool",
+                "depot": "Position"
+            },
+            "capabilities": [
+                "DAMAGE_REQUEST",
+                "MOTION_REQUEST"
+            ]
+        },
         "Rover": {
             "view": {
                 "position": "Position",
                 "speed_eff": "Speed",
                 "active_jobs": "List<Job>",
                 "materials_remaining": "Int64",
-                "depot": "Position"
+                "depot": "Position",
+                "passenger_count": "Int64",
+                "passenger_capacity": "Int64",
+                "transport_ready": "Bool",
+                "transport_target": "Position"
             },
             "capabilities": [
                 "MOTION_REQUEST",
