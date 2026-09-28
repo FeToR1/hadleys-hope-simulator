@@ -109,7 +109,7 @@ class WorldKernelTest {
             base.copy(scenario = base.scenario.copy(
                 ticks = 30,
                 world = base.scenario.world!!.copy(power = base.scenario.world!!.power.copy(
-                    reactorPower = 9_000.0, solarPeak = 0.0, upsCapacity = 0.0, upsMaxPower = 0.0)),
+                    reactorPower = 9_000.0, solarPeak = 0.0, upsCapacity = 0.0, upsInitialCharge = 0.0, upsMaxPower = 0.0)),
             ))
         }
         val run = ReferenceRun(prepared, "test")
@@ -125,6 +125,51 @@ class WorldKernelTest {
         if (asked > 0 && heaters.sum() > 0) {
             val share = heaters.first() / 8_000.0
             assertTrue(heaters.all { abs(it / 8_000.0 - share) < 1e-9 }, "the class that runs short is cut in proportion")
+        }
+    }
+
+    @Test fun anExhaustedUpsStopsBridgingAndTheHousesLosePower() {
+        // docs/simulation/trigger-conditions.md, section 3: "ИБП разрядился после потери сети" is a PowerLost.
+        // With both sources dead the battery bridges the bus, drains, and then the houses really lose power.
+        val prepared = prepareScenario(Path.of("../examples/physics/cascade.json")).let { base ->
+            base.copy(scenario = base.scenario.copy(
+                ticks = 60,
+                world = base.scenario.world!!.copy(power = base.scenario.world!!.power.copy(
+                    reactorPower = 0.0, solarPeak = 0.0, upsCapacity = 1.8e6, upsInitialCharge = 1.8e6)),
+            ))
+        }
+        val run = ReferenceRun(prepared, "test")
+        val kernel = assertNotNull(run.kernel)
+        run.use {
+            // The pump is the kernel's own class-0 consumer: while the battery bridges the dead sources,
+            // the settlement keeps receiving power through it.
+            repeat(4) { _ -> it.step() }
+            assertTrue(kernel.grantedOf("water/pump") > 0.0, "the battery feeds the settlement while it holds charge")
+            val lost = (4 until 60).map { tick -> tick to it.step() }
+                .firstOrNull { (_, snapshot) -> snapshot.events.any { e -> e.type == "PowerLost" } }
+            val dark = assertNotNull(lost, "an exhausted battery ends the bridging with a PowerLost")
+            assertTrue(dark.first > 3, "the battery bridged the dead sources for several steps first")
+            assertFalse(kernel.isPowered("home-1/house"), "the house is really disconnected after the battery dies")
+        }
+    }
+
+    @Test fun theUpsChargesAsAClassZeroConsumerWhileHeatersWait() {
+        // docs/simulation/calculations.md, section 4.3 and the section 11 resolution: charging is priority class 0,
+        // so a starving grid fills the battery before it feeds the heaters.
+        val prepared = prepareScenario(Path.of("../examples/physics/cascade.json")).let { base ->
+            base.copy(scenario = base.scenario.copy(
+                ticks = 10,
+                world = base.scenario.world!!.copy(power = base.scenario.world!!.power.copy(
+                    reactorPower = 100_000.0, solarPeak = 0.0, upsCapacity = 1.8e9, upsInitialCharge = 0.0)),
+            ))
+        }
+        val run = ReferenceRun(prepared, "test")
+        val kernel = assertNotNull(run.kernel)
+        run.use {
+            val snapshot = it.step()
+            assertTrue(kernel.grantedOf("grid/ups") > 0.0, "the battery receives charge power")
+            assertTrue(prepared.manifest.instances.filter { h -> h.kind == "Heater" }
+                .all { h -> kernel.grantedOf(h.id) == 0.0 }, "charging beats heating when the grid runs short")
         }
     }
 

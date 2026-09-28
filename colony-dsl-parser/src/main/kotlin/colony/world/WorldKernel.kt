@@ -55,7 +55,7 @@ class WorldKernel(
     private val waterMeter = HashMap<String, Double>()
     private val roundingCarry = HashMap<String, Double>()
     private val jobs = LinkedHashMap<String, RepairJob>()
-    private var upsCharge = config.power.upsCapacity
+    private var upsCharge = config.power.upsInitialCharge
     private var poweredNow = emptySet<String>()
     private var waterNow = emptySet<String>()
     private var occupantsOf = HashMap<String, Int>()
@@ -350,9 +350,15 @@ class WorldKernel(
     private fun sourcePower(id: String): Double = when (topology.byId[id]?.kind) {
         FixtureKind.REACTOR -> config.power.reactorPower
         FixtureKind.SOLAR -> config.power.solarPeak
-        FixtureKind.UPS -> config.power.upsMaxPower
+        // The battery is a working source only while it holds charge (docs/simulation/calculations.md, section 4.2):
+        // once it is empty it stops bridging the dead sources, and that transition is a PowerLost.
+        FixtureKind.UPS -> upsOutput()
         else -> 0.0
     }
+
+    /** What the battery can feed this step: never more than its maximal power or its remaining charge allows. */
+    private fun upsOutput(): Double =
+        if (isBroken("grid/ups")) 0.0 else minOf(config.power.upsMaxPower, upsCharge * config.power.upsEfficiency / dt)
 
     /** Phase 3. Classes are served in order; the class that runs out is cut in proportion to what it asked for. */
     private fun distributePower(intents: List<VmIntent>, accepted: Set<String>) {
@@ -364,39 +370,47 @@ class WorldKernel(
         }
         // The pump is part of the settlement rather than a program, so the kernel asks for it.
         if (isPowered(PUMP) && !isBroken(PUMP)) requested[PUMP] = config.water.pumpPower
+        // The battery charges as a consumer of priority class 0 (docs/simulation/calculations.md, section 4.3;
+        // the section 11 resolution: charging beats heating). It sits on the bus, so the bus carries it.
+        val ups = "grid/ups"
+        if (!isBroken(ups) && isPowered(BUS)) {
+            val headroom = (config.power.upsCapacity - upsCharge).coerceAtLeast(0.0)
+            val chargePower = minOf(config.power.upsMaxPower, headroom * config.power.upsEfficiency / dt)
+            if (chargePower > 0.0) requested[ups] = chargePower
+        }
 
-        val solar = config.power.solarPeak * climateSolar()
         val reactor = if (isBroken("grid/reactor")) 0.0 else config.power.reactorPower
-        val fromUps = if (isBroken("grid/ups")) 0.0 else minOf(config.power.upsMaxPower, upsCharge * config.power.upsEfficiency / dt)
-        var budget = reactor + (if (isBroken("grid/solar")) 0.0 else solar)
+        val solar = if (isBroken("grid/solar")) 0.0 else config.power.solarPeak * climateSolar()
+        val generation = reactor + solar + upsOutput()
+
         granted.clear()
         val byClass = requested.entries
             .sortedWith(compareBy({ config.power.priorityOf(kindOf(it.key)) }, { it.key }))
             .groupBy { config.power.priorityOf(kindOf(it.key)) }
-        var usedUps = 0.0
+        var served = 0.0
         for (klass in byClass.keys.sorted()) {
             val entries = byClass.getValue(klass)
             val wanted = entries.sumOf { it.value }
-            if (wanted <= budget) {
+            val available = (generation - served).coerceAtLeast(0.0)
+            if (wanted <= available) {
                 entries.forEach { granted[it.key] = it.value }
-                budget -= wanted
+                served += wanted
                 continue
             }
-            // The battery covers what the grid cannot, then the class that is still short is cut in proportion.
-            val fromBattery = minOf(fromUps - usedUps, wanted - budget)
-            usedUps += fromBattery
-            val available = budget + fromBattery
+            // The class that runs out is cut in proportion to what it asked for; later classes get nothing.
             val share = if (wanted > 0) available / wanted else 0.0
             entries.forEach { granted[it.key] = it.value * share }
-            budget = 0.0
+            served += available
             for (rest in byClass.keys.sorted().filter { it > klass }) byClass.getValue(rest).forEach { granted[it.key] = 0.0 }
             break
         }
-        upsCharge = if (usedUps > 0) {
-            (upsCharge - usedUps * dt / config.power.upsEfficiency).coerceAtLeast(0.0)
-        } else {
-            (upsCharge + minOf(config.power.upsMaxPower, budget) * dt * config.power.upsEfficiency).coerceAtMost(config.power.upsCapacity)
-        }
+        // The battery is the last generator in the merit order: whatever the sources did not cover came from it.
+        val fromBattery = (served - reactor - solar).coerceAtLeast(0.0).coerceAtMost(upsOutput())
+        // A discharging battery does not charge from its own output: the charge grant of this step is void.
+        val charge = if (fromBattery > 0.0) 0.0 else granted[ups] ?: 0.0
+        if (fromBattery > 0.0) granted[ups] = 0.0
+        upsCharge = (upsCharge - fromBattery * dt / config.power.upsEfficiency + charge * dt * config.power.upsEfficiency)
+            .coerceIn(0.0, config.power.upsCapacity)
     }
 
     private fun climateSolar(): Double = config.climate.solarFraction(currentSeconds)

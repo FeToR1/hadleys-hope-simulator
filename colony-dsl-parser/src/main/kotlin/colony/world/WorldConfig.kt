@@ -65,15 +65,18 @@ data class PowerConfig(
     val solarPeak: Double = 600_000.0,
     /** Energy the uninterruptible supply holds, in joules. */
     val upsCapacity: Double = 1.8e9,
+    /** Charge the battery starts the run with, in joules; a scenario drains or empties it to test blackouts. */
+    val upsInitialCharge: Double = 1.8e9,
     val upsMaxPower: Double = 300_000.0,
     val upsEfficiency: Double = 0.95,
     val housesPerPole: Int = 20,
     val poleHealth: Double = 100.0,
     /** Lower class is served first; the class that runs out of power is cut proportionally. */
-    val priorities: Map<String, Int> = mapOf("Pump" to 0, "Heater" to 1, "Kettle" to 2),
+    val priorities: Map<String, Int> = mapOf("Pump" to 0, "Ups" to 0, "Heater" to 1, "Kettle" to 2),
 ) {
     fun validate() {
         require(reactorPower >= 0 && solarPeak >= 0 && upsCapacity >= 0 && upsMaxPower >= 0) { "Power cannot be negative" }
+        require(upsInitialCharge in 0.0..upsCapacity) { "The initial battery charge must fit the capacity" }
         require(upsEfficiency in 0.1..1.0) { "Efficiency is a fraction" }
         require(housesPerPole >= 1 && poleHealth > 0) { "Bad grid layout" }
     }
