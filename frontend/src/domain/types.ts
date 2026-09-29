@@ -67,6 +67,7 @@ export interface TickBatch {
   runId?: string;
   runtimeMode?: 'reference' | 'process';
   seed?: string;
+  scenario?: 'storm' | 'weekend' | 'xenomorph' | 'marines';
   full?: boolean;
   tickId: number;
   timestamp: number;
@@ -76,6 +77,15 @@ export interface TickBatch {
   postings?: Posting[];
   deliveredEvents?: number;
 }
+
+export interface PhasePoint {
+  tickId: number;
+  x: number;
+  y: number;
+  z: number;
+}
+
+export type AttractorMode = 'stationary' | 'periodic' | 'chaotic' | 'collapse';
 
 export interface EntityLog {
   id: number;
@@ -106,6 +116,8 @@ export interface StateSnapshot {
   spendByOwner: ReadonlyMap<string, number>;
   /** One row per recent step, oldest first: what the charts plot. */
   trend: readonly import('./trend').TrendSample[];
+  attractorHistory: readonly PhasePoint[];
+  attractorMode: AttractorMode;
 }
 
 export type CausalChainStepKind = 'network' | 'thermal' | 'hydraulics' | 'economy' | 'action' | 'failure';

@@ -1,6 +1,7 @@
 import { describeEvents } from './effectLog';
+import { classifyAttractor, createPhasePoint, MAX_ATTRACTOR_HISTORY } from './attractor';
 import { pushTrend, sampleTrend, type TrendSample } from './trend';
-import type { EntityDelta, EntityLog, EntityState, Posting, StateSnapshot, TickBatch, WorldEvent } from './types';
+import type { AttractorMode, EntityDelta, EntityLog, EntityState, PhasePoint, Posting, StateSnapshot, TickBatch, WorldEvent } from './types';
 
 const MAX_EVENTS = 500;
 const MAX_POSTINGS = 500;
@@ -46,6 +47,9 @@ export class StateManager {
   private readonly postings: Posting[] = [];
   private readonly spendByOwner = new Map<string, number>();
   private readonly trend: TrendSample[] = [];
+  private readonly attractorHistory: PhasePoint[] = [];
+  private attractorMode: AttractorMode = 'stationary';
+  private scenario: TickBatch['scenario'];
   private tickId = -1;
   private timestamp = 0;
   private nextLogId = 1;
@@ -61,6 +65,9 @@ export class StateManager {
     this.postings.length = 0;
     this.spendByOwner.clear();
     this.trend.length = 0;
+    this.attractorHistory.length = 0;
+    this.attractorMode = 'stationary';
+    this.scenario = undefined;
     this.tickId = -1;
     this.timestamp = 0;
     this.runId = '';
@@ -89,6 +96,7 @@ export class StateManager {
     } else if (batch.tickId <= this.tickId) return;
     this.seed = batch.seed ?? '';
     this.runtimeMode = batch.runtimeMode ?? 'reference';
+    this.scenario = batch.scenario ?? this.scenario;
     if (batch.full) {
       const present = new Set(batch.entities.map((entity) => entity.id));
       let removed = false;
@@ -141,6 +149,12 @@ export class StateManager {
     pushTrend(this.trend, sampleTrend(batch, this.spendByOwner));
     this.tickId = batch.tickId;
     this.timestamp = batch.timestamp;
+    const point = createPhasePoint(this.tickId, [...this.entities.values()], this.postings);
+    this.attractorHistory.push(point);
+    if (this.attractorHistory.length > MAX_ATTRACTOR_HISTORY) this.attractorHistory.shift();
+    if (this.attractorHistory.length === 1 || this.tickId % 10 === 0) {
+      this.attractorMode = classifyAttractor(this.attractorHistory, this.scenario);
+    }
     const snapshot = this.snapshot();
     for (const record of this.listeners) {
       const payload = { snapshot, deltas };
@@ -194,6 +208,7 @@ export class StateManager {
   public snapshot(): StateSnapshot {
     return { runId: this.runId, revision: this.revision, seed: this.seed, runtimeMode: this.runtimeMode,
       tickId: this.tickId, timestamp: this.timestamp, entities: this.entities, logs: this.logs, events: this.events,
-      postings: this.postings, spendByOwner: this.spendByOwner, trend: this.trend };
+      postings: this.postings, spendByOwner: this.spendByOwner, trend: this.trend,
+      attractorHistory: this.attractorHistory, attractorMode: this.attractorMode };
   }
 }

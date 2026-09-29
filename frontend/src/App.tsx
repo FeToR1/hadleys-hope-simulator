@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { StateManager } from './domain/stateManager';
-import type { EntityLog, EntityState, Posting, WorldEvent } from './domain/types';
+import type { AttractorMode, EntityLog, EntityState, PhasePoint, Posting, WorldEvent } from './domain/types';
 import type { CausalChainStep } from './domain/types';
 import { createLiveCausalChain } from './domain/liveCausalChain';
 import { LiveBrokerSource, type BrokerHealth } from './domain/dataSource';
@@ -11,6 +11,7 @@ import { BrokerConnection } from './components/BrokerConnection';
 import { TrendPanel } from './components/TrendPanel';
 import type { TrendSample } from './domain/trend';
 import { RunControls, type RunCommand } from './components/RunControls';
+import { serializeAttractorCsv } from './domain/attractor';
 
 export function App(): JSX.Element {
   const managerRef = useRef(new StateManager());
@@ -22,6 +23,8 @@ export function App(): JSX.Element {
     { postings: [], spendByOwner: new Map() });
   const [tab, setTab] = useState<'map' | 'topology' | 'trend'>('map');
   const [trend, setTrend] = useState<readonly TrendSample[]>([]);
+  const [attractorHistory, setAttractorHistory] = useState<readonly PhasePoint[]>([]);
+  const [attractorMode, setAttractorMode] = useState<AttractorMode>('stationary');
   const [brokerHealth, setBrokerHealth] = useState<BrokerHealth>();
   const [streamConnected, setStreamConnected] = useState(false);
   const [sourceWarning, setSourceWarning] = useState<string>();
@@ -45,6 +48,8 @@ export function App(): JSX.Element {
       setLogs([...snapshot.logs]);
       setMoney({ postings: [...snapshot.postings], spendByOwner: new Map(snapshot.spendByOwner) });
       setTrend([...snapshot.trend]);
+      setAttractorHistory([...snapshot.attractorHistory]);
+      setAttractorMode(snapshot.attractorMode);
     }, { throttleMs: 200 });
     return () => {
       unsubscribeGraphics();
@@ -141,6 +146,15 @@ export function App(): JSX.Element {
     link.click();
     URL.revokeObjectURL(url);
   };
+  const exportAttractorCsv = (): void => {
+    const csv = serializeAttractorCsv(attractorHistory);
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `lv426-attractor-${tickId}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <main className="shell">
@@ -152,7 +166,7 @@ export function App(): JSX.Element {
           {tab === 'topology' && <NetworkTopology key={runMeta.runId} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { graphFocusRef.current = focus; }} />}
           {tab === 'trend' && <div className="visualization-shell"><TrendPanel trend={trend} /></div>}
         </section>
-        <Sidebar selected={selected} devices={devices} logs={logs} causalChain={causalChain} postings={money.postings} spendByOwner={money.spendByOwner} causalEmptyText="Поломок и гибели пока не было. Цепочка причин появится после первой." onFocusCausalStep={focusCausalStep} onExportCsv={exportCsv} />
+        <Sidebar selected={selected} devices={devices} logs={logs} causalChain={causalChain} postings={money.postings} spendByOwner={money.spendByOwner} attractorHistory={attractorHistory} attractorMode={attractorMode} causalEmptyText="Поломок и гибели пока не было. Цепочка причин появится после первой." onFocusCausalStep={focusCausalStep} onExportCsv={exportCsv} onExportAttractorCsv={exportAttractorCsv} />
       </div>
     </main>
   );
