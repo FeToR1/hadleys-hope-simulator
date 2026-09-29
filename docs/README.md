@@ -93,6 +93,7 @@ docker compose --profile simulation run --rm simulation
 
 ## Демонстрационный каскад
 
+По умолчанию Docker запускает большой сценарий `examples/physics/full.json` с 300 домами. Компактный
 `examples/physics/cascade.json` воспроизводит базовую цепочку аварии и одновременно содержит один вездеход и
 отряд из пяти морских пехотинцев. Задержка диспетчеризации ремонта — 120 с, задержка выезда пехоты — 300 с;
 вероятность успешной атаки отряда — 5%. Ремонт и перевозка делят общий парк, поэтому
@@ -110,7 +111,8 @@ docker compose --profile simulation run --rm simulation
 Полный сценарий со всеми параметрами мира: [`examples/physics/full.json`](../examples/physics/full.json) —
 300 домов, 6 роверов, 2 отряда, 12 ксеноморфов, модельные сутки.
 [Состав, параметры и команды запуска](../examples/physics/full.md). В Docker сценарий выбирается
-переменной `HH_SCENARIO`; без неё используется компактный `cascade.json`.
+переменной `HH_SCENARIO`; без неё используется `full.json`. Для компактного запуска укажите
+`HH_SCENARIO=examples/physics/cascade.json`.
 
 ## Документы
 
