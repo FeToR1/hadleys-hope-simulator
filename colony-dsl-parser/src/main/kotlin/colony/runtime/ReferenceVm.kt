@@ -23,27 +23,63 @@ class ReferenceVm private constructor(
     private val seed: Long = 426,
     private val instructionBudget: Int,
     verifyProgram: Boolean,
+    preparedDispatch: Dispatch? = null,
+    private val memoizePeriodicHandlers: Boolean = true,
 ) {
     constructor(entityId: String, program: BytecodeProgram, behaviorName: String,
                 parameters: JsonObject = JsonObject(emptyMap()), seed: Long = 426,
-                instructionBudget: Int = 100_000) : this(entityId, program, behaviorName, parameters, seed, instructionBudget, true)
+                instructionBudget: Int = 100_000, memoizePeriodicHandlers: Boolean = true) :
+        this(entityId, program, behaviorName, parameters, seed, instructionBudget, true, null, memoizePeriodicHandlers)
 
     internal class VerifiedProgram(val program: BytecodeProgram) {
         init { BytecodeVerifier.verify(program) }
+        private val dispatch = program.behaviors.associate { it.name to Dispatch(it) }
         fun context(instance: Instance, seed: Long) =
-            ReferenceVm(instance.id, program, instance.behavior, instance.params, seed, 100_000, false)
+            ReferenceVm(instance.id, program, instance.behavior, instance.params, seed, 100_000, false, dispatch.getValue(instance.behavior))
+    }
+    private class Dispatch(behavior: BehaviorCode) {
+        val events = behavior.handlers.filter { it.eventId != null }.groupBy { it.eventId!! }
+        val periodic = behavior.handlers.filter { it.periodTicks != null }
     }
     val behavior: BehaviorCode = program.behaviors.single { it.name == behaviorName }
+    private val dispatch = preparedDispatch ?: Dispatch(behavior)
+    /** A successful deterministic path, including every write and effect that must recur each invocation. */
+    private class PeriodicMemo(stateSize: Int) {
+        val views = LinkedHashMap<String, JsonElement>()
+        val stateInputs = LinkedHashMap<Int, JsonElement>()
+        val written = BooleanArray(stateSize)
+        val writes = ArrayList<Pair<Int, JsonElement>>()
+        var cacheable = true
+        var instructions = 0
+        var intents: List<VmIntent> = emptyList()
+    }
+    private val periodicMemos = arrayOfNulls<PeriodicMemo>(dispatch.periodic.size)
     private val params = behavior.params.map { slot -> parameters[slot.name] ?: error("Missing parameter ${slot.name} for $entityId") }
-    private val state = MutableList<JsonElement?>(behavior.state.size) { null }
-    private val counters = linkedMapOf<Pair<String, String>, Long>()
+    private val state = arrayOfNulls<JsonElement>(behavior.state.size)
+    private val previousState = arrayOfNulls<JsonElement>(behavior.state.size)
+    private class RandomStream(val input: ByteArray) {
+        var counter = 0L
+        var previousCounter = 0L
+        var journaled = false
+    }
+    private val streams = linkedMapOf<String, MutableMap<String, RandomStream>>()
+    private val randomJournal = ArrayList<RandomStream>()
+    private class RandomHasher {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val output = ByteArray(32)
+    }
+    private val hasher by lazy { RandomHasher() }
+    private var inStep = false
+    private val self = JsonPrimitive(entityId)
+    private val stepSeconds = program.stepSeconds.toDouble()
     private var sequence = 0L
     private var remaining = instructionBudget
     private val operandStack = ArrayList<JsonElement>()
     private val temporaries = arrayOfNulls<JsonElement>(behavior.temporaryCount)
+    private val touchedTemporaries = IntArray(behavior.temporaryCount)
     private val localSlots = arrayOfNulls<JsonElement>(behavior.handlers.maxOfOrNull { it.localCount } ?: 0)
     private var cachedState: JsonObject? = null
-    val randomDrawCount: Long get() = counters.values.sum()
+    val randomDrawCount: Long get() = streams.values.sumOf { sites -> sites.values.sumOf { it.counter } }
 
     init {
         if (verifyProgram) BytecodeVerifier.verify(program)
@@ -55,45 +91,108 @@ class ReferenceVm private constructor(
         require(state.none { it == null }) { "Uninitialized state in ${behavior.name}" }
     }
 
-    fun stateSnapshot(): JsonObject = cachedState ?: JsonObject(behavior.state.mapIndexed { index, slot ->
-        slot.name to (state[index] ?: error("Uninitialized state")) }.toMap()).also { cachedState = it }
+    fun stateSnapshot(): JsonObject {
+        cachedState?.let { return it }
+        val fields = LinkedHashMap<String, JsonElement>(state.size)
+        behavior.state.forEachIndexed { index, slot -> fields[slot.name] = state[index] ?: error("Uninitialized state") }
+        return JsonObject(fields).also { cachedState = it }
+    }
 
     fun step(frame: VmFrame): VmResult {
         require(frame.tick >= 0) { "Negative tick" }
-        val previousState = state.toList()
-        val previousCounters = counters.toMap()
+        state.copyInto(previousState)
+        val previousSnapshot = cachedState
         val previousSequence = sequence
         val intents = mutableListOf<VmIntent>()
         val outgoing = mutableListOf<OutgoingEvent>()
         remaining = instructionBudget
+        inStep = true
         try {
-            for (event in frame.events.sortedWith(compareBy({ it.sender }, { it.sequence }))) {
-                for (handler in behavior.handlers.filter { it.eventId == event.eventId }) {
+            val events = if (frame.events.size < 2) frame.events else frame.events.sortedWith(EVENT_ORDER)
+            for (event in events) {
+                for (handler in dispatch.events[event.eventId].orEmpty()) {
                     execute(handler.entry, handler.localCount, handler.name, frame, event.fields, intents, outgoing)
                 }
             }
-            for (handler in behavior.handlers) {
-                if (handler.periodTicks != null && frame.tick % handler.periodTicks == 0L) {
-                    execute(handler.entry, handler.localCount, handler.name, frame, JsonObject(emptyMap()), intents, outgoing)
+            for ((index, handler) in dispatch.periodic.withIndex()) {
+                if (frame.tick % handler.periodTicks!! == 0L) {
+                    executePeriodic(index, handler, frame, intents, outgoing)
                 }
             }
             return VmResult(intents, outgoing, stateSnapshot())
         } catch (failure: Exception) {
-            previousState.forEachIndexed { index, value -> state[index] = value }
-            counters.clear(); counters.putAll(previousCounters); sequence = previousSequence
-            cachedState = null
+            previousState.copyInto(state)
+            randomJournal.forEach { it.counter = it.previousCounter }
+            sequence = previousSequence
+            cachedState = previousSnapshot
+            periodicMemos.fill(null)
             throw failure
+        } finally {
+            inStep = false
+            randomJournal.forEach { it.journaled = false }
+            randomJournal.clear()
+            previousState.fill(null)
         }
     }
 
+    private fun executePeriodic(index: Int, handler: Handler, frame: VmFrame,
+                                intents: MutableList<VmIntent>, outgoing: MutableList<OutgoingEvent>) {
+        val saved = periodicMemos[index]
+        if (saved != null && remaining >= saved.instructions &&
+            intents.size + outgoing.size + saved.intents.size <= 1024 && matches(saved, frame)) {
+            remaining -= saved.instructions
+            for ((slot, value) in saved.writes) {
+                if (state[slot] != value) { state[slot] = value; cachedState = null }
+            }
+            intents.addAll(saved.intents)
+            return
+        }
+        val capture = if (memoizePeriodicHandlers) PeriodicMemo(state.size) else null
+        val budgetBefore = remaining
+        val intentStart = intents.size
+        execute(handler.entry, handler.localCount, handler.name, frame, EMPTY_OBJECT, intents, outgoing, capture)
+        periodicMemos[index] = capture?.takeIf { it.cacheable }?.also { memo ->
+            memo.instructions = budgetBefore - remaining
+            // Prevent callers mutating an old result's argument list from changing a later replay.
+            memo.intents = List(intents.size - intentStart) { offset ->
+                val original = intents[intentStart + offset]
+                original.copy(arguments = java.util.Collections.unmodifiableList(ArrayList(original.arguments)))
+            }
+        }
+    }
+
+    private fun matches(memo: PeriodicMemo, frame: VmFrame): Boolean {
+        for ((slot, expected) in memo.stateInputs) if (state[slot] != expected) return false
+        // A failed observation lookup must still receive the interpreter's rule/pc diagnostic.
+        return try { memo.views.all { (field, expected) -> frame.view[field] == expected } }
+        catch (_: Exception) { false }
+    }
+
     private fun execute(entry: Int, localCount: Int, rule: String, frame: VmFrame, message: JsonObject,
-                        intents: MutableList<VmIntent>, outgoing: MutableList<OutgoingEvent>) {
-        val stack = operandStack.apply { clear() }
-        val temps = temporaries.apply { fill(null) }
-        val locals = localSlots.apply { fill(null) }
+                        intents: MutableList<VmIntent>, outgoing: MutableList<OutgoingEvent>, capture: PeriodicMemo? = null) {
+        val stack = operandStack
+        val temps = temporaries
+        val locals = localSlots
+        var touchedTemporaryCount = 0
+        var memo = capture
+        fun disableMemo() { capture?.cacheable = false; memo = null }
         fun pop(): JsonElement = stack.removeLastOrNull() ?: error("Operand stack underflow")
-        fun arguments(count: Int): List<JsonElement> = List(count) { pop() }.reversed()
-        fun record(names: List<String>): JsonObject = JsonObject(names.zip(arguments(names.size)).toMap())
+        fun arguments(count: Int): List<JsonElement> {
+            val start = stack.size - count
+            check(start >= 0) { "Operand stack underflow" }
+            val values = ArrayList<JsonElement>(count)
+            for (index in start until stack.size) values.add(stack[index])
+            repeat(count) { stack.removeAt(stack.lastIndex) }
+            return values
+        }
+        fun record(names: List<String>): JsonObject {
+            val fields = LinkedHashMap<String, JsonElement>(names.size)
+            val start = stack.size - names.size
+            check(start >= 0) { "Operand stack underflow" }
+            names.forEachIndexed { index, name -> fields[name] = stack[start + index] }
+            repeat(names.size) { stack.removeAt(stack.lastIndex) }
+            return JsonObject(fields)
+        }
         var pc = entry
         try {
             while (true) {
@@ -105,20 +204,33 @@ class ReferenceVm private constructor(
                 when (instruction.op) {
                     Op.CONST -> stack += instruction.value
                     Op.LOAD_TEMP -> stack += temps[instruction.arg] ?: error("Uninitialized temporary")
-                    Op.STORE_TEMP -> temps[instruction.arg] = pop()
+                    Op.STORE_TEMP -> {
+                        val value = pop()
+                        if (temps[instruction.arg] == null) touchedTemporaries[touchedTemporaryCount++] = instruction.arg
+                        temps[instruction.arg] = value
+                    }
                     Op.LOAD_PARAM -> stack += params[instruction.arg]
-                    Op.LOAD_STATE -> stack += state[instruction.arg] ?: error("Uninitialized state")
+                    Op.LOAD_STATE -> {
+                        val value = state[instruction.arg] ?: error("Uninitialized state")
+                        memo?.let { if (!it.written[instruction.arg]) it.stateInputs[instruction.arg] = value }
+                        stack += value
+                    }
                     Op.STORE_STATE -> {
                         val value = pop()
+                        memo?.let { it.written[instruction.arg] = true; it.writes.add(instruction.arg to value) }
                         if (state[instruction.arg] != value) { state[instruction.arg] = value; cachedState = null }
                     }
                     Op.LOAD_LOCAL -> stack += locals[instruction.arg] ?: error("Uninitialized local")
                     Op.STORE_LOCAL -> locals[instruction.arg] = pop()
                     Op.LOAD_MESSAGE -> stack += message
-                    Op.LOAD_VIEW -> stack += frame.view[instruction.text] ?: error("Missing observation ${instruction.text}")
-                    Op.LOAD_OBSERVATIONS -> stack += frame.view
-                    Op.LOAD_TIME -> stack += finite(frame.tick * program.stepSeconds.toDouble())
-                    Op.LOAD_SELF -> stack += JsonPrimitive(entityId)
+                    Op.LOAD_VIEW -> {
+                        val value = frame.view[instruction.text] ?: error("Missing observation ${instruction.text}")
+                        memo?.views?.put(instruction.text, value)
+                        stack += value
+                    }
+                    Op.LOAD_OBSERVATIONS -> { disableMemo(); stack += JsonObject(frame.view.toMap()) }
+                    Op.LOAD_TIME -> { disableMemo(); stack += finite(frame.tick * stepSeconds) }
+                    Op.LOAD_SELF -> stack += self
                     Op.GET_FIELD -> stack += pop().jsonObject[instruction.text] ?: error("Missing field ${instruction.text}")
                     Op.CONVERT -> stack += convert(pop(), instruction.type)
                     Op.UNARY -> {
@@ -136,7 +248,7 @@ class ReferenceVm private constructor(
                     Op.IS_SOME -> stack += JsonPrimitive(pop() != JsonNull)
                     Op.UNWRAP -> stack += pop().jsonObject["some"] ?: error("Unwrap of none")
                     Op.INDEX -> { val index = pop().jsonPrimitive.int; stack += pop().jsonArray[index] }
-                    Op.CLAMP -> { val args = arguments(3); val lo = number(args[1]); val hi = number(args[2]); require(lo <= hi); stack += if (number(args[0]) < lo) args[1] else if (number(args[0]) > hi) args[2] else args[0] }
+                    Op.CLAMP -> { val high = pop(); val low = pop(); val value = pop(); val lo = number(low); val hi = number(high); require(lo <= hi); val n = number(value); stack += if (n < lo) low else if (n > hi) high else value }
                     Op.NEAREST -> {
                         val candidates = pop().jsonArray
                         require(candidates.size <= 4096) { "Observation list limit exceeded" }
@@ -144,18 +256,21 @@ class ReferenceVm private constructor(
                         stack += if (nearest == null) JsonNull else buildJsonObject { put("some", nearest) }
                     }
                     Op.CHANCE, Op.HAZARD -> {
+                        disableMemo()
                         val site = pop().jsonPrimitive.content
                         val parameter = number(pop())
                         val probability = if (instruction.op == Op.HAZARD) {
-                            require(parameter >= 0); -Math.expm1(-parameter * program.stepSeconds.toDouble())
+                            require(parameter >= 0); -Math.expm1(-parameter * stepSeconds)
                         } else parameter
                         require(probability in 0.0..1.0) { "Probability outside [0,1]" }
                         stack += JsonPrimitive(random(rule, site) < probability)
                     }
                     Op.POWER_REQUEST, Op.DAMAGE_REQUEST, Op.MOTION_REQUEST, Op.REPAIR_REQUEST -> {
-                        intents += VmIntent(entityId, instruction.op, arguments(instruction.stackEffect().first))
+                        val count = when (instruction.op) { Op.DAMAGE_REQUEST -> 3; Op.MOTION_REQUEST -> 2; else -> 1 }
+                        intents += VmIntent(entityId, instruction.op, arguments(count))
                     }
                     Op.SEND -> {
+                        disableMemo()
                         val fields = record(instruction.names)
                         outgoing += OutgoingEvent(pop().jsonPrimitive.content, instruction.arg, fields, entityId, sequence++)
                     }
@@ -169,16 +284,38 @@ class ReferenceVm private constructor(
             val instruction = behavior.code.getOrNull(pc)
             throw IllegalStateException("VM $entityId, tick ${frame.tick}, rule $rule, pc $pc, ${instruction?.line}:${instruction?.column}: ${failure.message}", failure)
         } finally {
-            stack.clear(); temps.fill(null); locals.fill(null)
+            stack.clear()
+            for (index in 0 until touchedTemporaryCount) temps[touchedTemporaries[index]] = null
+            locals.fill(null, 0, localCount)
         }
     }
 
     /** The next number of the stream of one (rule, site) of this entity; every draw advances only its own counter. */
     private fun random(rule: String, site: String): Double {
-        val key = rule to site
-        val counter = counters.getOrDefault(key, 0L)
-        counters[key] = counter + 1
-        return randomUnit(seed, entityId, behavior.name, rule, site, counter)
+        val stream = streams.getOrPut(rule) { linkedMapOf() }.getOrPut(site) {
+            RandomStream(randomInput(seed, entityId, behavior.name, rule, site, 0))
+        }
+        if (inStep && !stream.journaled) {
+            stream.previousCounter = stream.counter
+            stream.journaled = true
+            randomJournal.add(stream)
+        }
+        var counter = stream.counter++
+        for (index in stream.input.lastIndex downTo stream.input.size - 8) {
+            stream.input[index] = counter.toByte()
+            counter = counter ushr 8
+        }
+        hasher.digest.update(stream.input)
+        val hash = hasher.output
+        hasher.digest.digest(hash, 0, hash.size)
+        var head = 0L
+        for (index in 0 until 8) head = (head shl 8) or (hash[index].toLong() and 255L)
+        return (head ushr 11).toDouble() / 9007199254740992.0
+    }
+
+    private companion object {
+        val EMPTY_OBJECT = JsonObject(emptyMap())
+        val EVENT_ORDER = compareBy<DeliveredEvent>({ it.sender }, { it.sequence })
     }
 }
 
