@@ -322,6 +322,9 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
             val worldAt = System.nanoTime()
             val entities = objects.map { (id, instance) ->
                 val state = results.getValue(id).state
+                val entityPos = positionOf(id)
+                val point = colony.world.Point(entityPos.x, entityPos.y)
+                val inFog = kernel?.let { k -> k.seaController.isFogActive && k.seaController.isInFog(point) } ?: false
                 EntitySnapshot(id = id, pid = fleet.pids[id], type = when (instance.kind) { "Human" -> "civilian"; else -> instance.kind.lowercase() },
                     status = if (healthOf(id) <= 0) "dead" else "nominal",
                     metrics = buildJsonObject {
@@ -331,11 +334,20 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                                 put("water_level", if (kernel.hasWater(id)) 100.0 else 0.0)
                                 put("occupants", kernel.occupants(id))
                                 put("spend", kernel.spentBy(id))
+                                if (kernel.seaController.isInCoastalZone(point)) {
+                                    put("sea_damage", (100.0 - healthOf(id)).coerceAtLeast(0.0))
+                                }
                             }
                             if (instance.kind == "Rover") {
                                 val view = kernel.view(instance, setOf("passenger_count", "passenger_capacity"))
                                 view["passenger_count"]?.let { put("passenger_count", it) }
                                 view["passenger_capacity"]?.let { put("passenger_capacity", it) }
+                                kernel.roverCreatineCargo[id]?.let { put("creatine_stock", it) }
+                            }
+                            if (instance.kind == "Human") {
+                                if (kernel.respiratorEquipped[id] == true) {
+                                    put("respirator_equipped", true)
+                                }
                             }
                             if (instance.kind == "Marine") {
                                 kernel.view(instance, setOf("squad_size"))["squad_size"]?.let { put("squad_size", it) }
@@ -344,26 +356,48 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                             views.getValue(id)["temperature"]?.let { put("temperature", it) }
                             views.getValue(id)["water_temperature"]?.let { put("temperature", it) }
                         }
+                        if (inFog) {
+                            put("in_fog", true)
+                        }
                         state["stress"]?.let { put("stress", it) }
                         put("health", healthOf(id))
                         if (Capability.POWER_REQUEST in contracts.getValue(instance.kind).capabilities) {
                             put("power_consumption", kernel?.grantedOf(id) ?: power[id] ?: 0.0)
                         }
-                    }, connectedTo = listOfNotNull(instance.parent, kernel?.vehicleOf(id)), coordinates = positionOf(id), parentId = instance.parent, vmState = state)
+                    }, connectedTo = listOfNotNull(instance.parent, kernel?.vehicleOf(id)), coordinates = entityPos, parentId = instance.parent, vmState = state)
             }
             // The grid and the water network have no program of their own, but an observer has to see them.
             val fixtureStates = kernel?.fixtureState().orEmpty()
-            // Only the pump has a changing consumption metric; all other fixture metrics are health.
-            val pumpPower = kernel?.grantedOf("water/pump")
-            if (previousFixtures != fixtureStates || fixtureEntities.firstOrNull { it.id == "water/pump" }
-                    ?.metrics?.get("power_consumption")?.jsonPrimitive?.double != pumpPower) {
-                fixtureEntities = fixtureStates.map { fixture ->
+            val fixtures = fixtureStates.map { fixture ->
+                val fixtureType = when (fixture.kind) {
+                    "fence" -> "fence"
+                    "air_defense" -> "air_defense"
+                    "depository" -> "depository"
+                    "medical_center" -> "medical_center"
+                    else -> "power_node"
+                }
+                val inFog = kernel?.let { k -> k.seaController.isFogActive && k.seaController.isInFog(fixture.at) } ?: false
+                val isBroken = fixture.health <= 0.0 || (fixture.kind == "air_defense" && kernel?.airDefenseUnits?.get(fixture.id)?.broken == true)
                 EntitySnapshot(
-                    id = fixture.id, pid = null, type = if (fixture.kind == "fence") "fence" else "power_node",
-                    status = if (fixture.health <= 0) "dead" else if (!fixture.powered) "warning" else "nominal",
+                    id = fixture.id, pid = null, type = fixtureType,
+                    status = if (isBroken) "dead" else if (!fixture.powered) "warning" else "nominal",
                     metrics = buildJsonObject {
                         put("health", fixture.health)
                         if (fixture.id == "water/pump") put("power_consumption", kernel!!.grantedOf(fixture.id))
+                        if (fixture.kind == "depository") {
+                            kernel?.creatineManager?.let { put("creatine_stock", it.storedStock) }
+                        }
+                        if (fixture.kind == "medical_center") {
+                            kernel?.creatineManager?.let { put("creatine_stock", it.medicalCenterStock) }
+                        }
+                        if (fixture.kind == "air_defense") {
+                            val unit = kernel?.airDefenseUnits?.get(fixture.id)
+                            put("broken", isBroken)
+                            if (unit != null) put("ammo", unit.shotsFired)
+                        }
+                        if (inFog) {
+                            put("in_fog", true)
+                        }
                     },
                     connectedTo = fixture.feeds, coordinates = Coordinates(fixture.at.x, fixture.at.y),
                     parentId = null, vmState = buildJsonObject {
@@ -373,10 +407,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                         fixture.to?.let { put("to", buildJsonObject { put("x", it.x); put("y", it.y) }) }
                     },
                 )
-                }
-                previousFixtures = fixtureStates
             }
-            val fixtures = fixtureEntities
             val sites = kernel?.let { world ->
                 val at = world.minePosition
                 val workers = entities.filter { entity ->
@@ -384,15 +415,59 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                         entity.vmState["activity"]?.jsonPrimitive?.content == "Mining" && world.vehicleOf(entity.id) == null &&
                         hypot(entity.coordinates.x - at.x, entity.coordinates.y - at.y) < 1.0
                 }
-                listOf(EntitySnapshot(
+                val mineSite = EntitySnapshot(
                     id = "site/mine", pid = null, type = "mine", status = "nominal",
-                    metrics = buildJsonObject { put("workers", workers.size) },
+                    metrics = buildJsonObject {
+                        put("workers", workers.size)
+                        put("creatine_stock", world.creatineManager.mineStock)
+                        val synergy = 1.0 + 9.0 * (workers.size.toDouble() / 5000.0).coerceIn(0.0, 1.0)
+                        put("synergy_multiplier", synergy)
+                    },
                     connectedTo = workers.map { it.id }, coordinates = Coordinates(at.x, at.y),
                     vmState = buildJsonObject { put("shift", if (workers.isEmpty()) "Idle" else "Working") },
-                ))
+                )
+                val list = mutableListOf(mineSite)
+                if (world.seaController.isFogActive) {
+                    val fogCenter = world.seaController.cloudCenter
+                    list += EntitySnapshot(
+                        id = "weather/sea_fog",
+                        pid = null,
+                        type = "fog",
+                        status = "nominal",
+                        metrics = buildJsonObject {
+                            put("width", world.seaController.cloudWidth)
+                            put("height", world.seaController.cloudHeight)
+                            put("depth", world.seaController.currentFogDepth)
+                        },
+                        connectedTo = emptyList(),
+                        coordinates = Coordinates(fogCenter.x, fogCenter.y),
+                        vmState = buildJsonObject {
+                            put("active", true)
+                        }
+                    )
+                }
+                list
             }.orEmpty()
+            val crocodiles = kernel?.crocodilePool?.activeCrocodiles().orEmpty().map { croc ->
+                EntitySnapshot(
+                    id = croc.id,
+                    pid = null,
+                    type = "crocodile",
+                    status = if (croc.health <= 0) "dead" else if (croc.isDeflected) "warning" else "nominal",
+                    metrics = buildJsonObject {
+                        put("health", croc.health)
+                    },
+                    connectedTo = emptyList(),
+                    coordinates = Coordinates(croc.position.x, croc.position.y),
+                    parentId = null,
+                    vmState = buildJsonObject {
+                        put("deflected", croc.isDeflected)
+                        put("progress", croc.progress)
+                    }
+                )
+            }
             return TickSnapshot(runId = runId, runtimeMode = fleet.mode, seed = prepared.scenario.seed.toString(), tickId = tick,
-                timestamp = ((tick + 1) * dt * 1000).toLong(), entities = entities + fixtures + sites,
+                timestamp = ((tick + 1) * dt * 1000).toLong(), entities = entities + fixtures + sites + crocodiles,
                 effects = intents.mapIndexed { index, it -> TraceEvent(it.source, it.operation.name, it.arguments, it.source in ableToAct, refs[index]) },
                 events = changeEvents + events, postings = kernel?.lastPostings.orEmpty(),
                 deliveredEvents = delivered).also {

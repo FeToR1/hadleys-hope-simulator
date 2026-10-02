@@ -78,12 +78,14 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
       viewportRef.current = viewport;
       viewport.drag().pinch().wheel().decelerate().clampZoom({ minScale: 0.015, maxScale: 4 });
       app.ticker.maxFPS = 30;
+      const biomes = new Graphics();
       const grid = new Graphics();
       const fence = new Graphics();
+      const fog = new Graphics();
       const scene = new Container();
       scene.sortableChildren = true;
-      grid.eventMode = 'none'; fence.eventMode = 'none';
-      viewport.addChild(grid, fence, scene);
+      biomes.eventMode = 'none'; grid.eventMode = 'none'; fence.eventMode = 'none'; fog.eventMode = 'none';
+      viewport.addChild(biomes, grid, fence, scene, fog);
       app.stage.addChild(viewport);
       host.appendChild(app.canvas);
 
@@ -120,15 +122,41 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
           const bounds = [Math.floor((Math.min(...xs) - 100) / 70) * 70, Math.floor((Math.min(...ys) - 100) / 70) * 70,
             Math.ceil((Math.max(...xs) + 100) / 70) * 70, Math.ceil((Math.max(...ys) + 100) / 70) * 70];
           if (bounds.join(',') !== gridBounds) {
-            gridBounds = bounds.join(','); grid.clear();
+            gridBounds = bounds.join(','); grid.clear(); biomes.clear();
             const [left, top, right, bottom] = bounds;
+            const margin = 3000;
+            // Biomes: Forest on West, North, South; Sea on East
+            biomes.rect(left - margin, top - margin, margin, (bottom - top) + 2 * margin).fill({ color: 0x0a1e14, alpha: 0.5 });
+            biomes.rect(left, top - margin, right - left, margin).fill({ color: 0x0a1e14, alpha: 0.5 });
+            biomes.rect(left, bottom, right - left, margin).fill({ color: 0x0a1e14, alpha: 0.5 });
+            biomes.rect(right, top - margin, margin, (bottom - top) + 2 * margin).fill({ color: 0x071e33, alpha: 0.65 });
+            biomes.moveTo(right, top - margin).lineTo(right, bottom + margin).stroke({ color: 0x38bdf8, width: 3, alpha: 0.7 });
+
             const step = Math.max(70, Math.ceil(Math.max(right - left, bottom - top) / 7000) * 70);
             for (let x = left; x <= right; x += step) grid.moveTo(x, top).lineTo(x, bottom);
             for (let y = top; y <= bottom; y += step) grid.moveTo(left, y).lineTo(right, y);
             grid.stroke({ color: 0x233448, width: 0.8, alpha: 0.45 });
             grid.rect(left, top, right - left, bottom - top).stroke({ color: 0x34485f, width: 1, alpha: 0.55 });
           }
-        } else { grid.clear(); gridBounds = ''; }
+          const fogEntity = list.find((e) => e.id === 'weather/sea_fog' || e.type === 'fog');
+          fog.clear();
+          if (fogEntity) {
+            const cx = fogEntity.coordinates.x;
+            const cy = fogEntity.coordinates.y;
+            const rw = Number(fogEntity.metrics?.width ?? 1200) / 2;
+            const rh = Number(fogEntity.metrics?.height ?? 1400) / 2;
+            fog.ellipse(cx, cy, rw * 1.25, rh * 1.25).fill({ color: 0x475569, alpha: 0.18 });
+            fog.ellipse(cx, cy, rw, rh).fill({ color: 0x64748b, alpha: 0.28 });
+            fog.ellipse(cx, cy, rw * 0.65, rh * 0.65).fill({ color: 0x94a3b8, alpha: 0.35 });
+            fog.ellipse(cx, cy, rw * 0.35, rh * 0.35).fill({ color: 0xcfd8dc, alpha: 0.42 });
+          } else if (list.some((e) => e.metrics?.in_fog)) {
+            const fogged = list.filter((e) => e.metrics?.in_fog);
+            const cx = fogged.reduce((sum, e) => sum + e.coordinates.x, 0) / fogged.length;
+            const cy = fogged.reduce((sum, e) => sum + e.coordinates.y, 0) / fogged.length;
+            fog.ellipse(cx, cy, 700, 800).fill({ color: 0x64748b, alpha: 0.28 });
+            fog.ellipse(cx, cy, 450, 500).fill({ color: 0x94a3b8, alpha: 0.38 });
+          }
+        } else { grid.clear(); biomes.clear(); fog.clear(); gridBounds = ''; }
         // The perimeter fence: intact segments in steel, breaches in red until a crew repairs them.
         fence.clear();
         const segments = fenceSegments(list);
@@ -201,9 +229,9 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
           view.icon.alpha = entity.status === 'dead' ? 0.45 : 1;
           view.root.position.set(position.x, position.y);
           // Minimum screen sizes keep threats and vehicles readable in the colony overview.
-          const minimum = kind === 'mine' ? 54 : kind === 'house' ? 16 : kind === 'civilian' ? 10 : kind === 'power_node' ? 8 : 17;
+          const minimum = kind === 'mine' ? 54 : kind === 'house' ? 16 : kind === 'civilian' ? 10 : kind === 'power_node' ? 8 : (kind === 'air_defense' || kind === 'depository' || kind === 'medical_center') ? 22 : 17;
           view.root.scale.set(Math.max(design.size, minimum / scale) / 36);
-          view.root.zIndex = chosen ? 100 : kind === 'house' ? 1 : kind === 'power_node' ? 0 : kind === 'xenomorph' ? 20 : 10;
+          view.root.zIndex = chosen ? 100 : kind === 'house' ? 1 : kind === 'power_node' ? 0 : (kind === 'xenomorph' || kind === 'crocodile') ? 25 : kind === 'air_defense' ? 15 : 10;
           view.label.text = clustered ? '' : shortMapLabel(entity);
           view.label.scale.set(1 / (view.root.scale.x * scale));
           const labelBox = { x: entity.coordinates.x * scale, y: entity.coordinates.y * scale + 22 * view.root.scale.x * scale,
@@ -268,14 +296,19 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
   };
   return <div className="visualization-shell settlement-map" onKeyDown={(event) => { if (event.key === 'Escape') onClearSelection?.(); }}>
     <div className="map-toolbar">
-      <div className="map-title"><span className="eyebrow">LV–426 / HADLEY’S HOPE</span><strong>План колонии</strong></div>
-      <span className="map-summary"><strong>{counts.house ?? 0}</strong> домов <span>·</span> <strong>{counts.civilian ?? 0}</strong> жителей</span>
+      <div className="map-title"><span className="eyebrow">ЗЕМНОЙ СЕКТОР / ПОСЁЛОК</span><strong>План поселения</strong></div>
+      <span className="map-summary">
+        <strong>{counts.house ?? 0}</strong> домов <span>·</span> <strong>{counts.civilian ?? 0}</strong> жителей
+        {counts.air_defense ? <> <span>·</span> <strong>{counts.air_defense}</strong> ПВО</> : null}
+        {counts.crocodile ? <> <span>·</span> <strong style={{ color: '#10b981' }}>{counts.crocodile}</strong> крокодилов</> : null}
+        {entities.some((e) => e.metrics?.in_fog) ? <> <span>·</span> <strong style={{ color: '#38bdf8' }}>≋ Морской туман</strong></> : null}
+      </span>
       <button type="button" className="map-toggle map-label-toggle" title="Подписи видны при приближении; пересекающиеся скрываются" aria-pressed={labels} onClick={() => setLabels(!labels)}>Aa <span>Подписи</span></button>
       <button type="button" className="map-toggle" aria-expanded={legendOpen} aria-controls="map-legend" onClick={() => setLegendOpen(!legendOpen)}>☷ Легенда</button>
     </div>
     <div className="map-layerbar" aria-label="Слои карты">
       <span className="map-layer-label">Показать</span>
-      {MOBILE_LAYERS.map((kind) => <button type="button" key={kind} className="map-layer" aria-pressed={layers[kind]}
+      {MOBILE_LAYERS.filter((kind) => kind !== 'xenomorph' || (counts.xenomorph ?? 0) > 0).map((kind) => <button type="button" key={kind} className="map-layer" aria-pressed={layers[kind]}
         onClick={() => setLayers((previous) => ({ ...previous, [kind]: !previous[kind] }))}>
         <MapIcon kind={kind} /><span>{MAP_TYPES[kind].label}</span><small>{counts[kind] ?? 0}</small>
       </button>)}
@@ -292,18 +325,31 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
       {selectedId && <div className="map-selection"><span>Выбрано</span><strong>{selectedId}</strong><button type="button" onClick={onClearSelection} aria-label="Снять выделение">×</button></div>}
       {legendOpen && <div id="map-legend" className="map-legend">
         <div className="map-legend-heading"><strong>Условные обозначения</strong><button type="button" aria-label="Свернуть легенду" onClick={() => setLegendOpen(false)}>−</button></div>
-        <div className="map-legend-grid">{(['house', 'mine', 'civilian', 'rover', 'marine', 'xenomorph', 'power_node', 'fence'] as const).map((kind) =>
+        <div className="map-legend-grid">{(['house', 'mine', 'civilian', 'rover', 'air_defense', 'crocodile', 'depository', 'medical_center', 'marine', 'power_node', 'fence'] as const).map((kind) =>
           <div key={kind} className="map-legend-item"><MapIcon kind={kind} /><span>{MAP_TYPES[kind].label}</span></div>)}</div>
         <div className="map-status-legend"><span>Без метки — норма</span><span className="map-warning">! Внимание</span><span className="map-critical">! Критическое</span><span className="map-dead">× Погиб / разрушен</span></div>
-        <p>Издалека дома и жители объединяются в группы. Нажмите на группу, чтобы приблизить.</p>
+        <p>Издалека дома и жители объединяются в группы. Нажмите на группу, чтобы приблизить. По периметру: Лес (З, С, Ю) и Море (В).</p>
       </div>}
       {hovered && tooltip && <div className="entity-tooltip map-tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
         <div className="map-tooltip-heading"><MapIcon kind={mapKind(hovered.type)} /><div><strong>{MAP_TYPES[mapKind(hovered.type)].singular}</strong><span>{hovered.id}</span></div></div>
         <span style={{ color: MAP_STATUS[hovered.status].color }}>{MAP_STATUS[hovered.status].label}</span>
         {tooltip.count > 1 && <span>{tooltip.clustered ? 'В группе' : 'В этой точке'}: {tooltip.count}</span>}
-        {hovered.type === 'mine' && <span>Шахтёров на смене: {hovered.metrics.workers ?? 0}</span>}
-        {hovered.type === 'rover' && <span>Пассажиры: {hovered.metrics.passenger_count ?? 0} / {hovered.metrics.passenger_capacity ?? '—'}</span>}
+        {hovered.type === 'mine' && <span>Шахтёров на смене: {hovered.metrics.workers ?? 0} (эффективность: {((hovered.metrics.synergy_multiplier ?? 1) as number).toFixed(2)}x)</span>}
+        {hovered.type === 'air_defense' && <>
+          <span>ПВО: {hovered.metrics.broken ? 'ОТКЛЮЧЕНА (туман)' : 'Боеготовность'}</span>
+          {hovered.metrics.in_fog && <span style={{ color: '#f2c94c' }}>В зоне морского тумана</span>}
+        </>}
+        {hovered.type === 'crocodile' && <span>Воздушная угроза из леса (бомбардировка)</span>}
+        {hovered.type === 'depository' && <span>Склад креатина: {hovered.metrics.creatine_stock ?? 0} ед.</span>}
+        {hovered.type === 'medical_center' && <span>Медцентр: {hovered.metrics.creatine_stock ?? 0} ед. креатина</span>}
+        {hovered.type === 'rover' && <>
+          <span>{hovered.id.startsWith('crew-') ? 'Ремонтный экипаж' : hovered.id.startsWith('cargo-') ? 'Грузовой ровер (креатин)' : 'Пассажирский ровер (такси)'}</span>
+          <span>Пассажиры: {hovered.metrics.passenger_count ?? 0} / {hovered.metrics.passenger_capacity ?? '—'}</span>
+          {hovered.metrics.creatine_stock !== undefined && hovered.metrics.creatine_stock > 0 && <span style={{ color: '#f59e0b' }}>Груз креатина: {hovered.metrics.creatine_stock.toFixed(1)} ед.</span>}
+        </>}
         {hovered.type === 'marine' && <span>Бойцов в отряде: {hovered.metrics.squad_size ?? '—'}</span>}
+        {hovered.metrics.sea_damage !== undefined && hovered.metrics.sea_damage > 0 && <span style={{ color: '#ff617e' }}>Урон от подмыва моря: {hovered.metrics.sea_damage.toFixed(1)}</span>}
+        {hovered.metrics.in_fog && <span style={{ color: '#f2c94c' }}>В тумане (респиратор: {hovered.metrics.respirator_equipped ? 'надет' : 'нет'})</span>}
         {hovered.metrics.temperature !== undefined && <span>Температура: {hovered.metrics.temperature.toFixed(1)} °C</span>}
         {hovered.metrics.water_level !== undefined && <span>Вода: {hovered.metrics.water_level.toFixed(0)} %</span>}
         {hovered.metrics.power_consumption !== undefined && <span>Мощность: {hovered.metrics.power_consumption.toFixed(0)} W</span>}

@@ -186,7 +186,12 @@ class NativeVmConnection(
         fun executable(): Path? {
             // HH_VM lets the same tests drive a sanitizer build, or any other build, without changing them.
             System.getenv("HH_VM")?.let { return File(it).toPath().toAbsolutePath() }
-            val candidates = listOf("native/build/hh-vm.exe", "native/build/hh-vm", "../native/build/hh-vm.exe", "../native/build/hh-vm")
+            val candidates = listOf(
+                "native/build/Release/hh-vm.exe", "native/build/Debug/hh-vm.exe",
+                "native/build/hh-vm.exe", "native/build/hh-vm",
+                "../native/build/Release/hh-vm.exe", "../native/build/Debug/hh-vm.exe",
+                "../native/build/hh-vm.exe", "../native/build/hh-vm"
+            )
             return candidates.map { File(it) }.firstOrNull { it.isFile }?.toPath()?.toAbsolutePath()
         }
     }

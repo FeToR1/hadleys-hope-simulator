@@ -11,7 +11,8 @@ import kotlinx.serialization.Serializable
 
 /** Kinds of object the world owns without giving them a program of their own. */
 enum class FixtureKind(val repairKey: String) {
-    REACTOR("device"), SOLAR("device"), UPS("device"), PUMP("device"), POLE("pole"), PIPE("pipe"), FENCE("fence")
+    REACTOR("device"), SOLAR("device"), UPS("device"), PUMP("device"), POLE("pole"), PIPE("pipe"), FENCE("fence"),
+    AIR_DEFENSE("device"), DEPOSITORY("device"), MEDICAL_CENTER("device")
 }
 
 /** An axis-aligned rectangle; the fence runs along its border. */
@@ -20,7 +21,7 @@ enum class FixtureKind(val repairKey: String) {
 }
 
 /**
- * An object of the settlement that has no VM: a pole, a pipe, a source. It has a position, health and, for
+ * An object of the settlement that has no VM: a pole, a pipe, a source, an air defense turret, depository. It has a position, health and, for
  * the grid, the node it feeds from (docs/technical-reference.md#runtime, section 1).
  */
 @Serializable data class Fixture(
@@ -58,10 +59,14 @@ enum class FixtureKind(val repairKey: String) {
     val meeting: Point,
     /** The fenced area, when the settlement has a fence. */
     val fenceBox: Box? = null,
+    val depository: Point = Point((mine.x + services.x) / 2.0, (mine.y + services.y) / 2.0),
+    val medicalCenter: Point = Point(services.x, services.y - 30.0),
+    val seaCoastX: Double = mine.x + 80.0,
 ) {
     val byId: Map<String, Fixture> = fixtures.associateBy { it.id }
     val poles: List<Fixture> = fixtures.filter { it.kind == FixtureKind.POLE }
     val fence: List<Fixture> = fixtures.filter { it.kind == FixtureKind.FENCE }
+    val airDefenses: List<Fixture> = fixtures.filter { it.kind == FixtureKind.AIR_DEFENSE }
 }
 
 /**
@@ -107,10 +112,40 @@ fun buildTopology(manifest: RunManifest, config: WorldConfig): Topology {
     val mine = Point(housePoints.maxOf { it.x } + 120.0, housePoints.map { it.y }.average())
     val services = Point(housePoints.map { it.x }.average(), housePoints.minOf { it.y } - 90.0)
     val meeting = Point(services.x, services.y + 45.0)
+    val depository = Point((mine.x + services.x) / 2.0, (mine.y + services.y) / 2.0)
+    val medicalCenter = Point(services.x, services.y - 30.0)
+    val seaCoastX = housePoints.maxOf { it.x } + 90.0
 
-    // The fence encloses everything the colony owns and uses; the xenomorphs are the ones it keeps out.
+    fixtures += Fixture("storage/creatine", FixtureKind.DEPOSITORY, depository)
+    fixtures += Fixture("medical/center", FixtureKind.MEDICAL_CENTER, medicalCenter)
+
+    // Air Defense: Roof-mounted on selected houses and along settlement perimeter
+    for ((index, house) in houses.withIndex()) {
+        if (index % 12 == 0) {
+            val pos = positions.getValue(house)
+            fixtures += Fixture("defense/roof-${house.replace('/', '-')}", FixtureKind.AIR_DEFENSE, pos, feedsFrom = powerFeed[house])
+        }
+    }
+    val minX = housePoints.minOf { it.x }
+    val maxX = housePoints.maxOf { it.x }
+    val minY = housePoints.minOf { it.y }
+    val maxY = housePoints.maxOf { it.y }
+    val perimeterPoints = listOf(
+        Point(minX - 30.0, minY - 30.0),
+        Point(minX - 30.0, (minY + maxY) / 2),
+        Point(minX - 30.0, maxY + 30.0),
+        Point((minX + maxX) / 2, minY - 30.0),
+        Point((minX + maxX) / 2, maxY + 30.0),
+        Point(maxX + 30.0, minY - 30.0),
+        Point(maxX + 30.0, maxY + 30.0)
+    )
+    for ((idx, pt) in perimeterPoints.withIndex()) {
+        fixtures += Fixture("defense/perimeter-${idx + 1}", FixtureKind.AIR_DEFENSE, pt, feedsFrom = bus.id)
+    }
+
+    // The fence encloses everything the colony owns and uses; the xenomorphs/threats are the ones it keeps out.
     val fenceBox = if (!config.fence.enabled) null else {
-        val enclosed = fixtures.map { it.at } + listOf(mine, services, meeting) +
+        val enclosed = fixtures.map { it.at } + listOf(mine, services, meeting, depository, medicalCenter) +
             manifest.instances.filter { it.kind != "Xenomorph" }.map { Point(it.x, it.y) }
         val margin = config.fence.margin
         Box(enclosed.minOf { it.x } - margin, enclosed.minOf { it.y } - margin,
@@ -135,7 +170,7 @@ fun buildTopology(manifest: RunManifest, config: WorldConfig): Topology {
         val parent = instance.parent ?: continue
         if (parent in powerFeed) powerFeed[instance.id] = powerFeed.getValue(parent)
     }
-    return Topology(fixtures, powerFeed, waterPipe, houses, sources.map { it.id }, mine, services, meeting, fenceBox)
+    return Topology(fixtures, powerFeed, waterPipe, houses, sources.map { it.id }, mine, services, meeting, fenceBox, depository, medicalCenter, seaCoastX)
 }
 
 /** Instances by id, with the roles the kernel needs to find quickly. */

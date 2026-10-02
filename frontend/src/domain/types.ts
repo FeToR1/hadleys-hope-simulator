@@ -1,4 +1,4 @@
-export const KNOWN_ENTITY_TYPES = ['house', 'mine', 'heater', 'kettle', 'civilian', 'xenomorph', 'rover', 'marine', 'power_node', 'fence'] as const;
+export const KNOWN_ENTITY_TYPES = ['house', 'mine', 'heater', 'kettle', 'civilian', 'xenomorph', 'rover', 'marine', 'power_node', 'fence', 'air_defense', 'crocodile', 'depository', 'medical_center', 'fog'] as const;
 /** Kinds the observer may add later are shown generically instead of invalidating the whole snapshot. */
 export type EntityType = (typeof KNOWN_ENTITY_TYPES)[number] | 'other';
 
@@ -18,6 +18,18 @@ export interface EntityMetrics {
   passenger_capacity?: number;
   squad_size?: number;
   workers?: number;
+  creatine_stock?: number;
+  creatine_produced?: number;
+  creatine_sold?: number;
+  synergy_multiplier?: number;
+  sea_damage?: number;
+  in_fog?: boolean;
+  respirator_equipped?: boolean;
+  broken?: boolean;
+  ammo?: number;
+  width?: number;
+  height?: number;
+  depth?: number;
 }
 
 /** One line of the world's ledger: who was charged, what for, and how much. */

@@ -10,6 +10,7 @@ const KIND_LABEL: Record<string, string> = {
   electricity: 'электричество',
   water: 'вода',
   repair: 'ремонт',
+  creatine_sale: 'продажа креатина (доход)',
 };
 
 /** Money in minimal units; the settlement keeps whole units, so this only groups the digits. */
