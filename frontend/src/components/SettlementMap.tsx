@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
-import { Application, Circle, Container, Graphics, Text } from 'pixi.js';
+import { Application, Circle, Container, Graphics, GraphicsContext, Text } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import type { EntityState } from '../domain/types';
-import { createMapMarkers, DEFAULT_MAP_LAYERS, fenceSegments, isMobile, MAP_STATUS, MAP_TYPES, mapIconSvg, mapKind,
-  MOBILE_LAYERS, shortMapLabel, type MapKind, type MapLayers, type MapMarker } from '../domain/mapPresentation';
+import { DEFAULT_MAP_LAYERS, fenceSegments, isMobile, MAP_STATUS, MAP_TYPES, mapIconSvg, mapKind,
+  MOBILE_LAYERS, shortMapLabel, type MapKind, type MapLayers } from '../domain/mapPresentation';
 import { NavigationControls } from './NavigationControls';
+import { MapSceneIndex, type SceneMarker } from '../domain/mapScene';
 
 interface SettlementMapProps {
   entities: readonly EntityState[];
@@ -38,7 +39,7 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const [tooltip, setTooltip] = useState<{ id: string; count: number; x: number; y: number }>();
+  const [tooltip, setTooltip] = useState<{ id: string; count: number; clustered: boolean; x: number; y: number }>();
 
   useEffect(() => {
     const host = hostRef.current;
@@ -49,16 +50,34 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
     let resizeObserver: ResizeObserver | undefined;
     const app = new Application();
     const objects = new Map<string, MarkerView>();
-    let markers = new Map<string, MapMarker>();
+    let markers = new Map<string, SceneMarker>();
+    let indexedEntities: readonly EntityState[] | undefined;
+    let indexedLayers: MapLayers | undefined;
+    let indexedSelection: string | undefined;
+    let index: MapSceneIndex;
+    let redrawFrame = 0;
+    const iconContexts = new Map<string, GraphicsContext>();
+    const contextFor = (kind: MapKind, status: EntityState['status']): GraphicsContext => {
+      const key = kind === 'power_node' ? `${kind}:${status}` : kind;
+      let context = iconContexts.get(key);
+      if (!context) {
+        context = new GraphicsContext();
+        if (kind === 'power_node') context.circle(18, 18, 12).fill(MAP_STATUS[status].color);
+        else context.svg(mapIconSvg(kind));
+        iconContexts.set(key, context);
+      }
+      return context;
+    };
     let gridBounds = '';
     app.init({ width: 900, height: 650, background: 0x0c1520, antialias: true,
-      resolution: Math.min(window.devicePixelRatio || 1, 2), autoDensity: true }).then(() => {
+      resolution: Math.min(window.devicePixelRatio || 1, 1.5), autoDensity: true }).then(() => {
       if (disposed) { app.destroy(true, { children: true }); return; }
       initialized = true;
       const viewport = new Viewport({ events: app.renderer.events, screenWidth: host.clientWidth, screenHeight: host.clientHeight,
         worldWidth: 1800, worldHeight: 1500 });
       viewportRef.current = viewport;
-      viewport.drag().pinch().wheel().decelerate().clampZoom({ minScale: 0.12, maxScale: 4 });
+      viewport.drag().pinch().wheel().decelerate().clampZoom({ minScale: 0.015, maxScale: 4 });
+      app.ticker.maxFPS = 30;
       const grid = new Graphics();
       const fence = new Graphics();
       const scene = new Container();
@@ -82,9 +101,17 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
       };
 
       const redraw = (): void => {
+        if (disposed) return;
         const { entities: list, selectedId: selected } = currentRef.current;
-        const visible = createMapMarkers(list, displayRef.current.layers, selected);
-        markers = new Map(visible.map((marker) => [marker.entity.id, marker]));
+        if (!fitted && list.length) fit();
+        if (indexedEntities !== list || indexedLayers !== displayRef.current.layers || indexedSelection !== selected) {
+          index = new MapSceneIndex(list, displayRef.current.layers, selected);
+          indexedEntities = list; indexedLayers = displayRef.current.layers; indexedSelection = selected;
+        }
+        const visible = index.visible(viewport.getVisibleBounds(), viewport.scale.x);
+        markers = new Map(visible.map((marker) => [marker.key, marker]));
+        host.dataset.renderedMarkers = String(visible.length);
+        host.dataset.zoom = String(viewport.scale.x);
         const selectedEntity = list.find((entity) => entity.id === selected);
         // A coordinate grid is a reading aid, not an inferred road or network layout.
         const houses = list.filter((entity) => entity.type === 'house');
@@ -117,14 +144,14 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
         const occupiedLabels: { x: number; y: number; width: number }[] = [];
         // Reserve the selected label first. Hide colliding labels, not the entities underneath them.
         visible.sort((a, b) => Number(b.entity.id === selected) - Number(a.entity.id === selected));
-        for (const { entity, members } of visible) {
+        for (const { entity, members, key, clustered, position } of visible) {
           const kind = mapKind(entity.type);
           const design = MAP_TYPES[kind];
-          let view = objects.get(entity.id);
-          if (view && view.kind !== kind) { view.root.destroy({ children: true }); objects.delete(entity.id); view = undefined; }
+          let view = objects.get(key);
+          if (view && view.kind !== kind) { view.root.destroy({ children: true }); objects.delete(key); view = undefined; }
           if (!view) {
             const root = new Container();
-            const icon = new Graphics().svg(mapIconSvg(kind));
+            const icon = new Graphics({ context: contextFor(kind, entity.status) });
             icon.position.set(-18, -18);
             const outline = new Graphics();
             const label = new Text({ text: '', style: { fill: 0xb0c5dc, fontFamily: 'Arial', fontSize: 10, letterSpacing: 1 } });
@@ -137,16 +164,24 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
             status.anchor.set(0.5); status.position.set(17, -16);
             root.addChild(outline, icon, label, badge, status);
             root.eventMode = 'static'; root.cursor = 'pointer'; root.hitArea = new Circle(0, 0, 23);
-            root.on('pointertap', () => { host.focus({ preventScroll: true }); currentRef.current.onSelect(entity.id); });
+            root.on('pointertap', () => {
+              const marker = markers.get(key);
+              if (!marker) return;
+              host.focus({ preventScroll: true });
+              if (marker.clustered) {
+                viewport.setZoom(Math.min(4, viewport.scale.x * 2));
+                viewport.moveCenter(marker.position.x, marker.position.y); scheduleRedraw();
+              } else currentRef.current.onSelect(marker.entity.id);
+            });
             root.on('pointerover', (event) => {
-              const marker = markers.get(entity.id);
-              if (marker) setTooltip({ id: entity.id, count: marker.members.length,
+              const marker = markers.get(key);
+              if (marker) setTooltip({ id: marker.entity.id, count: marker.members.length, clustered: marker.clustered,
                 x: Math.max(8, Math.min(event.global.x + 16, host.clientWidth - 244)),
                 y: Math.max(8, Math.min(event.global.y + 16, host.clientHeight - 250)) });
             });
             root.on('pointerout', () => setTooltip(undefined));
             view = { root, icon, outline, label, badge, status, kind, decoration: '' };
-            objects.set(entity.id, view); scene.addChild(root);
+            objects.set(key, view); scene.addChild(root);
           }
           const chosen = entity.id === selected;
           const decoration = `${entity.status}:${chosen}`;
@@ -158,18 +193,18 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
             view.status.text = MAP_STATUS[entity.status].mark;
             view.status.style.fill = MAP_STATUS[entity.status].color;
             // Existing utility nodes retain their current status colours and simple appearance.
-            if (kind === 'power_node') view.icon.clear().circle(18, 18, 12).fill(MAP_STATUS[entity.status].color);
+            if (kind === 'power_node') view.icon.context = contextFor(kind, entity.status);
             view.decoration = decoration;
           }
           const related = !selected || chosen || entity.connectedTo.includes(selected) || selectedEntity?.connectedTo.includes(entity.id);
           view.root.alpha = related ? 1 : 0.7;
           view.icon.alpha = entity.status === 'dead' ? 0.45 : 1;
-          view.root.position.set(entity.coordinates.x, entity.coordinates.y);
+          view.root.position.set(position.x, position.y);
           // Minimum screen sizes keep threats and vehicles readable in the colony overview.
           const minimum = kind === 'mine' ? 54 : kind === 'house' ? 16 : kind === 'civilian' ? 10 : kind === 'power_node' ? 8 : 17;
           view.root.scale.set(Math.max(design.size, minimum / scale) / 36);
           view.root.zIndex = chosen ? 100 : kind === 'house' ? 1 : kind === 'power_node' ? 0 : kind === 'xenomorph' ? 20 : 10;
-          view.label.text = shortMapLabel(entity);
+          view.label.text = clustered ? '' : shortMapLabel(entity);
           view.label.scale.set(1 / (view.root.scale.x * scale));
           const labelBox = { x: entity.coordinates.x * scale, y: entity.coordinates.y * scale + 22 * view.root.scale.x * scale,
             width: view.label.text.length * 6 };
@@ -178,17 +213,22 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
           if (view.label.visible) occupiedLabels.push(labelBox);
           const passengers = entity.metrics.passenger_count ?? 0;
           view.badge.text = kind === 'mine' ? String(entity.metrics.workers ?? 0) : members.length > 1 ? String(members.length) : kind === 'rover' && passengers > 0 ? String(passengers) : '';
+          view.badge.scale.set(1 / (view.root.scale.x * scale));
+          view.status.scale.set(1 / (view.root.scale.x * scale));
         }
-        if (!fitted && list.length) { fit(); redraw(); }
       };
-      redrawRef.current = redraw;
-      fitRef.current = () => { fit(); redraw(); setTooltip(undefined); };
-      viewport.on('zoomed', () => { setZoom(viewport.scale.x); setTooltip(undefined); redraw(); });
+      const scheduleRedraw = (): void => {
+        if (!redrawFrame && !disposed) redrawFrame = requestAnimationFrame(() => { redrawFrame = 0; redraw(); });
+      };
+      redrawRef.current = scheduleRedraw;
+      fitRef.current = () => { fit(); scheduleRedraw(); setTooltip(undefined); };
+      viewport.on('zoomed', () => { setZoom(viewport.scale.x); setTooltip(undefined); scheduleRedraw(); });
+      viewport.on('moved', scheduleRedraw);
       viewport.on('drag-start', () => setTooltip(undefined));
       resizeObserver = new ResizeObserver(() => {
         if (disposed) return;
         const width = Math.max(1, host.clientWidth); const height = Math.max(1, host.clientHeight);
-        app.renderer.resize(width, height); viewport.resize(width, height); redraw();
+        app.renderer.resize(width, height); viewport.resize(width, height); scheduleRedraw();
       });
       app.renderer.resize(Math.max(1, host.clientWidth), Math.max(1, host.clientHeight));
       viewport.resize(Math.max(1, host.clientWidth), Math.max(1, host.clientHeight));
@@ -199,13 +239,15 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
         const entity = currentRef.current.entities.find((item) => item.id === id);
         if (!entity) return;
         if (isMobile(entity.type)) setLayers((previous) => ({ ...previous, [entity.type]: true }));
-        viewport.setZoom(1.5); viewport.moveCenter(entity.coordinates.x, entity.coordinates.y); setZoom(viewport.scale.x); redraw();
+        viewport.setZoom(1.5); viewport.moveCenter(entity.coordinates.x, entity.coordinates.y); setZoom(viewport.scale.x); scheduleRedraw();
       });
     }).catch(() => { if (!disposed) setError(true); });
     return () => {
       disposed = true; resizeObserver?.disconnect(); redrawRef.current = null; fitRef.current = null; viewportRef.current = null;
+      if (redrawFrame) cancelAnimationFrame(redrawFrame);
       objects.clear();
       if (initialized) app.destroy(true, { children: true });
+      for (const context of iconContexts.values()) context.destroy();
       host.replaceChildren();
     };
   }, []);
@@ -253,12 +295,12 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
         <div className="map-legend-grid">{(['house', 'mine', 'civilian', 'rover', 'marine', 'xenomorph', 'power_node', 'fence'] as const).map((kind) =>
           <div key={kind} className="map-legend-item"><MapIcon kind={kind} /><span>{MAP_TYPES[kind].label}</span></div>)}</div>
         <div className="map-status-legend"><span>Без метки — норма</span><span className="map-warning">! Внимание</span><span className="map-critical">! Критическое</span><span className="map-dead">× Погиб / разрушен</span></div>
-        <p>Число у значка — группа, пассажиры или шахтёры на смене.</p>
+        <p>Издалека дома и жители объединяются в группы. Нажмите на группу, чтобы приблизить.</p>
       </div>}
       {hovered && tooltip && <div className="entity-tooltip map-tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
         <div className="map-tooltip-heading"><MapIcon kind={mapKind(hovered.type)} /><div><strong>{MAP_TYPES[mapKind(hovered.type)].singular}</strong><span>{hovered.id}</span></div></div>
         <span style={{ color: MAP_STATUS[hovered.status].color }}>{MAP_STATUS[hovered.status].label}</span>
-        {tooltip.count > 1 && <span>В этой точке: {tooltip.count}</span>}
+        {tooltip.count > 1 && <span>{tooltip.clustered ? 'В группе' : 'В этой точке'}: {tooltip.count}</span>}
         {hovered.type === 'mine' && <span>Шахтёров на смене: {hovered.metrics.workers ?? 0}</span>}
         {hovered.type === 'rover' && <span>Пассажиры: {hovered.metrics.passenger_count ?? 0} / {hovered.metrics.passenger_capacity ?? '—'}</span>}
         {hovered.type === 'marine' && <span>Бойцов в отряде: {hovered.metrics.squad_size ?? '—'}</span>}
@@ -267,10 +309,10 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
         {hovered.metrics.power_consumption !== undefined && <span>Мощность: {hovered.metrics.power_consumption.toFixed(0)} W</span>}
         {hovered.metrics.health !== undefined && <span>Здоровье: {hovered.metrics.health.toFixed(0)} hp</span>}
         {hovered.pid !== null && <span>PID: {hovered.pid}</span>}
-        <small>Нажмите, чтобы открыть подробности</small>
+        <small>{tooltip.clustered ? 'Нажмите, чтобы приблизить группу' : 'Нажмите, чтобы открыть подробности'}</small>
       </div>}
       <NavigationControls disabled={!ready} onZoomIn={() => zoomTo(Math.min(4, zoom * 1.35))}
-        onZoomOut={() => zoomTo(Math.max(0.12, zoom / 1.35))} onReset={() => fitRef.current?.()} />
+        onZoomOut={() => zoomTo(Math.max(0.015, zoom / 1.35))} onReset={() => fitRef.current?.()} />
       <div className="map-footer"><div className="map-scale"><span style={{ width: scaleMeters * zoom }} /><small>{scaleMeters} м</small></div>
         <span className="map-gesture-hint">Перетаскивание — перемещение · Колесо — масштаб</span><span>{Math.round(zoom * 100)}%</span></div>
     </div>

@@ -9,6 +9,32 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.*
 
 class RunControllerTest {
+    @Test fun compactHistoryIsBoundedAndLegacyJsonRemainsAvailable() {
+        RunController(small(20), compactLive = true).use { controller ->
+            repeat(10) { controller.stepOnce() }
+            val update = assertNotNull(controller.awaitUpdate(null, -1, 0))
+            assertEquals((2L..9L).toList(), update.frames.map { it.tick })
+            assertTrue(update.gap)
+            for (frame in update.frames) {
+                assertNotNull(frame.snapshot)
+                val legacy = Json.parseToJsonElement(frame.json).jsonObject
+                assertEquals(1, legacy.getValue("version").jsonPrimitive.int)
+                assertEquals(frame.tick, legacy.getValue("tickId").jsonPrimitive.long)
+            }
+        }
+    }
+    @Test fun anEvictedCursorDoesNotLoseHistoryIfEveryFollowingTickIsAvailable() {
+        for (compact in listOf(false, true)) {
+            RunController(small(10), replayCapacity = 2, compactLive = compact).use { controller ->
+                controller.stepOnce()
+                val first = assertNotNull(controller.awaitUpdate(null, -1, 0))
+                repeat(2) { controller.stepOnce() }
+                val replay = assertNotNull(controller.awaitUpdate(first.frames.single().eventId, first.revision, 0))
+                assertFalse(replay.gap)
+                assertEquals(listOf(1L, 2L), replay.frames.map { it.tick })
+            }
+        }
+    }
     private fun small(ticks: Int): PreparedRun {
         val prepared = prepareScenario(Path.of("../examples/integration/small.json"))
         return prepared.copy(scenario = prepared.scenario.copy(ticks = ticks))

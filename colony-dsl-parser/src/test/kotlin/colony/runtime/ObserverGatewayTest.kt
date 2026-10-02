@@ -10,6 +10,27 @@ import org.junit.jupiter.api.Timeout
 import kotlin.test.*
 
 class ObserverGatewayTest {
+    @Test @Timeout(15) fun compactStreamStartsWithBaselineThenSendsAChainedDelta() {
+        val prepared = prepareScenario(Path.of("../examples/integration/small.json"))
+        RunController(prepared, compactLive = true).use { controller ->
+            ObserverGateway(controller, 0).start().use { gateway ->
+                controller.stepOnce()
+                val request = HttpRequest.newBuilder(URI("http://127.0.0.1:${gateway.port}/stream?format=compact")).build()
+                val response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofInputStream())
+                response.body().bufferedReader().use { reader ->
+                    val initial = reader.nextEvent().data
+                    assertEquals(2, initial.getValue("version").jsonPrimitive.int)
+                    assertTrue(initial.getValue("full").jsonPrimitive.boolean)
+                    assertEquals("health", reader.nextEvent().type)
+                    controller.stepOnce()
+                    val delta = reader.nextEvent().data
+                    assertFalse(delta.getValue("full").jsonPrimitive.boolean)
+                    assertEquals(0, delta.getValue("baseTick").jsonPrimitive.int)
+                    assertEquals(1, delta.getValue("tickId").jsonPrimitive.int)
+                }
+            }
+        }
+    }
     private data class Event(val type: String, val id: String?, val data: JsonObject)
 
     private fun java.io.BufferedReader.nextEvent(): Event {

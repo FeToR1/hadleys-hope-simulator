@@ -102,12 +102,17 @@ class ObserverGateway(
             writer.flush()
             var seen = exchange.requestHeaders.getFirst("Last-Event-ID")
             var revision = -1L
+            val compact = if (queryParameter(exchange.requestURI, "format") == "compact") CompactObserver() else null
             while (!Thread.currentThread().isInterrupted) {
                 val update = controller.awaitUpdate(seen, revision, KEEP_ALIVE_MILLIS)
                 if (update != null) {
-                    if (update.gap) writer.write("event: gap\ndata: {\"reason\":\"Replay history expired\"}\n\n")
+                    if (update.gap) {
+                        compact?.reset()
+                        writer.write("event: gap\ndata: {\"reason\":\"Replay history expired\"}\n\n")
+                    }
                     for (frame in update.frames) {
-                        writer.write("id: ${frame.eventId}\ndata: ${frame.json}\n\n")
+                        val payload = compact?.encode(requireNotNull(frame.snapshot)) ?: frame.json
+                        writer.write("id: ${frame.eventId}\ndata: $payload\n\n")
                         seen = frame.eventId
                     }
                     writer.write("event: health\ndata: ${update.health}\n\n")
@@ -173,7 +178,8 @@ private fun configuredAllowedHosts(): Set<String> =
 /** Entry point of the serve command: runs until the process is stopped. */
 fun serveReference(prepared: PreparedRun, port: Int, fleetFactory: (PreparedRun, String) -> VmFleet = { p, _ -> ReferenceFleet(p) }) {
     require(port in 1..65535)
-    val controller = RunController(prepared, fleetFactory = fleetFactory)
+    val controller = RunController(prepared, fleetFactory = fleetFactory,
+        compactLive = System.getenv("HH_COMPACT_OBSERVER") == "1")
     val pacer = RunPacer(controller)
     val gateway = try { ObserverGateway(controller, port) } catch (error: Exception) { controller.close(); throw error }
     Runtime.getRuntime().addShutdownHook(Thread { pacer.close(); gateway.close(); controller.close() })

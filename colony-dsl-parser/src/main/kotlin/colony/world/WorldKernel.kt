@@ -51,10 +51,47 @@ class WorldKernel(
     private val stepSeconds: Double,
 ) {
     private val people = Population(manifest)
+    // Static topology is indexed once; snapshot creation must not scan the city for every fixture.
+    private val fixtureFeeds: Map<String, List<String>> = run {
+        val feeds = HashMap<String, MutableList<String>>()
+        topology.powerFeed.forEach { (id, feed) -> feeds.getOrPut(feed) { ArrayList() }.add(id) }
+        topology.fixtures.forEach { fixture ->
+            if (fixture.kind == FixtureKind.POLE) fixture.feedsFrom?.let { feeds.getOrPut(it) { ArrayList() }.add(fixture.id) }
+            fixture.serves?.let { feeds.getOrPut(fixture.id) { ArrayList() }.add(it) }
+        }
+        feeds.mapValues { (_, ids) -> ids.distinct().sorted() }
+    }
+    // Appliances never move. Query nearby cells, then apply the original exact distance/health predicates.
+    private val applianceCellSize = maxOf(1.0, config.human.vandalRadius)
+    private fun applianceCell(p: Point) = kotlin.math.floor(p.x / applianceCellSize).toLong() to
+        kotlin.math.floor(p.y / applianceCellSize).toLong()
+    private val applianceCells = people.appliances.groupBy { applianceCell(Point(it.x, it.y)) }
+    private val powerClasses = (manifest.instances.map { it.id to it.kind } + (PUMP to "Pump"))
+        .groupBy { config.power.priorityOf(it.second) }.toSortedMap()
+        .mapValues { (_, consumers) -> consumers.map { it.first }.sorted() }
     private val dt = stepSeconds
     private var elapsedSeconds = 0.0
     private var currentTick = -1L
     private val routineSlots = people.residents.sortedBy { it.id }.mapIndexed { index, resident -> resident.id to index }.toMap()
+    private val deviceChildren = people.childrenOf.mapValues { (_, children) ->
+        children.filter { it.kind == "Heater" || it.kind == "Kettle" }.sortedBy { it.id }
+    }
+    private val deviceViews = HashMap<String, Pair<List<Boolean>, JsonArray>>()
+    private val homeViews = people.houses.associate { it.id to pointJson(Point(it.x, it.y)) }
+    private val workplaceViews = listOf(topology.mine, topology.services).associateWith(::pointJson)
+    private val meetingView = pointJson(topology.meeting)
+    private val depotViews = people.rovers.associate { it.id to pointJson(Point(it.x, it.y)) }
+
+    private fun devicesOf(id: String): JsonArray {
+        val children = deviceChildren[id].orEmpty()
+        val broken = children.map { isBroken(it.id) }
+        deviceViews[id]?.takeIf { it.first == broken }?.let { return it.second }
+        val view = JsonArray(children.mapIndexed { index, child -> buildJsonObject {
+            put("id", child.id); put("kind", child.kind); put("broken", broken[index])
+        } })
+        deviceViews[id] = broken to view
+        return view
+    }
 
     // --- state the kernel owns
     private val health = HashMap<String, Double>()
@@ -103,9 +140,7 @@ class WorldKernel(
                 else -> isPowered(fixture.id)
             },
             // What hangs off this fixture: the poles and consumers it feeds, or the house a pipe serves.
-            feeds = (topology.powerFeed.filterValues { it == fixture.id }.keys +
-                topology.fixtures.filter { it.feedsFrom == fixture.id && it.kind == FixtureKind.POLE }.map { it.id } +
-                listOfNotNull(fixture.serves)).distinct().sorted(),
+            feeds = fixtureFeeds[fixture.id].orEmpty(),
             from = fixture.from, to = fixture.to,
         )
     }
@@ -175,9 +210,7 @@ class WorldKernel(
                 "health" -> JsonPrimitive(healthOf(id))
                 "position" -> pointJson(positionOf(id))
                 "cold" -> JsonPrimitive((insideTemperature[houseId] ?: config.house.initialTemperature) < config.house.coldThreshold)
-                "devices" -> JsonArray(people.childrenOf[id].orEmpty().filter { it.kind == "Heater" || it.kind == "Kettle" }
-                    .sortedBy { it.id }
-                    .map { buildJsonObject { put("id", it.id); put("kind", it.kind); put("broken", isBroken(it.id)) } })
+                "devices" -> devicesOf(id)
                 "reachable_breakables" -> targets(id, reachableAppliances(instance))
                 // The substation is fenced off; what stands in the open is the distribution poles, and the fence
                 // segment the hunter has just run into.
@@ -190,12 +223,12 @@ class WorldKernel(
                 }.map { it.id }, config.sight.xenomorphRadius)
                 "patrol_waypoint" -> pointJson(patrolPoint(id))
                 "routed" -> JsonPrimitive(isRouted(id))
-                "home" -> pointJson(positionOf(instance.parent ?: id))
-                "workplace" -> pointJson(workplaceOf(id))
-                "meeting_point" -> pointJson(topology.meeting)
+                "home" -> homeViews[instance.parent ?: id] ?: pointJson(positionOf(instance.parent ?: id))
+                "workplace" -> workplaceViews.getValue(workplaceOf(id))
+                "meeting_point" -> meetingView
                 "routine_slot" -> JsonPrimitive(routineSlots[id] ?: 0)
                 "day_minute" -> JsonPrimitive((config.human.startMinute + (elapsedSeconds / 60).toLong()) % 1440)
-                "depot" -> pointJson(depotOf(instance))
+                "depot" -> depotViews[id] ?: pointJson(depotOf(instance))
                 "active_jobs" -> jobList(id)
                 "materials_remaining" -> JsonPrimitive(config.repair.materials)
                 "speed_eff" -> JsonPrimitive(config.repair.roverSpeed)
@@ -315,7 +348,7 @@ class WorldKernel(
 
     private fun nearestVisibleXenomorph(marineId: String): String? {
         val here = positionOf(marineId)
-        return people.byId.values.asSequence()
+        return people.xenomorphs.asSequence()
             // Behind a fence the squads defend the colony: they go after intruders, not what roams outside.
             .filter { it.kind == "Xenomorph" && !isBroken(it.id) && !isRouted(it.id) && topology.fenceBox?.contains(positionOf(it.id)) != false }
             .map { it.id to here.distanceTo(positionOf(it.id)) }
@@ -422,7 +455,14 @@ class WorldKernel(
 
     private fun reachableAppliances(instance: Instance): List<String> {
         val here = positionOf(instance.id)
-        return people.appliances.filter { !isBroken(it.id) && positionOf(it.id).distanceTo(here) <= config.human.vandalRadius }.map { it.id }
+        val (x, y) = applianceCell(here)
+        return buildList {
+            for (dx in -1L..1L) for (dy in -1L..1L) {
+                for (appliance in applianceCells[x + dx to y + dy].orEmpty()) {
+                    if (!isBroken(appliance.id) && positionOf(appliance.id).distanceTo(here) <= config.human.vandalRadius) add(appliance.id)
+                }
+            }
+        }
     }
 
     /**
@@ -780,15 +820,13 @@ class WorldKernel(
         val fromUps = if (isBroken("grid/ups")) 0.0 else minOf(config.power.upsMaxPower, upsCharge * config.power.upsEfficiency / dt)
         var budget = reactor + (if (isBroken("grid/solar")) 0.0 else solar)
         granted.clear()
-        val byClass = requested.entries
-            .sortedWith(compareBy({ config.power.priorityOf(kindOf(it.key)) }, { it.key }))
-            .groupBy { config.power.priorityOf(kindOf(it.key)) }
+        val byClass = powerClasses.mapValues { (_, ids) -> ids.mapNotNull { id -> requested[id]?.let { id to it } } }
         var usedUps = 0.0
         for (klass in byClass.keys.sorted()) {
             val entries = byClass.getValue(klass)
-            val wanted = entries.sumOf { it.value }
+            val wanted = entries.sumOf { it.second }
             if (wanted <= budget) {
-                entries.forEach { granted[it.key] = it.value }
+                entries.forEach { granted[it.first] = it.second }
                 budget -= wanted
                 continue
             }
@@ -797,9 +835,9 @@ class WorldKernel(
             usedUps += fromBattery
             val available = budget + fromBattery
             val share = if (wanted > 0) available / wanted else 0.0
-            entries.forEach { granted[it.key] = it.value * share }
+            entries.forEach { granted[it.first] = it.second * share }
             budget = 0.0
-            for (rest in byClass.keys.sorted().filter { it > klass }) byClass.getValue(rest).forEach { granted[it.key] = 0.0 }
+            for (rest in byClass.keys.sorted().filter { it > klass }) byClass.getValue(rest).forEach { granted[it.first] = 0.0 }
             break
         }
         upsCharge = if (usedUps > 0) {

@@ -60,7 +60,7 @@ export function App(): JSX.Element {
   useEffect(() => {
     const live = new LiveBrokerSource({
       healthUrl: '/health',
-      streamUrl: '/stream',
+      streamUrl: '/stream?format=compact',
       controlUrl: '/control',
       onHealthChange: setBrokerHealth,
       onConnectionChange: (connected) => {

@@ -24,6 +24,7 @@ import kotlin.io.path.*
 class ProcessFleet(prepared: PreparedRun, executable: Path, runId: String,
                    private val timeoutMillis: Long = 10_000, startupTimeoutMillis: Long = 120_000) : VmFleet {
     override val mode = "process"
+    override val workerCount = 8
     override val pids: Map<String, Int>
     val brokerPid: Long get() = broker.pid()
     private val closed = AtomicBoolean(false)

@@ -43,7 +43,7 @@ fun prepareScenario(path: Path): PreparedRun {
     val catalogPath = absolute.parent.resolve(scenario.catalog).normalize()
     val catalog = bytecodeJson.decodeFromString<Catalog>(catalogPath.readText())
     require(scenario.version == 1 && catalog.version == 1) { "Unsupported scenario/catalog version" }
-    require(scenario.ticks in 1..1_000_000) { "ticks must be in 1..1000000" }
+    require(scenario.ticks > 0) { "ticks must be positive" }
     require(catalog.sources.isNotEmpty() && catalog.sources.distinct().size == catalog.sources.size) { "Sources must be nonempty and unique" }
     // The sources form one compilation package; diagnostics are mapped back to the individual file names.
     val sources = catalog.sources.map { SourceFile(it, catalogPath.parent.resolve(it).readText()) }
@@ -60,10 +60,10 @@ fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgra
     require(scenario.populations.map { it.prefix }.distinct().size == scenario.populations.size) { "Duplicate population prefix" }
     var groupIndex = 0
     for (population in scenario.populations) {
-        require(population.count in 0..10_000 && identifier.matches(population.prefix)) { "Invalid population count/prefix" }
+        require(population.count >= 0 && identifier.matches(population.prefix)) { "Invalid population count/prefix" }
         val template = catalog.templates[population.template] ?: error("Unknown template ${population.template}")
         require(template.objects.isNotEmpty()) { "Empty template ${population.template}" }
-        require(instances.size.toLong() + population.count.toLong() * template.objects.size <= 10_000) { "Reference limit: 10000 instances" }
+        require(instances.size.toLong() + population.count.toLong() * template.objects.size <= Int.MAX_VALUE) { "Instance count exceeds JVM collection capacity" }
         repeat(population.count) { index ->
             val group = "${population.prefix}-${index + 1}"
             fun resolve(value: JsonElement): JsonElement = when (value) {

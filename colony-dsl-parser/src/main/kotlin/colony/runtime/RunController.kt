@@ -20,21 +20,22 @@ class RunController(
     private val prepared: PreparedRun,
     private val fleetFactory: (PreparedRun, String) -> VmFleet = { p, _ -> ReferenceFleet(p) },
     private val replayCapacity: Int = 256,
+    private val compactLive: Boolean = false,
     private val newRunId: () -> String = { UUID.randomUUID().toString() },
 ) : AutoCloseable {
     private fun createRun(): ReferenceRun { val id = newRunId(); return ReferenceRun(prepared, id, fleetFactory(prepared, id)) }
     enum class Status { WAITING, RUNNING, PAUSED, COMPLETED, FAILED }
 
     /** One committed step exactly as observers receive it. */
-    data class Frame(val sequence: Long, val runId: String, val tick: Long, val json: String) {
+    class Frame(val sequence: Long, val runId: String, val tick: Long, private val serialized: String?, val snapshot: TickSnapshot? = null) {
         val eventId: String get() = "$runId:$sequence"
+        val json: String by lazy { serialized ?: observerJson.encodeToString(requireNotNull(snapshot)) }
     }
 
     data class Update(val revision: Long, val frames: List<Frame>, val health: JsonObject, val gap: Boolean)
 
     private val lock = ReentrantLock()
     private val committed = lock.newCondition()
-    private val json = Json { encodeDefaults = true }
     private var run = createRun() // fail fast: a broken program must not start a server
     private var status = Status.WAITING
     private var failure: String? = null
@@ -122,6 +123,11 @@ class RunController(
             put("version", 1); put("runtimeMode", run.runtimeMode); put("runId", run.runId)
             put("status", status.name.lowercase()); put("tick", latest?.tick ?: -1L)
             put("ticks", prepared.scenario.ticks); put("stepsPerSecond", speed)
+            put("contexts", prepared.manifest.instances.size)
+            put("houses", prepared.manifest.instances.count { it.kind == "House" })
+            put("behaviorWorkers", run.behaviorWorkers); put("nativeProcesses", run.nativeProcesses)
+            put("lastStepMs", run.lastTimings.let { it.observeMs + it.behaviorMs + it.worldMs + it.snapshotMs })
+            put("observationMode", if (compactLive) "compact" else "full")
             failure?.let { put("error", it) }
         }
     }
@@ -133,9 +139,14 @@ class RunController(
             if (remaining <= 0) return@withLock null
             remaining = committed.awaitNanos(remaining)
         }
-        val previous = history.firstOrNull { it.eventId == afterId }
-        val gap = previous == null && history.isNotEmpty() && history.first().tick > 0
-        val frames = if (previous == null) history.toList() else history.filter { it.sequence > previous.sequence }
+        val first = history.firstOrNull()
+        // The cursor itself can be evicted while every tick AFTER it is still available.
+        val cursor = afterId?.substringAfterLast(':')?.toLongOrNull()?.takeIf {
+            first != null && afterId.substringBeforeLast(':') == first.runId &&
+                it >= first.sequence - 1 && it <= sequence
+        }
+        val gap = cursor == null && first != null && first.tick > 0
+        val frames = if (cursor == null) history.toList() else history.filter { it.sequence > cursor }
         Update(revision, frames, health(), gap)
     }
 
@@ -143,13 +154,17 @@ class RunController(
         try {
             val snapshot = run.step()
             sequence++
-            val frame = Frame(sequence, snapshot.runId, snapshot.tickId, json.encodeToString(snapshot))
+            val frame = Frame(sequence, snapshot.runId, snapshot.tickId,
+                if (compactLive) null else observerJson.encodeToString(snapshot), snapshot)
             latest = frame
             history.addLast(frame)
-            historyChars += frame.json.length
+            if (!compactLive) historyChars += frame.json.length
             // Bound both frame count and payload size, retaining at least the current snapshot.
-            while (history.size > 1 && (history.size > replayCapacity || historyChars > MAX_REPLAY_CHARS)) {
-                historyChars -= history.removeFirst().json.length
+            val capacity = if (compactLive) minOf(replayCapacity, 8,
+                maxOf(1, MAX_REPLAY_ENTITIES / maxOf(1, snapshot.entities.size))) else replayCapacity
+            while (history.size > 1 && (history.size > capacity || historyChars > MAX_REPLAY_CHARS)) {
+                val removed = history.removeFirst()
+                if (!compactLive) historyChars -= removed.json.length
             }
             status = if (snapshot.tickId + 1 >= prepared.scenario.ticks) Status.COMPLETED else continueAs
             if (status == Status.COMPLETED) run.close()
@@ -173,8 +188,11 @@ class RunController(
         const val MIN_STEPS_PER_SECOND = 0.1
         const val MAX_STEPS_PER_SECOND = 100.0
         private const val MAX_REPLAY_CHARS = 16L * 1024 * 1024
+        private const val MAX_REPLAY_ENTITIES = 250_000
     }
 }
+
+private val observerJson = Json { encodeDefaults = true }
 
 /** Background thread that calls [RunController.tick] at the configured speed. */
 class RunPacer(private val controller: RunController) : AutoCloseable {

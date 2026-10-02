@@ -58,6 +58,11 @@ private val APPLIANCES = setOf("Heater", "Kettle")
 class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUID().toString(),
                    private val fleet: VmFleet = ReferenceFleet(prepared)) : AutoCloseable {
     val runtimeMode: String get() = fleet.mode
+    val behaviorWorkers: Int get() = fleet.workerCount
+    val nativeProcesses: Int get() = fleet.pids.values.toSet().size
+    data class StepTimings(val observeMs: Double, val behaviorMs: Double, val worldMs: Double, val snapshotMs: Double)
+    var lastTimings = StepTimings(0.0, 0.0, 0.0, 0.0)
+        private set
     override fun close() = fleet.close()
     private data class Delivery(val recipient: String, val event: DeliveredEvent)
 
@@ -83,6 +88,8 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     private val subscriptions = behaviors.mapValues { (_, behavior) -> behavior.handlers.mapNotNull { it.eventId }.toSet() }
     private val eventIds = prepared.program.events.associate { it.name to it.id }
     private val childrenOf = objects.values.filter { it.parent != null }.groupBy { it.parent!! }
+    private var previousFixtures = emptyList<colony.world.FixtureState>()
+    private var fixtureEntities = emptyList<EntitySnapshot>()
     /** Power granted in the previous step: what a device sees as power_granted. */
     private var granted = emptyMap<String, Double>()
 
@@ -218,19 +225,21 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     }
 
     fun step(): TickSnapshot {
+        val startedAt = System.nanoTime()
         check(!failed) { "Run failed; create a fresh run before continuing" }
         check(tick < prepared.scenario.ticks) { "Run complete" }
         try {
             val changeEvents = applyChanges()
             val changeDeliveries = changeEvents.flatMap(::deliveriesOf)
             // Materialize all observations before executing any VM (snapshot isolation).
-            val snapshot = objects.mapValues { (id, instance) -> observe(id, instance) }
             val messageInboxes = pending.groupBy({ it.target }, { DeliveredEvent(it.eventId, it.fields, it.sender, it.sequence) })
             val worldInboxes = (pendingWorld + changeDeliveries).groupBy({ it.recipient }, { it.event })
-            val frames = objects.mapValues { (id, _) ->
-                VmFrame(tick, snapshot.getValue(id), messageInboxes[id].orEmpty() + worldInboxes[id].orEmpty())
+            val frames = objects.mapValues { (id, instance) ->
+                VmFrame(tick, observe(id, instance), messageInboxes[id].orEmpty() + worldInboxes[id].orEmpty())
             }
+            val observedAt = System.nanoTime()
             val results = fleet.step(frames)
+            val executedAt = System.nanoTime()
             val delivered = pending.size + pendingWorld.size + changeDeliveries.size
             val outgoing = results.values.flatMap { it.events }
             require(outgoing.all { it.target in objects }) { "SEND references an unknown object" }
@@ -310,6 +319,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
             granted = if (kernel == null) HashMap(power) else emptyMap()
             pending = outgoing
             pendingWorld = events.flatMap(::deliveriesOf)
+            val worldAt = System.nanoTime()
             val entities = objects.map { (id, instance) ->
                 val state = results.getValue(id).state
                 EntitySnapshot(id = id, pid = fleet.pids[id], type = when (instance.kind) { "Human" -> "civilian"; else -> instance.kind.lowercase() },
@@ -342,7 +352,12 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                     }, connectedTo = listOfNotNull(instance.parent, kernel?.vehicleOf(id)), coordinates = positionOf(id), parentId = instance.parent, vmState = state)
             }
             // The grid and the water network have no program of their own, but an observer has to see them.
-            val fixtures = kernel?.fixtureState().orEmpty().map { fixture ->
+            val fixtureStates = kernel?.fixtureState().orEmpty()
+            // Only the pump has a changing consumption metric; all other fixture metrics are health.
+            val pumpPower = kernel?.grantedOf("water/pump")
+            if (previousFixtures != fixtureStates || fixtureEntities.firstOrNull { it.id == "water/pump" }
+                    ?.metrics?.get("power_consumption")?.jsonPrimitive?.double != pumpPower) {
+                fixtureEntities = fixtureStates.map { fixture ->
                 EntitySnapshot(
                     id = fixture.id, pid = null, type = if (fixture.kind == "fence") "fence" else "power_node",
                     status = if (fixture.health <= 0) "dead" else if (!fixture.powered) "warning" else "nominal",
@@ -358,7 +373,10 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                         fixture.to?.let { put("to", buildJsonObject { put("x", it.x); put("y", it.y) }) }
                     },
                 )
+                }
+                previousFixtures = fixtureStates
             }
+            val fixtures = fixtureEntities
             val sites = kernel?.let { world ->
                 val at = world.minePosition
                 val workers = entities.filter { entity ->
@@ -377,7 +395,11 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                 timestamp = ((tick + 1) * dt * 1000).toLong(), entities = entities + fixtures + sites,
                 effects = intents.mapIndexed { index, it -> TraceEvent(it.source, it.operation.name, it.arguments, it.source in ableToAct, refs[index]) },
                 events = changeEvents + events, postings = kernel?.lastPostings.orEmpty(),
-                deliveredEvents = delivered).also { tick++ }
+                deliveredEvents = delivered).also {
+                    lastTimings = StepTimings((observedAt - startedAt) / 1e6, (executedAt - observedAt) / 1e6,
+                        (worldAt - executedAt) / 1e6, (System.nanoTime() - worldAt) / 1e6)
+                    tick++
+                }
         } catch (failure: Exception) { failed = true; close(); throw failure }
     }
 }

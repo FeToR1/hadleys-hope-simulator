@@ -15,24 +15,38 @@ import java.security.MessageDigest
 @Serializable data class VmResult(val intents: List<VmIntent>, val events: List<OutgoingEvent>, val state: JsonObject)
 
 /** Temporary, in-process reference for the future native VM. It executes the actual stack artifact. */
-class ReferenceVm(
+class ReferenceVm private constructor(
     val entityId: String,
     private val program: BytecodeProgram,
     behaviorName: String,
     parameters: JsonObject = JsonObject(emptyMap()),
     private val seed: Long = 426,
-    private val instructionBudget: Int = 100_000,
+    private val instructionBudget: Int,
+    verifyProgram: Boolean,
 ) {
+    constructor(entityId: String, program: BytecodeProgram, behaviorName: String,
+                parameters: JsonObject = JsonObject(emptyMap()), seed: Long = 426,
+                instructionBudget: Int = 100_000) : this(entityId, program, behaviorName, parameters, seed, instructionBudget, true)
+
+    internal class VerifiedProgram(val program: BytecodeProgram) {
+        init { BytecodeVerifier.verify(program) }
+        fun context(instance: Instance, seed: Long) =
+            ReferenceVm(instance.id, program, instance.behavior, instance.params, seed, 100_000, false)
+    }
     val behavior: BehaviorCode = program.behaviors.single { it.name == behaviorName }
     private val params = behavior.params.map { slot -> parameters[slot.name] ?: error("Missing parameter ${slot.name} for $entityId") }
     private val state = MutableList<JsonElement?>(behavior.state.size) { null }
     private val counters = linkedMapOf<Pair<String, String>, Long>()
     private var sequence = 0L
     private var remaining = instructionBudget
+    private val operandStack = ArrayList<JsonElement>()
+    private val temporaries = arrayOfNulls<JsonElement>(behavior.temporaryCount)
+    private val localSlots = arrayOfNulls<JsonElement>(behavior.handlers.maxOfOrNull { it.localCount } ?: 0)
+    private var cachedState: JsonObject? = null
     val randomDrawCount: Long get() = counters.values.sum()
 
     init {
-        BytecodeVerifier.verify(program)
+        if (verifyProgram) BytecodeVerifier.verify(program)
         require(parameters.keys == behavior.params.map { it.name }.toSet()) { "Parameter names do not match ${behavior.name}" }
         val initialized = mutableListOf<VmIntent>()
         val events = mutableListOf<OutgoingEvent>()
@@ -41,7 +55,8 @@ class ReferenceVm(
         require(state.none { it == null }) { "Uninitialized state in ${behavior.name}" }
     }
 
-    fun stateSnapshot(): JsonObject = JsonObject(behavior.state.mapIndexed { index, slot -> slot.name to (state[index] ?: error("Uninitialized state")) }.toMap())
+    fun stateSnapshot(): JsonObject = cachedState ?: JsonObject(behavior.state.mapIndexed { index, slot ->
+        slot.name to (state[index] ?: error("Uninitialized state")) }.toMap()).also { cachedState = it }
 
     fun step(frame: VmFrame): VmResult {
         require(frame.tick >= 0) { "Negative tick" }
@@ -62,19 +77,20 @@ class ReferenceVm(
                     execute(handler.entry, handler.localCount, handler.name, frame, JsonObject(emptyMap()), intents, outgoing)
                 }
             }
-            return VmResult(intents.toList(), outgoing.toList(), stateSnapshot())
+            return VmResult(intents, outgoing, stateSnapshot())
         } catch (failure: Exception) {
             previousState.forEachIndexed { index, value -> state[index] = value }
             counters.clear(); counters.putAll(previousCounters); sequence = previousSequence
+            cachedState = null
             throw failure
         }
     }
 
     private fun execute(entry: Int, localCount: Int, rule: String, frame: VmFrame, message: JsonObject,
                         intents: MutableList<VmIntent>, outgoing: MutableList<OutgoingEvent>) {
-        val stack = mutableListOf<JsonElement>()
-        val temps = arrayOfNulls<JsonElement>(behavior.temporaryCount)
-        val locals = arrayOfNulls<JsonElement>(localCount)
+        val stack = operandStack.apply { clear() }
+        val temps = temporaries.apply { fill(null) }
+        val locals = localSlots.apply { fill(null) }
         fun pop(): JsonElement = stack.removeLastOrNull() ?: error("Operand stack underflow")
         fun arguments(count: Int): List<JsonElement> = List(count) { pop() }.reversed()
         fun record(names: List<String>): JsonObject = JsonObject(names.zip(arguments(names.size)).toMap())
@@ -92,7 +108,10 @@ class ReferenceVm(
                     Op.STORE_TEMP -> temps[instruction.arg] = pop()
                     Op.LOAD_PARAM -> stack += params[instruction.arg]
                     Op.LOAD_STATE -> stack += state[instruction.arg] ?: error("Uninitialized state")
-                    Op.STORE_STATE -> state[instruction.arg] = pop()
+                    Op.STORE_STATE -> {
+                        val value = pop()
+                        if (state[instruction.arg] != value) { state[instruction.arg] = value; cachedState = null }
+                    }
                     Op.LOAD_LOCAL -> stack += locals[instruction.arg] ?: error("Uninitialized local")
                     Op.STORE_LOCAL -> locals[instruction.arg] = pop()
                     Op.LOAD_MESSAGE -> stack += message
@@ -149,6 +168,8 @@ class ReferenceVm(
         } catch (failure: Exception) {
             val instruction = behavior.code.getOrNull(pc)
             throw IllegalStateException("VM $entityId, tick ${frame.tick}, rule $rule, pc $pc, ${instruction?.line}:${instruction?.column}: ${failure.message}", failure)
+        } finally {
+            stack.clear(); temps.fill(null); locals.fill(null)
         }
     }
 
@@ -193,20 +214,37 @@ private fun convert(value: JsonElement, type: String): JsonElement = when {
     else -> value
 }
 
-private fun binary(operation: String, type: String, left: JsonElement, right: JsonElement): JsonElement {
-    fun decimal(value: JsonElement): java.math.BigDecimal? {
-        val primitive = (value as? JsonPrimitive)?.takeUnless { it.isString } ?: return null
-        primitive.longOrNull?.let { return java.math.BigDecimal.valueOf(it) }
-        // Compare the exact binary Real64 value, not its rounded decimal rendering in JSON.
-        return primitive.doubleOrNull?.let { java.math.BigDecimal(it) }
+/** Same exact mixed Int64/Real64 ordering as C++; no BigDecimal allocation in the interpreter loop. */
+internal fun compareNumbers(left: JsonElement, right: JsonElement): Int? {
+    val a = (left as? JsonPrimitive)?.takeUnless { it.isString } ?: return null
+    val b = (right as? JsonPrimitive)?.takeUnless { it.isString } ?: return null
+    val ai = a.longOrNull; val bi = b.longOrNull
+    if (ai != null && bi != null) return ai.compareTo(bi)
+    fun mixed(integer: Long, real: Double): Int {
+        if (real >= 9223372036854775808.0) return -1
+        if (real < -9223372036854775808.0) return 1
+        val truncated = real.toLong()
+        if (integer != truncated) return integer.compareTo(truncated)
+        val fraction = real - truncated.toDouble()
+        return if (fraction > 0) -1 else if (fraction < 0) 1 else 0
     }
-    val a = decimal(left); val b = decimal(right)
+    val ad = a.doubleOrNull ?: return null; val bd = b.doubleOrNull ?: return null
+    return when {
+        ai != null -> mixed(ai, bd)
+        bi != null -> -mixed(bi, ad)
+        ad < bd -> -1
+        ad > bd -> 1
+        else -> 0
+    }
+}
+
+private fun binary(operation: String, type: String, left: JsonElement, right: JsonElement): JsonElement {
     if (operation == "EQ" || operation == "NEQ") {
-        val equal = if (a != null && b != null) a.compareTo(b) == 0 else left == right
+        val equal = compareNumbers(left, right)?.let { it == 0 } ?: (left == right)
         return JsonPrimitive(if (operation == "EQ") equal else !equal)
     }
-    if (operation in setOf("LT", "LE", "GT", "GE")) {
-        val comparison = requireNotNull(a).compareTo(requireNotNull(b))
+    if (operation == "LT" || operation == "LE" || operation == "GT" || operation == "GE") {
+        val comparison = requireNotNull(compareNumbers(left, right))
         return JsonPrimitive(when (operation) { "LT" -> comparison < 0; "LE" -> comparison <= 0; "GT" -> comparison > 0; else -> comparison >= 0 })
     }
     if (type == "Int64" || type == "Money") {

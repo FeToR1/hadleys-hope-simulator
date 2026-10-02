@@ -69,12 +69,15 @@ export function fenceSegments(entities: readonly EntityState[]): FenceSegment[] 
 export function createMapMarkers(entities: readonly EntityState[], layers: MapLayers, selectedId?: string): MapMarker[] {
   const byId = new Map(entities.map((entity) => [entity.id, entity]));
   const mines = entities.filter((entity) => entity.type === 'mine');
+  const workersAtMine = new Map<string, EntityState>();
+  for (const mine of mines) for (const id of mine.connectedTo) workersAtMine.set(id, mine);
   const markers = new Map<string, MapMarker>();
   for (const entity of entities) {
     if (entity.type === 'heater' || entity.type === 'kettle' || entity.type === 'fence' || (isMobile(entity.type) && !layers[entity.type])) continue;
     // Workers are inside the mine; its counter represents them. A selected worker stays visible.
-    if (entity.type === 'civilian' && entity.id !== selectedId && mines.some((mine) => mine.connectedTo.includes(entity.id) &&
-      Math.hypot(mine.coordinates.x - entity.coordinates.x, mine.coordinates.y - entity.coordinates.y) < 1)) continue;
+    const mine = workersAtMine.get(entity.id);
+    if (entity.type === 'civilian' && entity.id !== selectedId && mine &&
+      Math.hypot(mine.coordinates.x - entity.coordinates.x, mine.coordinates.y - entity.coordinates.y) < 1) continue;
     // A connection alone does not mean someone is aboard: the positions must also match.
     const vehicle = entity.connectedTo.map((id) => byId.get(id)).find((candidate) => candidate?.type === 'rover' &&
       Math.hypot(candidate.coordinates.x - entity.coordinates.x, candidate.coordinates.y - entity.coordinates.y) < 0.1);
