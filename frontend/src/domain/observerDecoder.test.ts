@@ -40,4 +40,46 @@ describe('compact observer reconstruction', () => {
     const added = { ...home, id: 'new-home' };
     expect(decoder.decode(frame(1, false, [added], { removed: ['home'] })).entities.map(entity => entity.id)).toEqual(['new-home']);
   });
+  it('reuses unchanged identities and keeps earlier frames intact after ingestion', () => {
+    const decoder = new ObserverDecoder(); const manager = new StateManager();
+    const first = decoder.decode(frame(0, true, [home, { ...home, id: 'neighbor', type: 'future-kind' }]));
+    manager.ingest(first);
+    const second = decoder.decode(frame(1, false, [{ id: 'home', coordinates: { x: 5, y: 6 }, parentId: 'neighbor' }]));
+    manager.ingest(second);
+    expect(second.entities[1]).toBe(first.entities[1]);
+    expect(second.entities[1].type).toBe('other');
+    expect(second.entities[0]).not.toBe(first.entities[0]);
+    expect(second.entities[0].metrics).toBe(first.entities[0].metrics);
+    expect(first.entities[0].coordinates).toEqual({ x: 0, y: 0 });
+    expect(first.entities[0].parentId).toBeUndefined();
+    const third = decoder.decode(frame(2, false, [{ id: 'home', parentId: null }]));
+    expect(third.entities[0].parentId).toBeUndefined();
+    expect(second.entities[0].parentId).toBe('neighbor');
+    expect(decoder.decode(frame(3, false, [])).entities[0]).toBe(third.entities[0]);
+  });
+  it('rejects invalid patches, removals, envelopes and facts without committing them', () => {
+    const decoder = new ObserverDecoder();
+    const first = decoder.decode(frame(0, true, [home, { ...home, id: 'neighbor' }]));
+    const badFrames = [
+      frame(1, false, [{ id: 'home', unexpected: 2 }]),
+      frame(1, false, [{ id: 'home', metrics: null }]),
+      frame(1, false, [{ id: 'home', connectedTo: [2] }]),
+      frame(1, false, [{ id: 'home', vmState: null }]),
+      frame(1, false, [{ id: 'home', pid: 0 }]),
+      frame(1, false, [], { removed: ['neighbor', 'neighbor'] }),
+      frame(1, false, [], { removed: ['missing'] }),
+      frame(1, false, [{ id: 'home' }], { removed: ['home'] }),
+      frame(1, false, [{ id: 'home', status: 'dead' }], { events: [{ id: 'bad' }] }),
+      frame(1, false, [{ id: 'home', status: 'dead' }], { postings: [{ tick: 1, owner: 'home', kind: 'power', amount: -1 }] }),
+      frame(1, false, [{ id: 'home', status: 'dead' }], { timestamp: Infinity }),
+      frame(1, true, [{ id: 'incomplete', status: 'dead' }]),
+      frame(1, true, [home, home]),
+    ];
+    for (const bad of badFrames) expect(() => decoder.decode(bad)).toThrow();
+    const next = decoder.decode(frame(1, false, []));
+    expect(next.entities[0]).toBe(first.entities[0]);
+    expect(next.entities[1]).toBe(first.entities[1]);
+    expect(next.entities[0].status).toBe('nominal');
+  });
+
 });

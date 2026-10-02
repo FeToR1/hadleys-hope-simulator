@@ -147,43 +147,49 @@ export function parseHealth(value: unknown): BrokerHealth | undefined {
     stepsPerSecond: item.stepsPerSecond, error: item.error };
 }
 
-/** Validate the observer boundary before a payload can partially mutate application state. */
-export function parseTickBatch(value: unknown): TickBatch {
-  const record = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-  const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const record = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+
+/** Validate and normalize one entity at the observer boundary. */
+export function parseObserverEntity(entity: unknown): TickBatch['entities'][number] {
+  if (!record(entity) || typeof entity.id !== 'string' ||
+    !(entity.pid === null || (Number.isSafeInteger(entity.pid) && Number(entity.pid) > 0)) ||
+    typeof entity.type !== 'string' || entity.type === '' ||
+    !['nominal', 'warning', 'critical', 'dead'].includes(String(entity.status)) ||
+    !record(entity.metrics) || !Object.values(entity.metrics).every(finite) ||
+    !Array.isArray(entity.connectedTo) || !entity.connectedTo.every((id) => typeof id === 'string') ||
+    !record(entity.coordinates) || !finite(entity.coordinates.x) || !finite(entity.coordinates.y) ||
+    !(entity.parentId === undefined || entity.parentId === null || typeof entity.parentId === 'string') ||
+    !(entity.vmState === undefined || record(entity.vmState))) throw new Error('Invalid entity');
+  return {
+    ...entity,
+    type: (KNOWN_ENTITY_TYPES as readonly string[]).includes(entity.type) ? entity.type : 'other' as EntityType,
+    parentId: entity.parentId ?? undefined,
+  } as TickBatch['entities'][number];
+}
+
+/** Validate per-tick data separately so compact ticks need only validate changed entities. */
+export function parseObserverEnvelope(value: unknown): Omit<TickBatch, 'entities'> {
   if (!record(value) || value.version !== 1 || typeof value.runId !== 'string' || !value.runId ||
     typeof value.seed !== 'string' || !['reference', 'process'].includes(String(value.runtimeMode)) ||
     value.full !== true || !Number.isSafeInteger(value.tickId) || Number(value.tickId) < 0 ||
     !finite(value.timestamp) || !Array.isArray(value.entities)) throw new Error('Invalid observer envelope');
+  return { ...value, effects: parseEffects(value.effects), events: parseEvents(value.events),
+    postings: parsePostings(value.postings) } as Omit<TickBatch, 'entities'>;
+}
+
+/** Validate the observer boundary before a payload can partially mutate application state. */
+export function parseTickBatch(value: unknown): TickBatch {
+  const envelope = parseObserverEnvelope(value);
   const ids = new Set<string>();
-  for (const entity of value.entities) {
-    if (!record(entity) || typeof entity.id !== 'string' || ids.has(entity.id) ||
-      !(entity.pid === null || (Number.isSafeInteger(entity.pid) && Number(entity.pid) > 0)) ||
-      typeof entity.type !== 'string' || entity.type === '' ||
-      !['nominal', 'warning', 'critical', 'dead'].includes(String(entity.status)) ||
-      !record(entity.metrics) || !Object.values(entity.metrics).every(finite) ||
-      !Array.isArray(entity.connectedTo) || !entity.connectedTo.every((id) => typeof id === 'string') ||
-      !record(entity.coordinates) || !finite(entity.coordinates.x) || !finite(entity.coordinates.y) ||
-      !(entity.parentId === undefined || entity.parentId === null || typeof entity.parentId === 'string') ||
-      !(entity.vmState === undefined || record(entity.vmState))) throw new Error('Invalid entity');
-    ids.add(entity.id);
-  }
-  const effects = parseEffects(value.effects);
-  const events = parseEvents(value.events);
-  const postings = parsePostings(value.postings);
-  // Kotlin JSON emits explicit nulls; the UI uses undefined for absent parents.
-  // A kind this UI does not know yet is kept and drawn as a generic object.
-  return {
-    ...value,
-    effects,
-    events,
-    postings,
-    entities: value.entities.map((entity) => ({
-      ...entity,
-      type: (KNOWN_ENTITY_TYPES as readonly string[]).includes(String(entity.type)) ? entity.type : 'other' as EntityType,
-      parentId: entity.parentId ?? undefined,
-    })),
-  } as unknown as TickBatch;
+  const entities = (value as Record<string, unknown>).entities as unknown[];
+  return { ...envelope, entities: entities.map(entity => {
+    const parsed = parseObserverEntity(entity);
+    if (ids.has(parsed.id)) throw new Error('Invalid entity');
+    ids.add(parsed.id);
+    return parsed;
+  }) };
 }
 
 function parsePostings(value: unknown): Posting[] {
