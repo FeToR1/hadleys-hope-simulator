@@ -14,7 +14,7 @@ import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
     try {
-        val usage = "Usage: check SOURCE | compile SOURCE OUTPUT | prepare SCENARIO OUTPUT_DIR | run[-native] SCENARIO [OUTPUT.jsonl] | serve[-native] SCENARIO [PORT] | contract [OUTPUT.json] | conformance OUTPUT_DIR | emit SOURCE OUT.cvm | disasm ARTIFACT.cvm"
+        val usage = "Usage: check SOURCE | compile SOURCE OUTPUT | prepare SCENARIO OUTPUT_DIR | benchmark[-live] SCENARIO [TICKS] | run[-native] SCENARIO [OUTPUT.jsonl] | serve[-native] SCENARIO [PORT] | contract [OUTPUT.json] | conformance OUTPUT_DIR | emit SOURCE OUT.cvm | disasm ARTIFACT.cvm"
         if (args.firstOrNull() == "contract") {
             require(args.size in 1..2) { usage }
             val document = bytecodeJson.encodeToString(contractDocument())
@@ -26,6 +26,7 @@ fun main(args: Array<String>) {
         fun nativeFleet(p: PreparedRun, id: String): VmFleet = ProcessFleet(p,
             NativeVmConnection.executable() ?: error("Build native/ or set HH_VM to the hh-vm executable"), id)
         when (args[0]) {
+            "benchmark", "benchmark-live" -> benchmarkScenario(input, args.getOrNull(2)?.toInt() ?: 30, args[0] == "benchmark-live")
             "broker" -> { require(args.size == 2); runNativeBroker(input) }
             "check" -> { require(args.size == 2); val code = compileSources(listOf(SourceFile(input.fileName.toString(), input.readText()))); println("OK: ${code.behaviors.size} behaviors, ${code.events.size} events") }
             "compile" -> { require(args.size == 3); Path.of(args[2]).writeText(bytecodeJson.encodeToString(compileSources(listOf(SourceFile(input.fileName.toString(), input.readText()))))) }

@@ -1,4 +1,5 @@
 import { KNOWN_ENTITY_TYPES, type EntityType, type Posting, type TickBatch, type TraceEffect, type WorldEvent } from './types';
+import { ObserverDecoder } from './observerDecoder';
 
 export type RunStatus = 'waiting' | 'running' | 'paused' | 'completed' | 'failed';
 
@@ -27,6 +28,7 @@ interface LiveSourceOptions {
 }
 
 export class LiveBrokerSource {
+  private readonly decoder = new ObserverDecoder();
   private healthTimer: ReturnType<typeof setInterval> | undefined;
   private stream: EventSource | undefined;
   private healthRevision = 0;
@@ -95,7 +97,7 @@ export class LiveBrokerSource {
     stream.onmessage = (event) => {
       if (this.stream !== stream) return;
       try {
-        this.options.onBatch(parseTickBatch(JSON.parse(event.data)));
+        this.options.onBatch(this.decoder.decode(JSON.parse(event.data)));
       } catch {
         this.options.onError('Live Broker прислал некорректный TickBatch');
       }
@@ -112,7 +114,7 @@ export class LiveBrokerSource {
       }
     });
     stream.addEventListener('gap', () => {
-      if (this.stream === stream) this.options.onGap?.();
+      if (this.stream === stream) { this.decoder.reset(); this.options.onGap?.(); }
     });
     stream.onerror = () => {
       if (this.stream !== stream) return;
@@ -124,6 +126,7 @@ export class LiveBrokerSource {
   }
 
   public disconnect(): void {
+    this.decoder.reset();
     this.healthRevision++;
     if (this.stream) { this.stream.onopen = null; this.stream.onmessage = null; this.stream.onerror = null; }
     this.stream?.close();

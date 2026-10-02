@@ -145,6 +145,7 @@ internal class Population(manifest: RunManifest) {
     val appliances: List<Instance> = manifest.instances.filter { it.kind == "Heater" || it.kind == "Kettle" }
     val residents: List<Instance> = manifest.instances.filter { it.kind == "Human" }
     val marines: List<Instance> = manifest.instances.filter { it.kind == "Marine" }
+    val xenomorphs: List<Instance> = manifest.instances.filter { it.kind == "Xenomorph" }
     val rovers: List<Instance> = manifest.instances.filter { it.kind == "Rover" }
     val childrenOf: Map<String, List<Instance>> = manifest.instances.filter { it.parent != null }.groupBy { it.parent!! }
 }

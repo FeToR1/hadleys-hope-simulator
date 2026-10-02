@@ -31,6 +31,44 @@ class WorldKernelTest {
         cascade().let { prepared -> ReferenceRun(prepared, "test").use { } }
     }
 
+    @Test fun indexedFixtureLinksMatchTheOriginalTopologyTraversal() {
+        val prepared = cascade()
+        val config = prepared.scenario.world!!
+        val topology = buildTopology(prepared.manifest, config)
+        val kernel = WorldKernel(prepared.manifest, config, topology, 1.0)
+        val fixtures = kernel.fixtureState().associateBy { it.id }
+        for (fixture in topology.fixtures) {
+            val expected = (topology.powerFeed.filterValues { it == fixture.id }.keys +
+                topology.fixtures.filter { it.feedsFrom == fixture.id && it.kind == FixtureKind.POLE }.map { it.id } +
+                listOfNotNull(fixture.serves)).distinct().sorted()
+            assertEquals(expected, fixtures.getValue(fixture.id).feeds, fixture.id)
+        }
+    }
+
+    @Test fun indexedAppliancesMatchBruteForceAcrossCellEdgesAndDamage() {
+        val prepared = cascade()
+        val config = prepared.scenario.world!!
+        val manifest = prepared.manifest.copy(instances = prepared.manifest.instances.map { instance ->
+            if (instance.kind == "Heater" || instance.kind == "Kettle") instance.copy(x = -12.0, y = -12.0) else instance
+        })
+        val appliances = manifest.instances.filter { it.kind == "Heater" || it.kind == "Kettle" }
+        val broken = appliances.first().id
+        for (point in listOf(Point(-24.0, -12.0), Point(-12.0, -24.0), Point(-0.01, -12.0), Point(0.01, -12.0))) {
+            val observer = manifest.instances.first { it.kind == "Human" }.copy(id = "observer", x = point.x, y = point.y)
+            // Use a real entity at each position so the kernel's position lookup sees the test point.
+            val shifted = manifest.copy(instances = manifest.instances + observer)
+            val world = WorldKernel(shifted, config, buildTopology(shifted, config), 1.0)
+            world.step(0, listOf(colony.runtime.VmIntent(broken, colony.bytecode.Op.DAMAGE_REQUEST,
+                listOf(JsonPrimitive(broken), JsonPrimitive(1000.0), JsonPrimitive("test")))), listOf("damage"), setOf(broken))
+            val expected = appliances.filter { !world.isBroken(it.id) && point.distanceTo(world.positionOf(it.id)) <= config.human.vandalRadius }
+                .sortedWith(compareBy({ point.distanceTo(world.positionOf(it.id)) }, { it.id }))
+                .take(config.sight.listLimit).map { it.id }
+            val actual = world.view(observer, setOf("reachable_breakables")).getValue("reachable_breakables").jsonArray
+                .map { it.jsonObject.getValue("id").jsonPrimitive.content }
+            assertEquals(expected, actual, point.toString())
+        }
+    }
+
     @Test fun aHouseFollowsTheClosedFormOfItsThermalModel() {
         val prepared = cascade()
         val world = prepared.scenario.world!!

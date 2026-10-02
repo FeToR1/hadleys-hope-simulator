@@ -1,0 +1,132 @@
+{
+  "version": 1,
+  "catalog": "catalog.json",
+  "seed": 426,
+  "step": "1s",
+  "ticks": 86400,
+  "populations": [
+    {
+      "template": "crew",
+      "count": 4,
+      "prefix": "crew"
+    },
+    {
+      "template": "transport",
+      "count": 2,
+      "prefix": "transport"
+    },
+    {
+      "template": "marine_squad",
+      "count": 2,
+      "prefix": "marines"
+    },
+    {
+      "template": "household",
+      "count": 5000,
+      "prefix": "home"
+    },
+    {
+      "template": "alien",
+      "count": 12,
+      "prefix": "alien"
+    }
+  ],
+  "changes": [],
+  "world": {
+    "version": 1,
+    "climate": {
+      "meanTemperature": -30.0,
+      "amplitude": 10.0,
+      "dayLengthSeconds": 86400.0,
+      "sunriseSeconds": 21600.0,
+      "sunsetSeconds": 64800.0,
+      "weatherFactor": 0.8
+    },
+    "power": {
+      "reactorPower": 2000000.0,
+      "solarPeak": 600000.0,
+      "upsCapacity": 1800000000.0,
+      "upsInitialCharge": 1800000000.0,
+      "upsMaxPower": 300000.0,
+      "upsEfficiency": 0.95,
+      "housesPerPole": 20,
+      "poleHealth": 100.0,
+      "priorities": {
+        "Pump": 0,
+        "Heater": 1,
+        "Kettle": 2
+      }
+    },
+    "water": {
+      "pumpPower": 40000.0,
+      "freezeThresholdIndoor": 5400.0,
+      "houseDemand": 6e-06
+    },
+    "house": {
+      "conductance": 200.0,
+      "capacity": 10000000.0,
+      "heaterEfficiency": 1.0,
+      "initialTemperature": 20.0,
+      "coldThreshold": 10.0,
+      "kettleVolume": 1.7,
+      "kettleHeatLoss": 3.0
+    },
+    "human": {
+      "startMinute": 480,
+      "harmThreshold": 5.0,
+      "harmPerKelvinHour": 0.5,
+      "vandalRadius": 12.0
+    },
+    "marine": {
+      "responseDelaySeconds": 300.0,
+      "assaultRadius": 4.0,
+      "minSquadSize": 4,
+      "maxSquadSize": 5,
+      "routSeconds": 600.0
+    },
+    "transport": {
+      "boardRadius": 6.0,
+      "passengerCapacity": 5,
+      "walkRadius": 120.0,
+      "boardingWaitSeconds": 90.0
+    },
+    "repair": {
+      "duration": {
+        "pole": 300.0,
+        "pipe": 600.0,
+        "device": 180.0,
+        "fence": 240.0
+      },
+      "parts": {
+        "pole": 120000,
+        "pipe": 80000,
+        "device": 40000,
+        "fence": 30000
+      },
+      "hourlyRate": 150000,
+      "workRadius": 6.0,
+      "dispatchDelaySeconds": 120.0,
+      "materials": 24,
+      "roverSpeed": 9.0
+    },
+    "tariffs": {
+      "electricityPerKwh": 900,
+      "waterPerCubicMetre": 4500,
+      "billingIntervalSeconds": 3600,
+      "monthSeconds": 2592000
+    },
+    "sight": {
+      "sightRadius": 2000.0,
+      "listLimit": 16,
+      "attackRadius": 3.0,
+      "xenomorphRadius": 150.0
+    },
+    "fence": {
+      "enabled": true,
+      "margin": 40.0,
+      "segmentLength": 60.0,
+      "health": 400.0,
+      "roamingDistance": 120.0
+    }
+  }
+}

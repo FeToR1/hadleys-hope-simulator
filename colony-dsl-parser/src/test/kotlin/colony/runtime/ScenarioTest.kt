@@ -5,6 +5,34 @@ import java.nio.file.Path
 import kotlin.test.*
 
 class ScenarioTest {
+    @Test fun fiveThousandHousesPreserveTheFullWorldConfiguration() {
+        val base = prepareScenario(Path.of("../examples/physics/full.json"))
+        val large = prepareScenario(Path.of("../examples/physics/full-5000.json"))
+        assertEquals(5000, large.manifest.instances.count { it.kind == "House" })
+        assertEquals(20028, large.manifest.instances.size)
+        assertEquals(base.scenario.world, large.scenario.world)
+        assertEquals(base.scenario.seed, large.scenario.seed)
+        assertEquals(base.scenario.step, large.scenario.step)
+        assertEquals(base.scenario.ticks, large.scenario.ticks)
+        assertEquals(base.scenario.populations.filter { it.template != "household" },
+            large.scenario.populations.filter { it.template != "household" })
+    }
+
+    @Test fun aMonthAtOneSecondStepsPassesScenarioValidation() {
+        val directory = java.nio.file.Files.createTempDirectory("colony-month-")
+        val scenario = directory.resolve("month.json")
+        try {
+            val base = prepareScenario(Path.of("../examples/physics/full.json"))
+            val catalog = Path.of("../examples/physics/catalog.json").toAbsolutePath().normalize()
+            java.nio.file.Files.writeString(scenario, colony.bytecode.bytecodeJson.encodeToString(
+                Scenario.serializer(), base.scenario.copy(catalog = catalog.toString(), ticks = 2_592_000)))
+            assertEquals(2_592_000, prepareScenario(scenario).scenario.ticks)
+        } finally {
+            java.nio.file.Files.deleteIfExists(scenario)
+            java.nio.file.Files.deleteIfExists(directory)
+        }
+    }
+
     @Test fun catalogExpansionAndReplayHaveStableResults() {
         val prepared = prepareScenario(Path.of("../examples/integration/small.json"))
         assertEquals(9, prepared.manifest.instances.size)
