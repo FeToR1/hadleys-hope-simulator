@@ -31,15 +31,18 @@
 ```
 
 Скрипт собирает backend и запускает backend/UI в фоне на портах 8080/5173. Использует `full-5000.json`,
-4 рабочих потока поведения, компактный поток наблюдений, общий JVM-процесс с максимумом heap 2 ГиБ и скорость 2 тика/с.
+4 рабочих потока поведения, компактный поток наблюдений, общий JVM-процесс с максимумом heap 2 ГиБ и целевую скорость 10 тиков/с.
 Мир содержит 20 028 контекстов; климат, мощности, службы, шаг 1 с и длительность суток сохранены из `full.json`.
 Логи и PID — `results/local-5000.json`, `results/*-5000*.log`. `-Workers N` меняет число рабочих потоков,
 `-Speed 10` задаёт целевые 10 тиков/с, `-BackendPort`/`-FrontendPort` меняют порты, `-SkipBuild` использует готовую сборку.
-На этой машине замер расчёта с компактным кодированием даёт около 3,35 тика/с: заданная скорость не гарантирует фактическую.
+На этой машине замер объединённого `development` с компактным кодированием даёт около 6,22 тика/с без HTTP и браузера:
+заданная скорость не гарантирует фактическую. Быстрый расчёт без промежуточных снимков достигает 10,47 тика/с
+в коротком замере без записи журнала; условия и ограничения приведены в [отчёте](docs/optimization-5000.md#проверка-и-слияние-с-development).
 Это эталонный режим `reference`; текущий `serve-native` всё ещё создаёт процесс на сущность.
 Карта объединяет дома и жителей в группы издалека, при приближении рисует только видимую область.
 
-Для ручного запуска и замера после `installDist`:
+Для ручного запуска и замера после `installDist` (на Windows пересборка требует остановки сервера,
+использующего JAR из этого каталога):
 
 ```powershell
 $env:JAVA_OPTS = '-Xms512m -Xmx2g'
@@ -47,6 +50,7 @@ $env:HH_REFERENCE_WORKERS = '4'
 $env:HH_COMPACT_OBSERVER = '1'
 .\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark examples/physics/full-5000.json 120
 .\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-live examples/physics/full-5000.json 120
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-fast examples/physics/full-5000.json 120
 .\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat serve examples/physics/full-5000.json 8080
 ```
 
@@ -55,6 +59,16 @@ $env:HH_COMPACT_OBSERVER = '1'
 1 000 000 тиков сняты; количества остаются положительными/неотрицательными `Int`, общий размер манифеста проверяется до переполнения.
 `HH_COMPACT_OBSERVER=1` отключает обязательное кодирование полных кадров на каждом шаге сервера.
 UI запрашивает `/stream?format=compact`; обычный `/stream` и JSONL сохраняют полный формат.
+
+Для расчёта сценария без карты используйте `run-fast SCENARIO [OUTPUT.jsonl]`. Команда выполняет каждый тик
+модели и строит полный снимок в конце. Без файла выводится один JSON с итогами и контрольной суммой;
+с файлом сохраняются события и проводки каждого тика, а последний кадр содержит полный мир.
+Промежуточные кадры имеют `full=false` и пустые списки сущностей и намерений: это журнал фактов,
+его нельзя загружать как запись полных кадров наблюдателя. Обычный `run` сохраняет полный журнал.
+
+```powershell
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat run-fast examples/physics/full-5000.json
+```
 
 Прежний нативный сценарий на 300 домах через Docker:
 

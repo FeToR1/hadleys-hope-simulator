@@ -69,18 +69,20 @@ class ScenarioTest {
         assertFailsWith<IllegalArgumentException> { expandScenario(scenario, catalog.copy(templates = mapOf("bad" to badParams)), prepared.program) }
     }
 
-    @Test fun aPowerOutageInTheDemoScenarioReachesTheHeaterAndTheResident() {
+    @Test fun aPowerOutageInTheDemoScenarioReachesTheHouseAndItsAppliances() {
         val run = ReferenceRun(prepareScenario(Path.of("../examples/integration/small.json")), "test")
         val frames = (0..46).map { run.step() }
         fun power(tick: Int) = frames[tick].entities.single { it.id == "home-2/heater" }.metrics.getValue("power_consumption").jsonPrimitive.double
         fun stress(tick: Int) = frames[tick].entities.single { it.id == "home-2/resident" }.vmState.getValue("stress").jsonPrimitive.double
         assertEquals(2000.0, power(19), "the heater draws power while the house is connected")
         assertEquals(0.0, power(20), "the heater sees power_connected = false in the same frame")
-        assertEquals(0.15, stress(20) - stress(19), 1e-9, "the resident reacts to PowerLost")
+        // docs/simulation/trigger-conditions.md, section 3: residents are not recipients of a house power event.
+        assertEquals(0.0, stress(20) - stress(19), 1e-9, "the resident does not hear about the house power")
         assertEquals(2000.0, power(46), "and draws again after PowerRestored at tick 45")
         val lost = frames[20].events.single { it.type == "PowerLost" }
         assertEquals("home-2/house", lost.entityId)
-        assertContains(lost.recipients, "home-2/resident")
+        assertContains(lost.recipients, "home-2/heater")
+        assertFalse(lost.recipients.contains("home-2/resident"))
         assertEquals(1, frames.flatMap { it.events }.count { it.type == "PowerRestored" })
     }
 }

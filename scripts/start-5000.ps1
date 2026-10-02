@@ -2,7 +2,7 @@ param(
     [ValidateRange(1, 256)][int]$Workers = 4,
     [ValidateRange(1, 65535)][int]$BackendPort = 8080,
     [ValidateRange(1, 65535)][int]$FrontendPort = 5173,
-    [ValidateRange(0.1, 100)][double]$Speed = 2,
+    [ValidateRange(0.1, 100)][double]$Speed = 10,
     [string]$Scenario = 'examples/physics/settlement-5000.json',
     [switch]$SkipBuild
 )

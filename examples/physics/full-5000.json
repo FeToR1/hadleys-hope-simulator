@@ -46,12 +46,14 @@
       "reactorPower": 2000000.0,
       "solarPeak": 600000.0,
       "upsCapacity": 1800000000.0,
+      "upsInitialCharge": 1800000000.0,
       "upsMaxPower": 300000.0,
       "upsEfficiency": 0.95,
       "housesPerPole": 20,
       "poleHealth": 100.0,
       "priorities": {
         "Pump": 0,
+        "Ups": 0,
         "Heater": 1,
         "Kettle": 2
       }

@@ -6,6 +6,8 @@ import colony.runtime.RunManifest
 import colony.runtime.VmIntent
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
+import java.util.ArrayDeque
+import java.util.concurrent.ConcurrentHashMap
 
 /** A fact the kernel established during one step; the run gives it an id, a cause and a place in the journal. */
 data class KernelEvent(
@@ -66,9 +68,9 @@ class WorldKernel(
     private fun applianceCell(p: Point) = kotlin.math.floor(p.x / applianceCellSize).toLong() to
         kotlin.math.floor(p.y / applianceCellSize).toLong()
     private val applianceCells = people.appliances.groupBy { applianceCell(Point(it.x, it.y)) }
-    private val powerClasses = (manifest.instances.map { it.id to it.kind } + (PUMP to "Pump"))
+    private val powerClasses = (manifest.instances.map { it.id to it.kind } + (PUMP to "Pump") + (UPS to "Ups"))
         .groupBy { config.power.priorityOf(it.second) }.toSortedMap()
-        .mapValues { (_, consumers) -> consumers.map { it.first }.sorted() }
+        .values.map { consumers -> consumers.map { it.first }.sorted() }
     private val dt = stepSeconds
     private var elapsedSeconds = 0.0
     private var currentTick = -1L
@@ -128,6 +130,7 @@ class WorldKernel(
     private fun depotOf(instance: Instance): Point = crewDepots[instance.id] ?: Point(instance.x, instance.y)
     private val depotViews = people.rovers.associate { it.id to pointJson(depotOf(it)) }
 
+    @Synchronized
     private fun devicesOf(id: String): JsonArray {
         val children = deviceChildren[id].orEmpty()
         val broken = children.map { isBroken(it.id) }
@@ -163,11 +166,15 @@ class WorldKernel(
     /** Xenomorphs a squad has driven off, and until when they keep away. */
     private val routedUntil = HashMap<String, Double>()
     private var nextJobId = 0L
-    private var upsCharge = config.power.upsCapacity
+    private var upsCharge = config.power.upsInitialCharge
     private var poweredNow = emptySet<String>()
     private var waterNow = emptySet<String>()
     private var occupantsOf = HashMap<String, Int>()
-    private val postings = ArrayList<Posting>()
+    private val postings = ArrayDeque<Posting>()
+    private val tickPostings = ArrayList<Posting>()
+    private var networksDirty = true
+    @Volatile private var observationPhase: ObservationProjectionPhase? = null
+    private val observationSeats = ConcurrentHashMap<String, List<String>>()
     private val monthlyTotals = HashMap<String, Long>()
     private var lastBilledTick = 0L
     private var lastMonthTick = 0L
@@ -186,24 +193,31 @@ class WorldKernel(
     var totalCrocodilesDeflected = 0L
     var totalCrocodilesDowned = 0L
 
-    val ledger: List<Posting> get() = postings
+    val ledger: List<Posting> get() = postings.toList()
     /** What the grid and the water network look like right now, for the dashboard and the journal. */
-    fun fixtureState(): List<FixtureState> = topology.fixtures.map { fixture ->
-        FixtureState(
-            id = fixture.id,
-            kind = fixture.kind.name.lowercase(),
-            at = fixture.at,
-            health = healthOf(fixture.id),
-            // A source makes power, a pipe carries water and a fence just stands: none of them draws from the grid.
-            powered = when (fixture.kind) {
+    private var fixtureSnapshots: List<FixtureState> = emptyList()
+    fun fixtureState(): List<FixtureState> {
+        var changed: MutableList<FixtureState>? = null
+        topology.fixtures.forEachIndexed { index, fixture ->
+            val currentHealth = healthOf(fixture.id)
+            // Sources, pipes and fences do not consume grid power.
+            val powered = when (fixture.kind) {
                 FixtureKind.REACTOR, FixtureKind.SOLAR, FixtureKind.UPS, FixtureKind.PIPE, FixtureKind.FENCE,
-                FixtureKind.DEPOSITORY, FixtureKind.MEDICAL_CENTER -> healthOf(fixture.id) > 0
+                FixtureKind.DEPOSITORY, FixtureKind.MEDICAL_CENTER -> currentHealth > 0
                 else -> isPowered(fixture.id)
-            },
-            // What hangs off this fixture: the poles and consumers it feeds, or the house a pipe serves.
-            feeds = fixtureFeeds[fixture.id].orEmpty(),
-            from = fixture.from, to = fixture.to,
-        )
+            }
+            val previous = fixtureSnapshots.getOrNull(index)
+            if (previous == null || previous.health != currentHealth || previous.powered != powered) {
+                if (changed == null) changed = fixtureSnapshots.toMutableList()
+                val next = previous?.copy(health = currentHealth, powered = powered) ?: FixtureState(
+                    fixture.id, fixture.kind.name.lowercase(), fixture.at, currentHealth, powered,
+                    fixtureFeeds[fixture.id].orEmpty(), fixture.from, fixture.to,
+                )
+                if (index < changed!!.size) changed!![index] = next else changed!!.add(next)
+            }
+        }
+        changed?.let { fixtureSnapshots = it }
+        return fixtureSnapshots
     }
     val activeJobs: Collection<RepairJob> get() = jobs.values.filter { it.availableAtTick <= currentTick }
     /** Lines posted during the step that has just finished, for the journal and the dashboard. */
@@ -275,69 +289,84 @@ class WorldKernel(
 
     /** The values of the observations a program reads, computed from the physical state of this moment. */
     fun view(instance: Instance, fields: Set<String>): Map<String, JsonElement> {
+        return fields.associateWithTo(LinkedHashMap()) { fieldValue(instance, it) }
+    }
+
+    /** Reads are deferred only while the fleet runs against this unchanged world. */
+    fun beginObservationPhase() {
+        check(observationPhase == null) { "An observation phase is already open" }
+        observationSeats.clear()
+        observationPhase = ObservationProjectionPhase()
+    }
+
+    fun endObservationPhase() {
+        observationPhase?.close()
+        observationPhase = null
+        observationSeats.clear()
+    }
+
+    fun lazyView(instance: Instance, fields: Set<String>): Map<String, JsonElement> =
+        ObservationProjection(fields, checkNotNull(observationPhase)) { fieldValue(instance, it) }
+
+    private fun fieldValue(instance: Instance, field: String): JsonElement {
         val id = instance.id
-        val out = LinkedHashMap<String, JsonElement>()
         val houseId = if (instance.kind == "House") id else instance.parent
-        for (field in fields) {
-            val value: JsonElement = when (field) {
-                "occupants" -> JsonPrimitive(occupants(id))
-                "home_occupants" -> JsonPrimitive(houseId?.let(::occupants) ?: 0)
-                "temperature" -> JsonPrimitive(insideTemperature[id] ?: config.house.initialTemperature)
-                "water_temperature" -> JsonPrimitive(waterTemperature[id] ?: 15.0)
-                "power_connected" -> JsonPrimitive(isPowered(id))
-                "water_available" -> JsonPrimitive(hasWater(id))
-                "broken" -> JsonPrimitive(isBroken(id))
-                "power_granted" -> JsonPrimitive(grantedOf(id))
-                "health" -> JsonPrimitive(healthOf(id))
-                "position" -> pointJson(positionOf(id))
-                "cold" -> JsonPrimitive((insideTemperature[houseId] ?: config.house.initialTemperature) < config.house.coldThreshold)
-                "devices" -> devicesOf(id)
-                "reachable_breakables" -> targets(id, reachableAppliances(instance))
-                "in_fog" -> JsonPrimitive(seaController.isInFog(positionOf(id)))
-                "respirator_equipped" -> JsonPrimitive(respiratorEquipped[id] == true)
-                "depository" -> pointJson(topology.depository)
-                "medical_center" -> pointJson(topology.medicalCenter)
-                "creatine_stock" -> JsonPrimitive(creatineManager.stock)
-                "sea_damage" -> JsonPrimitive(seaController.totalErosionDamage)
-                // The substation is fenced off; what stands in the open is the distribution poles, and the fence
-                // segment the hunter has just run into.
-                "visible_infrastructure" -> targets(id, topology.poles.filter { it.id != BUS && !isBroken(it.id) }.map { it.id } +
-                    listOfNotNull(blockedBy[id]?.takeUnless(::isBroken)), config.sight.xenomorphRadius)
-                // People indoors or inside a rover are out of reach; marines are not prey.
-                "visible_humans" -> targets(id, people.residents.filter { resident ->
-                    !isBroken(resident.id) && resident.id !in passengerVehicle &&
-                        positionOf(resident.id).distanceTo(positionOf(resident.parent ?: resident.id)) > HOUSE_ZONE
-                }.map { it.id }, config.sight.xenomorphRadius)
-                "patrol_waypoint" -> pointJson(patrolPoint(id))
-                "routed" -> JsonPrimitive(isRouted(id))
-                "home" -> homeViews[instance.parent ?: id] ?: pointJson(positionOf(instance.parent ?: id))
-                "workplace" -> workplaceViews[workplaceOf(id)] ?: pointJson(workplaceOf(id))
-                "meeting_point" -> meetingView
-                "routine_slot" -> JsonPrimitive(routineSlots[id] ?: 0)
-                "day_minute" -> JsonPrimitive(residentDayMinute(id))
-                "depot" -> vehicleRouteTarget[id]?.let(::pointJson) ?: depotViews[id] ?: pointJson(depotOf(instance))
-                "active_jobs" -> jobList(id)
-                "materials_remaining" -> JsonPrimitive(config.repair.materials)
-                "speed_eff" -> JsonPrimitive(config.repair.roverSpeed)
-                "work_radius" -> JsonPrimitive(config.repair.workRadius)
-                "boarding_radius" -> JsonPrimitive(config.transport.boardRadius)
-                "passenger_count" -> JsonPrimitive(vehiclePassengers[id]?.size ?: 0)
-                "passenger_capacity" -> JsonPrimitive(config.transport.passengerCapacity)
-                "transport_ready" -> JsonPrimitive(transportReady(id))
-                "transport_target" -> pointJson(transportDestination(id) ?: depotOf(instance))
-                "boarding_pending" -> JsonPrimitive(seatedWalkers(id).size)
-                "available_vehicles" -> targets(id, availableTransportVehicles(id), if (squadOf(id) == null) config.transport.walkRadius else config.sight.sightRadius)
-                "in_vehicle" -> JsonPrimitive(id in passengerVehicle)
-                "dispatch_ready" -> JsonPrimitive(elapsedSeconds >= config.marine.responseDelaySeconds)
-                "visible_xenomorphs" -> targets(id, listOfNotNull(squadTarget(id)), radius = null)
-                "squad_size" -> JsonPrimitive(marineSquad(id).count { !isBroken(it.id) })
-                "squad_leader" -> JsonPrimitive(isMarineLeader(id))
-                "squad_ready" -> JsonPrimitive(squadReady(id))
-                else -> error("The world does not compute observation '$field'")
-            }
-            out[field] = value
+        return when (field) {
+            "occupants" -> JsonPrimitive(occupants(id))
+            "home_occupants" -> JsonPrimitive(houseId?.let(::occupants) ?: 0)
+            "temperature" -> JsonPrimitive(insideTemperature[id] ?: config.house.initialTemperature)
+            "water_temperature" -> JsonPrimitive(waterTemperature[id] ?: 15.0)
+            "power_connected" -> JsonPrimitive(isPowered(id))
+            "water_available" -> JsonPrimitive(hasWater(id))
+            "broken" -> JsonPrimitive(isBroken(id))
+            "power_granted" -> JsonPrimitive(grantedOf(id))
+            "health" -> JsonPrimitive(healthOf(id))
+            "position" -> pointJson(positionOf(id))
+            "cold" -> JsonPrimitive((insideTemperature[houseId] ?: config.house.initialTemperature) < config.house.coldThreshold)
+            "devices" -> devicesOf(id)
+            "reachable_breakables" -> targets(id, reachableAppliances(instance))
+            "in_fog" -> JsonPrimitive(seaController.isInFog(positionOf(id)))
+            "respirator_equipped" -> JsonPrimitive(respiratorEquipped[id] == true)
+            "depository" -> pointJson(topology.depository)
+            "medical_center" -> pointJson(topology.medicalCenter)
+            "creatine_stock" -> JsonPrimitive(creatineManager.stock)
+            "sea_damage" -> JsonPrimitive(seaController.totalErosionDamage)
+            // The substation is fenced off; what stands in the open is the distribution poles, and the fence
+            // segment the hunter has just run into.
+            "visible_infrastructure" -> targets(id, topology.poles.filter { it.id != BUS && !isBroken(it.id) }.map { it.id } +
+                listOfNotNull(blockedBy[id]?.takeUnless(::isBroken)), config.sight.xenomorphRadius)
+            // People indoors or inside a rover are out of reach; marines are not prey.
+            "visible_humans" -> targets(id, people.residents.filter { resident ->
+                !isBroken(resident.id) && resident.id !in passengerVehicle &&
+                    positionOf(resident.id).distanceTo(positionOf(resident.parent ?: resident.id)) > HOUSE_ZONE
+            }.map { it.id }, config.sight.xenomorphRadius)
+            "patrol_waypoint" -> pointJson(patrolPoint(id))
+            "routed" -> JsonPrimitive(isRouted(id))
+            "home" -> homeViews[instance.parent ?: id] ?: pointJson(positionOf(instance.parent ?: id))
+            "workplace" -> workplaceViews[workplaceOf(id)] ?: pointJson(workplaceOf(id))
+            "meeting_point" -> meetingView
+            "routine_slot" -> JsonPrimitive(routineSlots[id] ?: 0)
+            "day_minute" -> JsonPrimitive(residentDayMinute(id))
+            "depot" -> vehicleRouteTarget[id]?.let(::pointJson) ?: depotViews[id] ?: pointJson(depotOf(instance))
+            "active_jobs" -> jobList(id)
+            "materials_remaining" -> JsonPrimitive(config.repair.materials)
+            "speed_eff" -> JsonPrimitive(config.repair.roverSpeed)
+            "work_radius" -> JsonPrimitive(config.repair.workRadius)
+            "boarding_radius" -> JsonPrimitive(config.transport.boardRadius)
+            "passenger_count" -> JsonPrimitive(vehiclePassengers[id]?.size ?: 0)
+            "passenger_capacity" -> JsonPrimitive(config.transport.passengerCapacity)
+            "transport_ready" -> JsonPrimitive(transportReady(id))
+            "transport_target" -> pointJson(transportDestination(id) ?: depotOf(instance))
+            "boarding_pending" -> JsonPrimitive(seatedWalkers(id).size)
+            "available_vehicles" -> targets(id, availableTransportVehicles(id), if (squadOf(id) == null) config.transport.walkRadius else config.sight.sightRadius)
+            "in_vehicle" -> JsonPrimitive(id in passengerVehicle)
+            "dispatch_ready" -> JsonPrimitive(elapsedSeconds >= config.marine.responseDelaySeconds)
+            "visible_xenomorphs" -> targets(id, listOfNotNull(squadTarget(id)), radius = null)
+            "squad_size" -> JsonPrimitive(marineSquad(id).count { !isBroken(it.id) })
+            "squad_leader" -> JsonPrimitive(isMarineLeader(id))
+            "squad_ready" -> JsonPrimitive(squadReady(id))
+            else -> error("The world does not compute observation '$field'")
         }
-        return out
     }
 
     /** The jobs a crew can see, nearest first, with the distance the crew has to drive. */
@@ -404,7 +433,11 @@ class WorldKernel(
     private fun freeSeats(roverId: String) = config.transport.passengerCapacity - (vehiclePassengers[roverId]?.size ?: 0)
 
     /** Residents walking to this rover in the latest step who hold one of its free seats, nearest first. */
-    private fun seatedWalkers(roverId: String): List<String> {
+    private fun seatedWalkers(roverId: String): List<String> =
+        if (observationPhase != null) observationSeats.computeIfAbsent(roverId, ::computeSeatedWalkers)
+        else computeSeatedWalkers(roverId)
+
+    private fun computeSeatedWalkers(roverId: String): List<String> {
         val here = positionOf(roverId)
         return walkersOf[roverId].orEmpty().filter { it !in passengerVehicle && !isBroken(it) }
             .sortedWith(compareBy({ positionOf(it).distanceTo(here) }, { it }))
@@ -714,7 +747,7 @@ class WorldKernel(
 
     private fun roamingPoint(id: String): Point {
         val leg = patrolLeg.getOrDefault(id, 0)
-        val along = patrolAlong.getOrPut(id) { roll(id, 0, 0) * perimeter() }
+        val along = patrolAlong[id] ?: (roll(id, 0, 0) * perimeter())
         return perimeterPoint(along, roamDistance * (0.4 + 0.6 * roll(id, leg, 3)))
     }
 
@@ -781,9 +814,10 @@ class WorldKernel(
         tick: Long, intents: List<VmIntent>, refs: List<String>, accepted: Set<String>,
         transportRequests: List<TransportRequest> = emptyList(),
     ): List<KernelEvent> {
+        check(observationPhase == null) { "Close observations before advancing the world" }
         currentTick = tick
         val events = ArrayList<KernelEvent>()
-        val postedBefore = postings.size
+        tickPostings.clear()
         val poweredBefore = poweredNow
         val waterBefore = waterNow
 
@@ -813,10 +847,11 @@ class WorldKernel(
         integrate(tick, events)
         applyMovement(intents, accepted, events)
         recomputeOccupants()
-        recomputeNetworks()
+        // No second network pass here: a pipe frozen in phase 4 reaches the water network with the next
+        // step, as the phase order fixes (docs/technical-reference.md#world).
         reportChanges(poweredBefore, waterBefore, events)
         bill(tick, events)
-        lastPostings = if (postings.size > postedBefore) postings.subList(postedBefore, postings.size).toList() else emptyList()
+        lastPostings = tickPostings.toList()
         elapsedSeconds += dt
         return events
     }
@@ -1204,6 +1239,7 @@ class WorldKernel(
                 buildJsonObject { put("target", target); put("amount", amount); put("reason", reason) },
                 listOfNotNull(intent.source, owner).distinct(), refs[index])
             if (before > 0 && health.getValue(target) <= 0) {
+                networksDirty = true
                 events += breakOf(tick, target, reason, intent.source)
                 if (people.byId[target]?.kind == "Rover") unboard(target, events, reason = "vehicle_broken", ref = refs[index])
             }
@@ -1217,8 +1253,10 @@ class WorldKernel(
             return KernelEvent("EntityDied", target, actor, buildJsonObject { put("entity", target) })
         }
         openJob(target, tick)
+        // docs/technical-reference.md#world: the owner and every crew hear about a break.
+        val recipients = (listOfNotNull(ownerOf(target)) + people.rovers.map { it.id }).distinct()
         return KernelEvent("ObjectBroken", target, actor,
-            buildJsonObject { put("object", target); put("reason", reason) }, listOfNotNull(ownerOf(target)))
+            buildJsonObject { put("object", target); put("reason", reason) }, recipients)
     }
 
     private fun openJob(target: String, brokenAtTick: Long, customKind: String? = null, fastDispatch: Boolean = false) {
@@ -1235,8 +1273,11 @@ class WorldKernel(
         jobs[target] = job
     }
 
-    /** The house that pays for an object: its own house for an appliance, the settlement for the grid. */
-    private fun ownerOf(target: String): String? = people.byId[target]?.parent ?: people.byId[target]?.id?.takeIf { people.byId[it]?.kind == "House" }
+    /** The house that pays for an object: its own house for an entity, the served house for a pipe; the grid itself has none. */
+    private fun ownerOf(target: String): String? =
+        people.byId[target]?.parent
+            ?: people.byId[target]?.id?.takeIf { people.byId[it]?.kind == "House" }
+            ?: topology.byId[target]?.serves
 
     /** Phase 2. A crew makes progress while it stands next to the object it asked to repair. */
     private fun applyRepairs(tick: Long, intents: List<VmIntent>, accepted: Set<String>, events: MutableList<KernelEvent>) {
@@ -1263,6 +1304,7 @@ class WorldKernel(
             if (target in airDefenseUnits) {
                 airDefenseUnits[target]?.repair()
             }
+            networksDirty = true
             frostExposure[target]?.let { frostExposure[target] = 0.0 }
             val cost = config.repair.partsOf(job.kind) + Math.round(config.repair.hourlyRate * job.duration / 3600.0)
             post(tick, ownerOf(target) ?: "settlement", "repair", cost, target)
@@ -1273,6 +1315,8 @@ class WorldKernel(
 
     /** Phase 3. Power reaches an object when a healthy path of healthy fixtures joins it to a working source. */
     private fun recomputeNetworks() {
+        if (!networksDirty) return
+        networksDirty = false
         val working = topology.sources.filter { !isBroken(it) && sourcePower(it) > 0.0 }
         val live = HashSet<String>()
         if (working.isNotEmpty() && !isBroken(BUS)) {
@@ -1293,9 +1337,15 @@ class WorldKernel(
     private fun sourcePower(id: String): Double = when (topology.byId[id]?.kind) {
         FixtureKind.REACTOR -> config.power.reactorPower
         FixtureKind.SOLAR -> config.power.solarPeak
-        FixtureKind.UPS -> config.power.upsMaxPower
+        // The battery is a working source only while it holds charge (docs/technical-reference.md#world):
+        // once it is empty it stops bridging the dead sources, and that transition is a PowerLost.
+        FixtureKind.UPS -> upsOutput()
         else -> 0.0
     }
+
+    /** What the battery can feed this step: never more than its maximal power or its remaining charge allows. */
+    private fun upsOutput(): Double =
+        if (isBroken("grid/ups")) 0.0 else minOf(config.power.upsMaxPower, upsCharge * config.power.upsEfficiency / dt)
 
     /** Phase 3. Classes are served in order; the class that runs out is cut in proportion to what it asked for. */
     private fun distributePower(intents: List<VmIntent>, accepted: Set<String>) {
@@ -1307,37 +1357,53 @@ class WorldKernel(
         }
         // The pump is part of the settlement rather than a program, so the kernel asks for it.
         if (isPowered(PUMP) && !isBroken(PUMP)) requested[PUMP] = config.water.pumpPower
-
-        val solar = config.power.solarPeak * climateSolar()
         val reactor = if (isBroken("grid/reactor")) 0.0 else config.power.reactorPower
-        val fromUps = if (isBroken("grid/ups")) 0.0 else minOf(config.power.upsMaxPower, upsCharge * config.power.upsEfficiency / dt)
-        var budget = reactor + (if (isBroken("grid/solar")) 0.0 else solar)
+        val solar = if (isBroken("grid/solar")) 0.0 else config.power.solarPeak * climateSolar()
+        val externalPower = reactor + solar
+        val batteryPower = upsOutput()
+        var load = 0.0
+        for (ids in powerClasses) for (id in ids) load += requested[id] ?: 0.0
+        val discharging = batteryPower > 0.0 && load > externalPower
+        // Charging has class-0 priority, but can only consume external generation. A battery needed
+        // by the actual loads discharges instead (docs/technical-reference.md#world).
+        val ups = UPS
+        if (!discharging && !isBroken(ups) && isPowered(BUS)) {
+            val headroom = (config.power.upsCapacity - upsCharge).coerceAtLeast(0.0)
+            val chargePower = minOf(config.power.upsMaxPower, headroom / (config.power.upsEfficiency * dt))
+            if (chargePower > 0.0) requested[ups] = chargePower
+        }
+        val generation = externalPower + if (discharging) batteryPower else 0.0
+
         granted.clear()
-        val byClass = powerClasses.mapValues { (_, ids) -> ids.mapNotNull { id -> requested[id]?.let { id to it } } }
-        var usedUps = 0.0
-        for (klass in byClass.keys.sorted()) {
-            val entries = byClass.getValue(klass)
-            val wanted = entries.sumOf { it.second }
-            if (wanted <= budget) {
-                entries.forEach { granted[it.first] = it.second }
-                budget -= wanted
+        var served = 0.0
+        var curtailed = false
+        for (ids in powerClasses) {
+            if (curtailed) {
+                for (id in ids) if (id in requested) granted[id] = 0.0
                 continue
             }
-            // The battery covers what the grid cannot, then the class that is still short is cut in proportion.
-            val fromBattery = minOf(fromUps - usedUps, wanted - budget)
-            usedUps += fromBattery
-            val available = budget + fromBattery
+            // Consumer IDs are pre-sorted, keeping the original floating-point reduction order.
+            val wanted = ids.sumOf { requested[it] ?: 0.0 }
+            val available = (generation - served).coerceAtLeast(0.0)
+            if (wanted <= available) {
+                for (id in ids) requested[id]?.let { granted[id] = it }
+                served += wanted
+                continue
+            }
+            // The class that runs out is cut in proportion to what it asked for; later classes get nothing.
             val share = if (wanted > 0) available / wanted else 0.0
-            entries.forEach { granted[it.first] = it.second * share }
-            budget = 0.0
-            for (rest in byClass.keys.sorted().filter { it > klass }) byClass.getValue(rest).forEach { granted[it.first] = 0.0 }
-            break
+            for (id in ids) requested[id]?.let { granted[id] = it * share }
+            served += available
+            curtailed = true
         }
-        upsCharge = if (usedUps > 0) {
-            (upsCharge - usedUps * dt / config.power.upsEfficiency).coerceAtLeast(0.0)
-        } else {
-            (upsCharge + minOf(config.power.upsMaxPower, budget) * dt * config.power.upsEfficiency).coerceAtMost(config.power.upsCapacity)
-        }
+        // The battery is the last generator in the merit order: whatever the sources did not cover came from it.
+        val fromBattery = (served - externalPower).coerceAtLeast(0.0).coerceAtMost(batteryPower)
+        val charge = granted[ups] ?: 0.0
+        val upsWasWorking = batteryPower > 0.0
+        upsCharge = (upsCharge - fromBattery * dt / config.power.upsEfficiency + charge * dt * config.power.upsEfficiency)
+            .coerceIn(0.0, config.power.upsCapacity)
+        // A charge transition changes source connectivity at the next phase-3 network pass.
+        if (upsWasWorking != (upsOutput() > 0.0)) networksDirty = true
     }
 
     private fun climateSolar(): Double = config.climate.solarFraction(currentSeconds)
@@ -1363,6 +1429,7 @@ class WorldKernel(
                 frostExposure[pipe] = exposure
                 if (exposure >= config.water.freezeThresholdIndoor) {
                     health[pipe] = 0.0
+                    networksDirty = true
                     frostExposure[pipe] = 0.0
                     events += breakOf(tick, pipe, "freezing", null)
                 }
@@ -1388,7 +1455,10 @@ class WorldKernel(
             val before = healthOf(resident.id)
             val after = (before - config.human.harmPerKelvinSecond * deficit * dt).coerceAtLeast(0.0)
             health[resident.id] = after
-            if (before > 0 && after <= 0) events += breakOf(tick, resident.id, "cold", null)
+            if (before > 0 && after <= 0) {
+                networksDirty = true
+                events += breakOf(tick, resident.id, "cold", null)
+            }
         }
     }
 
@@ -1517,7 +1587,8 @@ class WorldKernel(
             val had = id in poweredBefore
             val has = id in poweredNow
             if (had != has) {
-                val recipients = listOf(id) + people.childrenOf[id].orEmpty().map { it.id }
+                // docs/technical-reference.md#world: the house and its appliances hear about it.
+                val recipients = listOf(id) + people.appliances.filter { it.parent == id }.map { it.id }
                 events += KernelEvent(if (has) "PowerRestored" else "PowerLost", id, null, JsonObject(emptyMap()), recipients)
             }
             val hadWater = id in waterBefore
@@ -1559,9 +1630,11 @@ class WorldKernel(
     }
 
     private fun post(tick: Long, owner: String, kind: String, amount: Long, detail: String = "") {
-        postings += Posting(tick, owner, kind, amount, detail)
+        val posting = Posting(tick, owner, kind, amount, detail)
+        postings.addLast(posting)
+        tickPostings += posting
         monthlyTotals.merge(owner, amount, Long::plus)
-        if (postings.size > MAX_POSTINGS) postings.subList(0, postings.size - MAX_POSTINGS).clear()
+        if (postings.size > MAX_POSTINGS) postings.removeFirst()
     }
 
     private companion object {
@@ -1575,6 +1648,7 @@ class WorldKernel(
         const val EXIT_STEP = 5.0
         const val EXIT_RUN = 25.0
         const val BUS = "grid/bus"
+        const val UPS = "grid/ups"
         const val PUMP = "water/pump"
         const val MAX_POSTINGS = 20_000
     }

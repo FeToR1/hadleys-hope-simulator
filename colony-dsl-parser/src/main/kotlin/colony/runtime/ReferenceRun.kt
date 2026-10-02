@@ -2,6 +2,7 @@ package colony.runtime
 
 import colony.bytecode.Op
 import colony.semantics.Capability
+import colony.semantics.KindContract
 import colony.semantics.SemanticEnvironment
 import colony.world.KernelEvent
 import colony.world.Point
@@ -56,7 +57,8 @@ private val APPLIANCES = setOf("Heater", "Kettle")
  * that a scenario change causes. Events cross tick boundaries as the spec requires.
  */
 class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUID().toString(),
-                   private val fleet: VmFleet = ReferenceFleet(prepared)) : AutoCloseable {
+                   private val fleet: VmFleet = ReferenceFleet(prepared),
+                   private val kindContracts: Map<String, KindContract> = SemanticEnvironment().kindContracts) : AutoCloseable {
     val runtimeMode: String get() = fleet.mode
     val behaviorWorkers: Int get() = fleet.workerCount
     val nativeProcesses: Int get() = fleet.pids.values.toSet().size
@@ -81,15 +83,60 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     private var failed = false
     private var eventCounter = 0L
     private var worldSequence = 0L
-    private val contracts = SemanticEnvironment().kindContracts
     /** A frame carries only what the entity's program reads (the frame is a projection, not a copy of the world). */
     private val behaviors = objects.mapValues { (_, instance) -> prepared.program.behaviors.single { it.name == instance.behavior } }
     private val observed = behaviors.mapValues { it.value.observes.toSet() }
     private val subscriptions = behaviors.mapValues { (_, behavior) -> behavior.handlers.mapNotNull { it.eventId }.toSet() }
     private val eventIds = prepared.program.events.associate { it.name to it.id }
     private val childrenOf = objects.values.filter { it.parent != null }.groupBy { it.parent!! }
+    init {
+        // A contract field the world cannot compute would otherwise kill the run mid-tick; the spec wants a
+        // binding error before the first step (docs/technical-reference.md#world).
+        try {
+            for (kind in objects.values.map { it.kind }.distinct()) {
+                check(kind in kindContracts) { "Kind $kind has no observation contract; the scenario cannot be bound" }
+            }
+            kernel?.let { world ->
+                for ((kind, samples) in objects.values.groupBy { it.kind }) {
+                    val contract = kindContracts.getValue(kind)
+                    val failure = runCatching { world.view(samples.first(), contract.viewFields.keys) }.exceptionOrNull() ?: continue
+                    error("Kind $kind declares observations the world cannot compute: ${failure.message}")
+                }
+            }
+        } catch (failure: Exception) {
+            runCatching { fleet.close() }.exceptionOrNull()?.let(failure::addSuppressed)
+            throw failure
+        }
+    }
+
+    private data class EntityDescriptor(val instance: Instance, val type: String, val usesPower: Boolean,
+                                        val connected: List<String>)
+    private val entityDescriptors = objects.values.map { instance -> EntityDescriptor(instance,
+        if (instance.kind == "Human") "civilian" else instance.kind.lowercase(),
+        Capability.POWER_REQUEST in kindContracts.getValue(instance.kind).capabilities, listOfNotNull(instance.parent)) }
+    /** Dense mutable cache keys are private; all trees exposed in snapshots stay immutable. */
+    private class MetricCache {
+        var temperature: Double? = null
+        var scenarioTemperature: JsonElement? = null
+        var waterLevel: Double? = null
+        var occupants: Int? = null
+        var spend: Long? = null
+        var passengerCount: JsonElement? = null
+        var passengerCapacity: JsonElement? = null
+        var squadSize: JsonElement? = null
+        var stress: JsonElement? = null
+        var health: Double = Double.NaN
+        var power: Double? = null
+        var inFog: Boolean = false
+        var seaDamage: Double? = null
+        var creatineCargo: Double? = null
+        var respirator: Boolean = false
+    }
+    private val metricCaches = Array(entityDescriptors.size) { MetricCache() }
+    private val entitySnapshots = arrayOfNulls<EntitySnapshot>(entityDescriptors.size)
     private var previousFixtures = emptyList<colony.world.FixtureState>()
     private var fixtureEntities = emptyList<EntitySnapshot>()
+    private var previousPumpPower: Double? = null
     /** Power granted in the previous step: what a device sees as power_granted. */
     private var granted = emptyMap<String, Double>()
 
@@ -105,8 +152,8 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
      * state (docs/technical-reference.md#contract). Lists are sorted by (distance, id) and drop destroyed objects.
      */
     private fun observe(id: String, instance: Instance): JsonObject {
-        kernel?.let { return JsonObject(it.view(instance, observed.getValue(id))) }
-        val fields = contracts.getValue(instance.kind).viewFields
+        kernel?.let { return JsonObject(it.lazyView(instance, observed.getValue(id))) }
+        val fields = kindContracts.getValue(instance.kind).viewFields
         val view = views.getValue(id).toMutableMap()
         if ("position" in fields) view["position"] = positionJson(positions.getValue(id))
         // Without a world the harness has no settlement plan, so a place is simply where the manifest put it.
@@ -147,7 +194,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     /** Power reaches an object when its own connection and, for an appliance, its house's connection are up. */
     private fun powerOn(id: String): Boolean {
         val instance = objects.getValue(id)
-        if ("power_connected" !in contracts.getValue(instance.kind).viewFields) return true
+        if ("power_connected" !in kindContracts.getValue(instance.kind).viewFields) return true
         return flag(id, "power_connected") && (instance.parent?.let { flag(it, "power_connected") } ?: true)
     }
 
@@ -165,14 +212,23 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
 
     /**
      * Kernel facts become journal entries. A break that follows damage in the same step is linked to the hit
-     * that caused it; frost and other causes outside a request have no cause inside the world.
+     * that caused it; cold and freezing have no request behind them, so [chainedCause] supplies the cause from
+     * the journal's memory of what the world did to the same object before.
      */
     private fun convert(facts: List<KernelEvent>): List<WorldEvent> {
         val lastDamage = HashMap<String, String>()
+        val repairs = HashMap<String, String>()
+        val breaks = HashSet<String>()
         return facts.map { fact ->
-            val event = worldEvent(fact.type, fact.entityId, fact.actorId, fact.causeRef ?: lastDamage[fact.entityId],
-                fact.fields, fact.recipients)
+            val event = worldEvent(fact.type, fact.entityId, fact.actorId,
+                fact.causeRef ?: lastDamage[fact.entityId]?.takeIf { fact.type in setOf("ObjectBroken", "EntityDied") }
+                    ?: chainedCause(fact, repairs, breaks), fact.fields, fact.recipients)
             if (fact.type == "DamageApplied") lastDamage[fact.entityId] = event.id
+            when (fact.type) {
+                "ObjectBroken" -> { lastBreakEvent[fact.entityId] = event; breaks += fact.entityId }
+                "PowerLost" -> lastPowerLossEvent[fact.entityId] = event.id
+                "RepairCompleted" -> { lastBreakEvent.remove(fact.entityId); repairs[fact.entityId] = event.id }
+            }
             event
         }
     }
@@ -192,12 +248,64 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
         }
     }
 
+    /** Unrepaired breaks; completed repairs must not cause unrelated later network transitions. */
+    private val lastBreakEvent = HashMap<String, WorldEvent>()
+    private val lastPowerLossEvent = HashMap<String, String>()
+
+    /** Network paths are static; causal lookup visits only the affected house's dependencies. */
+    private val powerDependencies = kernel?.let { world -> world.topology.houses.associateWith { house ->
+        buildList {
+            add(house)
+            var node = world.topology.powerFeed[house]
+            while (node != null) {
+                add(node)
+                node = world.topology.byId[node]?.feedsFrom
+            }
+            addAll(world.topology.sources)
+        }
+    } }.orEmpty()
+    private val waterDependencies = kernel?.let { world -> world.topology.houses.associateWith { house ->
+        listOf(world.topology.waterPipe.getValue(house), "water/pump", "grid/bus") + world.topology.sources
+    } }.orEmpty()
+
+    /**
+     * The cause of a world-internal transition (docs/technical-reference.md#contract): a frozen pipe
+     * or a cold death traces to the power loss of the house it belongs to; a power or water loss traces to the
+     * break that severed the network; a repair and the restoration it brings trace to the break they answer.
+     */
+    private fun chainedCause(fact: KernelEvent, repairs: Map<String, String>, breaks: Set<String>): String? {
+        val world = kernel ?: return null
+        val reason = fact.fields["reason"]?.jsonPrimitive?.content
+        fun loss(dependencies: List<String>): String? = dependencies.firstNotNullOfOrNull { id ->
+            lastBreakEvent[id]?.takeIf { event ->
+                world.isBroken(id) &&
+                    (id !in world.topology.sources || id in breaks) &&
+                    // Freezing occurs after network recomputation and cannot cause this step's water loss.
+                    !(fact.type == "WaterLost" && event.tick == tick && event.fields["reason"]?.jsonPrimitive?.content == "freezing")
+            }?.id
+        }
+        fun restoration(dependencies: List<String>): String? = dependencies.firstNotNullOfOrNull { id ->
+            repairs[id]?.takeUnless { world.isBroken(id) }
+        }
+        return when {
+            fact.type == "PowerLost" -> loss(powerDependencies[fact.entityId].orEmpty())
+            fact.type == "WaterLost" -> loss(waterDependencies[fact.entityId].orEmpty())
+            fact.type == "ObjectBroken" && reason == "freezing" ->
+                world.topology.waterPipe.entries.firstOrNull { it.value == fact.entityId }?.key?.let { lastPowerLossEvent[it] }
+            fact.type == "EntityDied" -> objects.getValue(fact.entityId).parent?.let { lastPowerLossEvent[it] }
+            fact.type == "RepairCompleted" -> lastBreakEvent[fact.entityId]?.id
+            fact.type == "PowerRestored" -> restoration(powerDependencies[fact.entityId].orEmpty())
+            fact.type == "WaterRestored" -> restoration(waterDependencies[fact.entityId].orEmpty())
+            else -> null
+        }
+    }
+
     private fun obj(vararg pairs: Pair<String, String>) = JsonObject(pairs.associate { it.first to JsonPrimitive(it.second) })
 
     /**
      * Scenario changes of this tick, and the losses and returns of power and water they cause. A change is the
      * transition into this snapshot, so its event is delivered in this frame together with the new observation.
-     * Assumption of the reference run: residents of a house hear about its power (the spec table names house and appliances).
+     * A house power event reaches the house and its appliances.
      */
     private fun applyChanges(): List<WorldEvent> {
         val changes = prepared.scenario.changes.filter { it.tick == tick }
@@ -212,8 +320,9 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
             if (on == powerBefore.getValue(id)) continue
             val parent = instance.parent
             if (parent != null && powerOn(parent) != powerBefore.getValue(parent)) continue // covered by the house event
+            // docs/technical-reference.md#contract: the house and its appliances, not the residents.
             val recipients = if (instance.kind == "House") {
-                listOf(id) + childrenOf[id].orEmpty().filter { it.kind == "Human" || powerOn(it.id) != powerBefore.getValue(it.id) }.map { it.id }
+                listOf(id) + childrenOf[id].orEmpty().filter { it.kind in APPLIANCES }.map { it.id }
             } else listOf(id)
             events += worldEvent(if (on) "PowerRestored" else "PowerLost", id, null, null, JsonObject(emptyMap()), recipients)
         }
@@ -224,21 +333,22 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
         return events
     }
 
-    fun step(): TickSnapshot {
+    fun step(captureSnapshot: Boolean = true): TickSnapshot {
         val startedAt = System.nanoTime()
         check(!failed) { "Run failed; create a fresh run before continuing" }
         check(tick < prepared.scenario.ticks) { "Run complete" }
         try {
             val changeEvents = applyChanges()
             val changeDeliveries = changeEvents.flatMap(::deliveriesOf)
-            // Materialize all observations before executing any VM (snapshot isolation).
+            // The world remains read-only until the fleet completes; fields are cached when first read.
+            kernel?.beginObservationPhase()
             val messageInboxes = pending.groupBy({ it.target }, { DeliveredEvent(it.eventId, it.fields, it.sender, it.sequence) })
             val worldInboxes = (pendingWorld + changeDeliveries).groupBy({ it.recipient }, { it.event })
             val frames = objects.mapValues { (id, instance) ->
                 VmFrame(tick, observe(id, instance), messageInboxes[id].orEmpty() + worldInboxes[id].orEmpty())
             }
             val observedAt = System.nanoTime()
-            val results = fleet.step(frames)
+            val results = try { fleet.step(frames) } finally { kernel?.endObservationPhase() }
             val executedAt = System.nanoTime()
             val delivered = pending.size + pendingWorld.size + changeDeliveries.size
             val outgoing = results.values.flatMap { it.events }
@@ -264,7 +374,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                 }
             }
             val dt = prepared.program.stepSeconds.toDouble()
-            // Spec (docs/simulation): a request from an entity that could not act in S_k is rejected.
+            // Spec (docs/technical-reference.md#world): a request from an entity that could not act in S_k is rejected.
             val ableToAct = objects.keys.filterTo(HashSet()) { healthOf(it) > 0 }
             val events = mutableListOf<WorldEvent>()
             intents.forEachIndexed { index, intent ->
@@ -320,161 +430,205 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
             pending = outgoing
             pendingWorld = events.flatMap(::deliveriesOf)
             val worldAt = System.nanoTime()
-            val entities = objects.map { (id, instance) ->
-                val state = results.getValue(id).state
-                val entityPos = positionOf(id)
-                val point = colony.world.Point(entityPos.x, entityPos.y)
-                val inFog = kernel?.let { k -> k.seaController.isFogActive && k.seaController.isInFog(point) } ?: false
-                EntitySnapshot(id = id, pid = fleet.pids[id], type = when (instance.kind) { "Human" -> "civilian"; else -> instance.kind.lowercase() },
-                    status = if (healthOf(id) <= 0) "dead" else "nominal",
-                    metrics = buildJsonObject {
-                        if (kernel != null) {
-                            kernel.temperatureOf(id)?.let { put("temperature", it) }
-                            if (instance.kind == "House") {
-                                put("water_level", if (kernel.hasWater(id)) 100.0 else 0.0)
-                                put("occupants", kernel.occupants(id))
-                                put("spend", kernel.spentBy(id))
-                                if (kernel.seaController.isInCoastalZone(point)) {
-                                    put("sea_damage", (100.0 - healthOf(id)).coerceAtLeast(0.0))
-                                }
-                            }
-                            if (instance.kind == "Rover") {
-                                val view = kernel.view(instance, setOf("passenger_count", "passenger_capacity"))
-                                view["passenger_count"]?.let { put("passenger_count", it) }
-                                view["passenger_capacity"]?.let { put("passenger_capacity", it) }
-                                kernel.roverCreatineCargo[id]?.let { put("creatine_stock", it) }
-                            }
-                            if (instance.kind == "Human") {
-                                if (kernel.respiratorEquipped[id] == true) {
-                                    put("respirator_equipped", true)
-                                }
-                            }
-                            if (instance.kind == "Marine") {
-                                kernel.view(instance, setOf("squad_size"))["squad_size"]?.let { put("squad_size", it) }
-                            }
-                        } else {
-                            views.getValue(id)["temperature"]?.let { put("temperature", it) }
-                            views.getValue(id)["water_temperature"]?.let { put("temperature", it) }
-                        }
-                        if (inFog) {
-                            put("in_fog", true)
-                        }
-                        state["stress"]?.let { put("stress", it) }
-                        put("health", healthOf(id))
-                        if (Capability.POWER_REQUEST in contracts.getValue(instance.kind).capabilities) {
-                            put("power_consumption", kernel?.grantedOf(id) ?: power[id] ?: 0.0)
-                        }
-                    }, connectedTo = listOfNotNull(instance.parent, kernel?.vehicleOf(id)), coordinates = entityPos, parentId = instance.parent, vmState = state)
-            }
-            // The grid and the water network have no program of their own, but an observer has to see them.
-            val fixtureStates = kernel?.fixtureState().orEmpty()
-            val fixtures = fixtureStates.map { fixture ->
-                val fixtureType = when (fixture.kind) {
-                    "fence" -> "fence"
-                    "air_defense" -> "air_defense"
-                    "depository" -> "depository"
-                    "medical_center" -> "medical_center"
-                    else -> "power_node"
+            val capturedEntities = if (captureSnapshot) {
+                val entities = entityDescriptors.mapIndexed { ordinal, descriptor ->
+                    val instance = descriptor.instance
+                    val id = instance.id
+                    val state = results.getValue(id).state
+                    val world = kernel
+                    val point = if (world != null) world.positionOf(id) else null
+                    val inFog = world != null && point != null && world.seaController.isFogActive && world.seaController.isInFog(point)
+                    val roverView = if (world != null && instance.kind == "Rover")
+                        world.view(instance, ROVER_METRICS) else null
+                    val squadSize = if (world != null && instance.kind == "Marine")
+                        world.view(instance, MARINE_METRICS)["squad_size"] else null
+                    val temperature = world?.temperatureOf(id)
+                    val scenarioTemperature = if (world == null) views.getValue(id)["water_temperature"] ?: views.getValue(id)["temperature"] else null
+                    val waterLevel = if (world != null && instance.kind == "House") if (world.hasWater(id)) 100.0 else 0.0 else null
+                    val occupants = if (world != null && instance.kind == "House") world.occupants(id) else null
+                    val spend = if (world != null && instance.kind == "House") world.spentBy(id) else null
+                    val seaDamage = if (world != null && instance.kind == "House" && point != null && world.seaController.isInCoastalZone(point))
+                        (100.0 - healthOf(id)).coerceAtLeast(0.0) else null
+                    val passengerCount = roverView?.get("passenger_count")
+                    val passengerCapacity = roverView?.get("passenger_capacity")
+                    val creatineCargo = if (world != null && instance.kind == "Rover") world.roverCreatineCargo[id] else null
+                    val respirator = world != null && instance.kind == "Human" && world.respiratorEquipped[id] == true
+                    val stress = state["stress"]
+                    val currentHealth = healthOf(id)
+                    val powerConsumption = if (descriptor.usesPower) world?.grantedOf(id) ?: power[id] ?: 0.0 else null
+                    val previous = entitySnapshots[ordinal]
+                    val cache = metricCaches[ordinal]
+                    val metricsUnchanged = previous != null &&
+                        cache.temperature == temperature && cache.scenarioTemperature == scenarioTemperature && cache.waterLevel == waterLevel &&
+                        cache.occupants == occupants && cache.spend == spend && cache.passengerCount == passengerCount &&
+                        cache.passengerCapacity == passengerCapacity && cache.squadSize == squadSize && cache.stress == stress &&
+                        cache.health == currentHealth && cache.power == powerConsumption &&
+                        cache.inFog == inFog && cache.seaDamage == seaDamage &&
+                        cache.creatineCargo == creatineCargo && cache.respirator == respirator
+                    val metrics = if (metricsUnchanged) previous!!.metrics else buildJsonObject {
+                        temperature?.let { put("temperature", it) }
+                        scenarioTemperature?.let { put("temperature", it) }
+                        waterLevel?.let { put("water_level", it) }
+                        occupants?.let { put("occupants", it) }
+                        spend?.let { put("spend", it) }
+                        seaDamage?.let { put("sea_damage", it) }
+                        passengerCount?.let { put("passenger_count", it) }
+                        passengerCapacity?.let { put("passenger_capacity", it) }
+                        creatineCargo?.let { put("creatine_stock", it) }
+                        if (respirator) put("respirator_equipped", true)
+                        squadSize?.let { put("squad_size", it) }
+                        if (inFog) put("in_fog", true)
+                        stress?.let { put("stress", it) }
+                        put("health", currentHealth)
+                        powerConsumption?.let { put("power_consumption", it) }
+                    }
+                    if (!metricsUnchanged) {
+                        cache.temperature = temperature
+                        cache.scenarioTemperature = scenarioTemperature
+                        cache.waterLevel = waterLevel
+                        cache.occupants = occupants
+                        cache.spend = spend
+                        cache.seaDamage = seaDamage
+                        cache.passengerCount = passengerCount
+                        cache.passengerCapacity = passengerCapacity
+                        cache.creatineCargo = creatineCargo
+                        cache.respirator = respirator
+                        cache.squadSize = squadSize
+                        cache.inFog = inFog
+                        cache.stress = stress
+                        cache.health = currentHealth
+                        cache.power = powerConsumption
+                    }
+                    val vehicle = world?.vehicleOf(id)
+                    val connected = if (vehicle == null) descriptor.connected else
+                        previous?.connectedTo?.takeIf { it.size == descriptor.connected.size + 1 && it.lastOrNull() == vehicle } ?: listOfNotNull(instance.parent, vehicle)
+                    val coordinates = if (world != null) {
+                        val p = point ?: world.positionOf(id)
+                        previous?.coordinates?.takeIf { it.x.toBits() == p.x.toBits() && it.y.toBits() == p.y.toBits() }
+                            ?: Coordinates(p.x, p.y)
+                    } else positions.getValue(id)
+                    val status = if (currentHealth <= 0) "dead" else "nominal"
+                    val pid = fleet.pids[id]
+                    if (previous != null && previous.metrics === metrics && previous.vmState == state &&
+                        previous.connectedTo == connected && previous.coordinates == coordinates && previous.status == status && previous.pid == pid) previous
+                    else EntitySnapshot(id, pid, descriptor.type, status, metrics, connected, coordinates, instance.parent, state)
+                        .also { entitySnapshots[ordinal] = it }
                 }
-                val inFog = kernel?.let { k -> k.seaController.isFogActive && k.seaController.isInFog(fixture.at) } ?: false
-                val isBroken = fixture.health <= 0.0 || (fixture.kind == "air_defense" && kernel?.airDefenseUnits?.get(fixture.id)?.broken == true)
-                EntitySnapshot(
-                    id = fixture.id, pid = null, type = fixtureType,
-                    status = if (isBroken) "dead" else if (!fixture.powered) "warning" else "nominal",
-                    metrics = buildJsonObject {
-                        put("health", fixture.health)
-                        if (fixture.id == "water/pump") put("power_consumption", kernel!!.grantedOf(fixture.id))
-                        if (fixture.kind == "depository") {
-                            kernel?.creatineManager?.let { put("creatine_stock", it.storedStock) }
+                // The grid and the water network have no program of their own, but an observer has to see them.
+                val fixtureStates = kernel?.fixtureState().orEmpty()
+                val fixtures = kernel?.let { world ->
+                    fixtureStates.map { fixture ->
+                        val fixtureType = when (fixture.kind) {
+                            "fence" -> "fence"
+                            "air_defense" -> "air_defense"
+                            "depository" -> "depository"
+                            "medical_center" -> "medical_center"
+                            else -> "power_node"
                         }
-                        if (fixture.kind == "medical_center") {
-                            kernel?.creatineManager?.let { put("creatine_stock", it.medicalCenterStock) }
-                        }
-                        if (fixture.kind == "air_defense") {
-                            val unit = kernel?.airDefenseUnits?.get(fixture.id)
-                            put("broken", isBroken)
-                            if (unit != null) put("ammo", unit.shotsFired)
-                        }
-                        if (inFog) {
-                            put("in_fog", true)
-                        }
-                    },
-                    connectedTo = fixture.feeds, coordinates = Coordinates(fixture.at.x, fixture.at.y),
-                    parentId = null, vmState = buildJsonObject {
-                        put("kind", fixture.kind)
-                        // A fence segment is a line; the observer draws it between its ends.
-                        fixture.from?.let { put("from", buildJsonObject { put("x", it.x); put("y", it.y) }) }
-                        fixture.to?.let { put("to", buildJsonObject { put("x", it.x); put("y", it.y) }) }
-                    },
-                )
-            }
-            val sites = kernel?.let { world ->
-                val at = world.minePosition
-                val workers = entities.filter { entity ->
-                    entity.type == "civilian" && entity.metrics["health"]?.jsonPrimitive?.double?.let { it > 0 } == true &&
-                        entity.vmState["activity"]?.jsonPrimitive?.content == "Mining" && world.vehicleOf(entity.id) == null &&
-                        hypot(entity.coordinates.x - at.x, entity.coordinates.y - at.y) < 1.0
-                }
-                val mineSite = EntitySnapshot(
-                    id = "site/mine", pid = null, type = "mine", status = "nominal",
-                    metrics = buildJsonObject {
-                        put("workers", workers.size)
-                        put("creatine_stock", world.creatineManager.mineStock)
-                        val synergy = 1.0 + 9.0 * (workers.size.toDouble() / 5000.0).coerceIn(0.0, 1.0)
-                        put("synergy_multiplier", synergy)
-                    },
-                    connectedTo = workers.map { it.id }, coordinates = Coordinates(at.x, at.y),
-                    vmState = buildJsonObject { put("shift", if (workers.isEmpty()) "Idle" else "Working") },
-                )
-                val list = mutableListOf(mineSite)
-                if (world.seaController.isFogActive) {
-                    val fogCenter = world.seaController.cloudCenter
-                    list += EntitySnapshot(
-                        id = "weather/sea_fog",
-                        pid = null,
-                        type = "fog",
-                        status = "nominal",
+                        val inFog = world.seaController.isFogActive && world.seaController.isInFog(fixture.at)
+                        val isBroken = fixture.health <= 0.0 || (fixture.kind == "air_defense" && world.airDefenseUnits[fixture.id]?.broken == true)
+                        EntitySnapshot(
+                            id = fixture.id, pid = null, type = fixtureType,
+                            status = if (isBroken) "dead" else if (!fixture.powered) "warning" else "nominal",
+                            metrics = buildJsonObject {
+                                put("health", fixture.health)
+                                if (fixture.id == "water/pump") put("power_consumption", world.grantedOf(fixture.id))
+                                if (fixture.kind == "depository") {
+                                    put("creatine_stock", world.creatineManager.storedStock)
+                                }
+                                if (fixture.kind == "medical_center") {
+                                    put("creatine_stock", world.creatineManager.medicalCenterStock)
+                                }
+                                if (fixture.kind == "air_defense") {
+                                    val unit = world.airDefenseUnits[fixture.id]
+                                    put("broken", isBroken)
+                                    if (unit != null) put("ammo", unit.shotsFired)
+                                }
+                                if (inFog) {
+                                    put("in_fog", true)
+                                }
+                            },
+                            connectedTo = fixture.feeds, coordinates = Coordinates(fixture.at.x, fixture.at.y),
+                            parentId = null, vmState = buildJsonObject {
+                                put("kind", fixture.kind)
+                                fixture.from?.let { put("from", buildJsonObject { put("x", it.x); put("y", it.y) }) }
+                                fixture.to?.let { put("to", buildJsonObject { put("x", it.x); put("y", it.y) }) }
+                            },
+                        )
+                    }
+                }.orEmpty()
+                val sites = kernel?.let { world ->
+                    val at = world.minePosition
+                    val workers = entities.filter { entity ->
+                        entity.type == "civilian" && entity.metrics["health"]?.jsonPrimitive?.double?.let { it > 0 } == true &&
+                            entity.vmState["activity"]?.jsonPrimitive?.content == "Mining" && world.vehicleOf(entity.id) == null &&
+                            hypot(entity.coordinates.x - at.x, entity.coordinates.y - at.y) < 1.0
+                    }
+                    val mineSite = EntitySnapshot(
+                        id = "site/mine", pid = null, type = "mine", status = "nominal",
                         metrics = buildJsonObject {
-                            put("width", world.seaController.cloudWidth)
-                            put("height", world.seaController.cloudHeight)
-                            put("depth", world.seaController.currentFogDepth)
+                            put("workers", workers.size)
+                            put("creatine_stock", world.creatineManager.mineStock)
+                            val synergy = 1.0 + 9.0 * (workers.size.toDouble() / 5000.0).coerceIn(0.0, 1.0)
+                            put("synergy_multiplier", synergy)
+                        },
+                        connectedTo = workers.map { it.id }, coordinates = Coordinates(at.x, at.y),
+                        vmState = buildJsonObject { put("shift", if (workers.isEmpty()) "Idle" else "Working") },
+                    )
+                    val list = mutableListOf(mineSite)
+                    if (world.seaController.isFogActive) {
+                        val fogCenter = world.seaController.cloudCenter
+                        list += EntitySnapshot(
+                            id = "weather/sea_fog",
+                            pid = null,
+                            type = "fog",
+                            status = "nominal",
+                            metrics = buildJsonObject {
+                                put("width", world.seaController.cloudWidth)
+                                put("height", world.seaController.cloudHeight)
+                                put("depth", world.seaController.currentFogDepth)
+                            },
+                            connectedTo = emptyList(),
+                            coordinates = Coordinates(fogCenter.x, fogCenter.y),
+                            vmState = buildJsonObject {
+                                put("active", true)
+                            }
+                        )
+                    }
+                    list
+                }.orEmpty()
+                val crocodiles = kernel?.crocodilePool?.activeCrocodiles().orEmpty().map { croc ->
+                    EntitySnapshot(
+                        id = croc.id,
+                        pid = null,
+                        type = "crocodile",
+                        status = if (croc.health <= 0) "dead" else if (croc.isDeflected) "warning" else "nominal",
+                        metrics = buildJsonObject {
+                            put("health", croc.health)
                         },
                         connectedTo = emptyList(),
-                        coordinates = Coordinates(fogCenter.x, fogCenter.y),
+                        coordinates = Coordinates(croc.position.x, croc.position.y),
+                        parentId = null,
                         vmState = buildJsonObject {
-                            put("active", true)
+                            put("deflected", croc.isDeflected)
+                            put("progress", croc.progress)
                         }
                     )
                 }
-                list
-            }.orEmpty()
-            val crocodiles = kernel?.crocodilePool?.activeCrocodiles().orEmpty().map { croc ->
-                EntitySnapshot(
-                    id = croc.id,
-                    pid = null,
-                    type = "crocodile",
-                    status = if (croc.health <= 0) "dead" else if (croc.isDeflected) "warning" else "nominal",
-                    metrics = buildJsonObject {
-                        put("health", croc.health)
-                    },
-                    connectedTo = emptyList(),
-                    coordinates = Coordinates(croc.position.x, croc.position.y),
-                    parentId = null,
-                    vmState = buildJsonObject {
-                        put("deflected", croc.isDeflected)
-                        put("progress", croc.progress)
-                    }
-                )
-            }
+                entities + fixtures + sites + crocodiles
+            } else emptyList()
             return TickSnapshot(runId = runId, runtimeMode = fleet.mode, seed = prepared.scenario.seed.toString(), tickId = tick,
-                timestamp = ((tick + 1) * dt * 1000).toLong(), entities = entities + fixtures + sites + crocodiles,
-                effects = intents.mapIndexed { index, it -> TraceEvent(it.source, it.operation.name, it.arguments, it.source in ableToAct, refs[index]) },
+                timestamp = ((tick + 1) * dt * 1000).toLong(), full = captureSnapshot, entities = capturedEntities,
+                effects = if (captureSnapshot) intents.mapIndexed { index, it -> TraceEvent(it.source, it.operation.name, it.arguments, it.source in ableToAct, refs[index]) } else emptyList(),
                 events = changeEvents + events, postings = kernel?.lastPostings.orEmpty(),
                 deliveredEvents = delivered).also {
                     lastTimings = StepTimings((observedAt - startedAt) / 1e6, (executedAt - observedAt) / 1e6,
                         (worldAt - executedAt) / 1e6, (System.nanoTime() - worldAt) / 1e6)
                     tick++
                 }
-        } catch (failure: Exception) { failed = true; close(); throw failure }
+        } catch (failure: Exception) { kernel?.endObservationPhase(); failed = true; close(); throw failure }
     }
 }
+
+private val ROVER_METRICS = setOf("passenger_count", "passenger_capacity")
+private val MARINE_METRICS = setOf("squad_size")

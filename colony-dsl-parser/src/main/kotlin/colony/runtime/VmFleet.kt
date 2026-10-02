@@ -21,7 +21,8 @@ class ReferenceFleet(prepared: PreparedRun, workers: Int = configuredReferenceWo
     private val verified = ReferenceVm.VerifiedProgram(prepared.program)
     private val vms = prepared.manifest.instances.map { verified.context(it, prepared.scenario.seed) }
     private val entityIds = vms.mapTo(HashSet()) { it.entityId }
-    private val shards = vms.chunked(maxOf(1, ((vms.size.toLong() + workerCount - 1) / workerCount).toInt()))
+    private val shardSize = maxOf(1, ((vms.size.toLong() + workerCount - 1) / workerCount).toInt())
+    private val shards = (vms.indices step shardSize).map { start -> start until minOf(start + shardSize, vms.size) }
     private val executor = if (workerCount == 1) null else Executors.newFixedThreadPool(workerCount) { task ->
         Thread(task, "reference-vm-worker").apply { isDaemon = true }
     }
@@ -30,14 +31,25 @@ class ReferenceFleet(prepared: PreparedRun, workers: Int = configuredReferenceWo
     override fun step(frames: Map<String, VmFrame>): Map<String, VmResult> {
         check(!closed) { "Reference fleet is closed" }
         require(frames.keys == entityIds) { "Frame set does not match the manifest" }
-        fun evaluate(shard: List<ReferenceVm>) = shard.map { vm -> vm.entityId to vm.step(frames.getValue(vm.entityId)) }
-        // Join in manifest order. Scheduling cannot change intent, event or floating-point reduction order.
-        val results = if (executor == null) listOf(evaluate(vms)) else {
-            val jobs = shards.map { shard -> executor.submit(Callable { evaluate(shard) }) }
-            try { jobs.map { it.get() } }
-            catch (failure: Exception) { jobs.forEach { it.cancel(true) }; close(); throw failure }
+        val results = LinkedHashMap<String, VmResult>(vms.size)
+        if (executor == null) {
+            for (vm in vms) results[vm.entityId] = vm.step(frames.getValue(vm.entityId))
+            return results
         }
-        return results.flatten().toMap(LinkedHashMap())
+        val slots = arrayOfNulls<VmResult>(vms.size)
+        // Join in manifest order. Scheduling cannot change intent, event or floating-point reduction order.
+        val jobs = shards.map { shard -> executor.submit(Callable {
+            for (index in shard) {
+                val vm = vms[index]
+                slots[index] = vm.step(frames.getValue(vm.entityId))
+            }
+        }) }
+        try { jobs.forEach { it.get() } }
+        catch (failure: Exception) { jobs.forEach { it.cancel(true) }; close(); throw failure }
+        for (index in vms.indices) {
+            results[vms[index].entityId] = checkNotNull(slots[index])
+        }
+        return results
     }
 
     override fun close() {
