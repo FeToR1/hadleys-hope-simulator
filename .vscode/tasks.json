@@ -1,0 +1,135 @@
+{
+  "version": "2.0.0",
+  "options": {
+    "env": {
+      "JAVA_HOME": "C:\\Users\\Григорий\\.gradle\\jdks\\eclipse_adoptium-17-amd64-windows\\jdk-17.0.20.1+1",
+      "GRADLE_USER_HOME": "B:\\gradle_user_home"
+    }
+  },
+  "tasks": [
+    {
+      "label": "1. Запуск симулятора (5000 домов + Экосистема)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/start-5000.ps1",
+        "-Scenario",
+        "examples/physics/settlement-5000.json"
+      ],
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      }
+    },
+    {
+      "label": "Остановить симуляцию (5000 домов)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/stop-5000.ps1"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "focus": true
+      }
+    },
+    {
+      "label": "Перезапуск симулятора (5000 домов + Экосистема)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "& '${workspaceFolder}/scripts/stop-5000.ps1'; & '${workspaceFolder}/scripts/start-5000.ps1' -Scenario 'examples/physics/settlement-5000.json'"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      }
+    },
+    {
+      "label": "2. Запуск Backend (JVM Server)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-Command",
+        "$env:JAVA_OPTS='-Xms512m -Xmx2g'; $env:HH_REFERENCE_WORKERS='4'; $env:HH_COMPACT_OBSERVER='1'; & '${workspaceFolder}/colony-dsl-parser/gradlew.bat' -p colony-dsl-parser installDist; & '${workspaceFolder}/colony-dsl-parser/build/install/colony-dsl-parser/bin/colony-dsl-parser.bat' serve examples/physics/settlement-5000.json 8080"
+      ],
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "3. Запуск Frontend Dev (Vite)",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev"
+      ],
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Сборка C++ Native VM (CMake)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-Command",
+        "cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release; cmake --build native/build --config Release"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Тестирование Backend (Gradle)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-Command",
+        "& '${workspaceFolder}/colony-dsl-parser/gradlew.bat' -p colony-dsl-parser test"
+      ],
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Тестирование Frontend (Vitest)",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "--prefix",
+        "frontend",
+        "test",
+        "--",
+        "--run"
+      ],
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

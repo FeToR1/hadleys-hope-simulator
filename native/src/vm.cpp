@@ -45,6 +45,32 @@ double finite(double value) {
     return value;
 }
 
+#if defined(_MSC_VER) && !defined(__clang__)
+int64_t addExact(int64_t a, int64_t b) {
+    if ((b > 0 && a > INT64_MAX - b) || (b < 0 && a < INT64_MIN - b)) {
+        throw StepError("Int64 overflow");
+    }
+    return a + b;
+}
+
+int64_t subExact(int64_t a, int64_t b) {
+    if ((b < 0 && a > INT64_MAX + b) || (b > 0 && a < INT64_MIN + b)) {
+        throw StepError("Int64 overflow");
+    }
+    return a - b;
+}
+
+int64_t mulExact(int64_t a, int64_t b) {
+    if (a > 0) {
+        if (b > 0 && a > INT64_MAX / b) throw StepError("Int64 overflow");
+        if (b < 0 && b < INT64_MIN / a) throw StepError("Int64 overflow");
+    } else if (a < 0) {
+        if (b > 0 && a < INT64_MIN / b) throw StepError("Int64 overflow");
+        if (b < 0 && (b == INT64_MIN || a < INT64_MAX / b)) throw StepError("Int64 overflow");
+    }
+    return a * b;
+}
+#else
 int64_t addExact(int64_t a, int64_t b) {
     int64_t out;
     if (__builtin_add_overflow(a, b, &out)) throw StepError("Int64 overflow");
@@ -62,6 +88,7 @@ int64_t mulExact(int64_t a, int64_t b) {
     if (__builtin_mul_overflow(a, b, &out)) throw StepError("Int64 overflow");
     return out;
 }
+#endif
 
 /** Exact mixed comparison: never round the integer to double, and never cast an out-of-range double. */
 int compareIntReal(int64_t integer, double real) {
