@@ -89,6 +89,26 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     private val subscriptions = behaviors.mapValues { (_, behavior) -> behavior.handlers.mapNotNull { it.eventId }.toSet() }
     private val eventIds = prepared.program.events.associate { it.name to it.id }
     private val childrenOf = objects.values.filter { it.parent != null }.groupBy { it.parent!! }
+    init {
+        // A contract field the world cannot compute would otherwise kill the run mid-tick; the spec wants a
+        // binding error before the first step (docs/technical-reference.md#world).
+        try {
+            for (kind in objects.values.map { it.kind }.distinct()) {
+                check(kind in kindContracts) { "Kind $kind has no observation contract; the scenario cannot be bound" }
+            }
+            kernel?.let { world ->
+                for ((kind, samples) in objects.values.groupBy { it.kind }) {
+                    val contract = kindContracts.getValue(kind)
+                    val failure = runCatching { world.view(samples.first(), contract.viewFields.keys) }.exceptionOrNull() ?: continue
+                    error("Kind $kind declares observations the world cannot compute: ${failure.message}")
+                }
+            }
+        } catch (failure: Exception) {
+            runCatching { fleet.close() }.exceptionOrNull()?.let(failure::addSuppressed)
+            throw failure
+        }
+    }
+
     private data class EntityDescriptor(val instance: Instance, val type: String, val usesPower: Boolean,
                                         val connected: List<String>)
     private val entityDescriptors = objects.values.map { instance -> EntityDescriptor(instance,
@@ -115,19 +135,6 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     private var previousPumpPower: Double? = null
     /** Power granted in the previous step: what a device sees as power_granted. */
     private var granted = emptyMap<String, Double>()
-
-    init {
-        // A contract field the world cannot compute would otherwise kill the run mid-tick; the spec wants a
-        // binding error before the first step (docs/simulation/calculations.md, section 1).
-        kernel?.let { world ->
-            for ((kind, samples) in objects.values.groupBy { it.kind }) {
-                val contract = kindContracts[kind]
-                    ?: error("Kind $kind has no observation contract; the scenario cannot be bound")
-                val failure = runCatching { world.view(samples.first(), contract.viewFields.keys) }.exceptionOrNull() ?: continue
-                error("Kind $kind declares observations the world cannot compute: ${failure.message}")
-            }
-        }
-    }
 
     private fun healthOf(id: String): Double = kernel?.healthOf(id) ?: health.getValue(id)
     private fun positionOf(id: String): Coordinates =
@@ -206,14 +213,17 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
      */
     private fun convert(facts: List<KernelEvent>): List<WorldEvent> {
         val lastDamage = HashMap<String, String>()
+        val repairs = HashMap<String, String>()
+        val breaks = HashSet<String>()
         return facts.map { fact ->
             val event = worldEvent(fact.type, fact.entityId, fact.actorId,
-                fact.causeRef ?: lastDamage[fact.entityId] ?: chainedCause(fact), fact.fields, fact.recipients)
+                fact.causeRef ?: lastDamage[fact.entityId]?.takeIf { fact.type in setOf("ObjectBroken", "EntityDied") }
+                    ?: chainedCause(fact, repairs, breaks), fact.fields, fact.recipients)
             if (fact.type == "DamageApplied") lastDamage[fact.entityId] = event.id
             when (fact.type) {
-                "ObjectBroken" -> lastBreakEvent[fact.entityId] = event.id
+                "ObjectBroken" -> { lastBreakEvent[fact.entityId] = event; breaks += fact.entityId }
                 "PowerLost" -> lastPowerLossEvent[fact.entityId] = event.id
-                "RepairCompleted" -> lastRepairEvent[fact.entityId] = event.id
+                "RepairCompleted" -> { lastBreakEvent.remove(fact.entityId); repairs[fact.entityId] = event.id }
             }
             event
         }
@@ -234,27 +244,54 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
         }
     }
 
-    /** The journal's long-range memory: which break, power loss and repair an object saw last. */
-    private val lastBreakEvent = HashMap<String, String>()
+    /** Unrepaired breaks; completed repairs must not cause unrelated later network transitions. */
+    private val lastBreakEvent = HashMap<String, WorldEvent>()
     private val lastPowerLossEvent = HashMap<String, String>()
-    private val lastRepairEvent = HashMap<String, String>()
+
+    /** Network paths are static; causal lookup visits only the affected house's dependencies. */
+    private val powerDependencies = kernel?.let { world -> world.topology.houses.associateWith { house ->
+        buildList {
+            add(house)
+            var node = world.topology.powerFeed[house]
+            while (node != null) {
+                add(node)
+                node = world.topology.byId[node]?.feedsFrom
+            }
+            addAll(world.topology.sources)
+        }
+    } }.orEmpty()
+    private val waterDependencies = kernel?.let { world -> world.topology.houses.associateWith { house ->
+        listOf(world.topology.waterPipe.getValue(house), "water/pump", "grid/bus") + world.topology.sources
+    } }.orEmpty()
 
     /**
-     * The cause of a world-internal transition (docs/simulation/trigger-conditions.md, section 8): a frozen pipe
+     * The cause of a world-internal transition (docs/technical-reference.md#contract): a frozen pipe
      * or a cold death traces to the power loss of the house it belongs to; a power or water loss traces to the
      * break that severed the network; a repair and the restoration it brings trace to the break they answer.
      */
-    private fun chainedCause(fact: KernelEvent): String? {
+    private fun chainedCause(fact: KernelEvent, repairs: Map<String, String>, breaks: Set<String>): String? {
         val world = kernel ?: return null
         val reason = fact.fields["reason"]?.jsonPrimitive?.content
+        fun loss(dependencies: List<String>): String? = dependencies.firstNotNullOfOrNull { id ->
+            lastBreakEvent[id]?.takeIf { event ->
+                world.isBroken(id) &&
+                    (id !in world.topology.sources || id in breaks) &&
+                    // Freezing occurs after network recomputation and cannot cause this step's water loss.
+                    !(fact.type == "WaterLost" && event.tick == tick && event.fields["reason"]?.jsonPrimitive?.content == "freezing")
+            }?.id
+        }
+        fun restoration(dependencies: List<String>): String? = dependencies.firstNotNullOfOrNull { id ->
+            repairs[id]?.takeUnless { world.isBroken(id) }
+        }
         return when {
-            fact.type == "PowerLost" -> world.topology.powerFeed[fact.entityId]?.let { lastBreakEvent[it] }
-            fact.type == "WaterLost" -> world.topology.waterPipe[fact.entityId]?.let { lastBreakEvent[it] }
+            fact.type == "PowerLost" -> loss(powerDependencies[fact.entityId].orEmpty())
+            fact.type == "WaterLost" -> loss(waterDependencies[fact.entityId].orEmpty())
             fact.type == "ObjectBroken" && reason == "freezing" ->
                 world.topology.waterPipe.entries.firstOrNull { it.value == fact.entityId }?.key?.let { lastPowerLossEvent[it] }
             fact.type == "EntityDied" -> objects.getValue(fact.entityId).parent?.let { lastPowerLossEvent[it] }
-            fact.type == "RepairCompleted" -> lastBreakEvent[fact.entityId] ?: lastRepairEvent[fact.entityId]
-            fact.type == "PowerRestored" -> world.topology.powerFeed[fact.entityId]?.let { lastRepairEvent[it] }
+            fact.type == "RepairCompleted" -> lastBreakEvent[fact.entityId]?.id
+            fact.type == "PowerRestored" -> restoration(powerDependencies[fact.entityId].orEmpty())
+            fact.type == "WaterRestored" -> restoration(waterDependencies[fact.entityId].orEmpty())
             else -> null
         }
     }
@@ -264,7 +301,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     /**
      * Scenario changes of this tick, and the losses and returns of power and water they cause. A change is the
      * transition into this snapshot, so its event is delivered in this frame together with the new observation.
-     * Assumption of the reference run: residents of a house hear about its power (the spec table names house and appliances).
+     * A house power event reaches the house and its appliances.
      */
     private fun applyChanges(): List<WorldEvent> {
         val changes = prepared.scenario.changes.filter { it.tick == tick }
@@ -279,7 +316,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
             if (on == powerBefore.getValue(id)) continue
             val parent = instance.parent
             if (parent != null && powerOn(parent) != powerBefore.getValue(parent)) continue // covered by the house event
-            // docs/simulation/trigger-conditions.md, section 3: the house and its appliances, not the residents.
+            // docs/technical-reference.md#contract: the house and its appliances, not the residents.
             val recipients = if (instance.kind == "House") {
                 listOf(id) + childrenOf[id].orEmpty().filter { it.kind in APPLIANCES }.map { it.id }
             } else listOf(id)
@@ -333,7 +370,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                 }
             }
             val dt = prepared.program.stepSeconds.toDouble()
-            // Spec (docs/simulation): a request from an entity that could not act in S_k is rejected.
+            // Spec (docs/technical-reference.md#world): a request from an entity that could not act in S_k is rejected.
             val ableToAct = objects.keys.filterTo(HashSet()) { healthOf(it) > 0 }
             val events = mutableListOf<WorldEvent>()
             intents.forEachIndexed { index, intent ->
