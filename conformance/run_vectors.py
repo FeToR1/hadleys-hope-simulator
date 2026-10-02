@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent second implementation of the stack VM (docs/integration-v1.md) that replays the vectors.
+"""Independent second implementation of the stack VM (docs/technical-reference.md) that replays the vectors.
 
 It is written from the artifact description, not by porting the Kotlin code, so a vector that passes here and in
 Kotlin says the description is enough to implement a VM. Usage: python run_vectors.py [DIRECTORY_WITH_VECTORS]

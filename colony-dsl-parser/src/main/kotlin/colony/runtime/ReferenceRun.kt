@@ -27,7 +27,7 @@ import kotlin.math.min
 )
 
 /**
- * A fact the world established (docs/simulation/trigger-conditions.md, section 3). Recipients are the entities whose
+ * A fact the world established (docs/technical-reference.md#contract, section 3). Recipients are the entities whose
  * programs can receive it and fields are the payload they receive; no recipients means the journal only.
  * The tick is the snapshot in which the event first appears.
  */
@@ -95,7 +95,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
 
     /**
      * The observation of one entity at the start of a step: scenario inputs, plus what the run computes from its own
-     * state (docs/simulation/trigger-conditions.md, section 6). Lists are sorted by (distance, id) and drop destroyed objects.
+     * state (docs/technical-reference.md#contract). Lists are sorted by (distance, id) and drop destroyed objects.
      */
     private fun observe(id: String, instance: Instance): JsonObject {
         kernel?.let { return JsonObject(it.view(instance, observed.getValue(id))) }

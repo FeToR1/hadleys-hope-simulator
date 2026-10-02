@@ -4,7 +4,7 @@ import colony.bytecode.compileSource
 import kotlinx.serialization.json.*
 import kotlin.test.*
 
-/** Events the world establishes (docs/simulation/trigger-conditions.md, section 3) and how programs receive them. */
+/** Events the world establishes (docs/technical-reference.md#contract, section 3) and how programs receive them. */
 class WorldEventsTest {
     private val program = compileSource("""
         event ActionSucceeded { action: String; }

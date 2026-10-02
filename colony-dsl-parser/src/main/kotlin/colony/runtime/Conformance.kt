@@ -11,7 +11,7 @@ import kotlin.io.path.readText
 import kotlin.io.path.writeText
 
 /*
- * Cross-implementation test vectors for the stack VM (see conformance/README.md). The reference VM produces them;
+ * Cross-implementation test vectors for the stack VM (see docs/technical-reference.md#vectors). The reference VM produces them;
  * another VM, for example the native one, must reproduce every step exactly. Programs, frames and expected results
  * are data, so nothing here has to be ported.
  */

@@ -40,7 +40,7 @@ data class TransportRequest(
 )
 
 /**
- * The single owner of the physical settlement (docs/simulation/calculations.md). Programs decide what they want;
+ * The single owner of the physical settlement (docs/technical-reference.md#world). Programs decide what they want;
  * this decides what happens. Every step runs the documented phases in order: check, damage and repair, networks
  * and resources, integration, movement and presence, events.
  */

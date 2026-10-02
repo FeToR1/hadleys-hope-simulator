@@ -8,7 +8,7 @@ import kotlin.math.abs
 import kotlin.test.*
 
 /**
- * The physical models against the formulas they come from (docs/simulation/calculations.md) and the cascade the
+ * The physical models against the formulas they come from (docs/technical-reference.md#world) and the cascade the
  * lab asks for: a broken grid, a cooling house, a frozen pipe, a repair and the money it costs.
  */
 class WorldKernelTest {
