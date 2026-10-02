@@ -709,7 +709,7 @@ class WorldKernel(
         applyMovement(intents, accepted, events)
         recomputeOccupants()
         // No second network pass here: a pipe frozen in phase 4 reaches the water network with the next
-        // step, as the phase order fixes (docs/simulation/calculations.md, section 2).
+        // step, as the phase order fixes (docs/technical-reference.md#world).
         reportChanges(poweredBefore, waterBefore, events)
         bill(tick, events)
         lastPostings = tickPostings.toList()
@@ -768,7 +768,7 @@ class WorldKernel(
             return KernelEvent("EntityDied", target, actor, buildJsonObject { put("entity", target) })
         }
         openJob(target, tick)
-        // docs/simulation/trigger-conditions.md, section 3: the owner and every crew hear about a break.
+        // docs/technical-reference.md#world: the owner and every crew hear about a break.
         val recipients = (listOfNotNull(ownerOf(target)) + people.rovers.map { it.id }).distinct()
         return KernelEvent("ObjectBroken", target, actor,
             buildJsonObject { put("object", target); put("reason", reason) }, recipients)
@@ -844,7 +844,7 @@ class WorldKernel(
     private fun sourcePower(id: String): Double = when (topology.byId[id]?.kind) {
         FixtureKind.REACTOR -> config.power.reactorPower
         FixtureKind.SOLAR -> config.power.solarPeak
-        // The battery is a working source only while it holds charge (docs/simulation/calculations.md, section 4.2):
+        // The battery is a working source only while it holds charge (docs/technical-reference.md#world):
         // once it is empty it stops bridging the dead sources, and that transition is a PowerLost.
         FixtureKind.UPS -> upsOutput()
         else -> 0.0
@@ -864,18 +864,22 @@ class WorldKernel(
         }
         // The pump is part of the settlement rather than a program, so the kernel asks for it.
         if (isPowered(PUMP) && !isBroken(PUMP)) requested[PUMP] = config.water.pumpPower
-        // The battery charges as a consumer of priority class 0 (docs/simulation/calculations.md, section 4.3;
-        // the section 11 resolution: charging beats heating). It sits on the bus, so the bus carries it.
-        val ups = UPS
-        if (!isBroken(ups) && isPowered(BUS)) {
-            val headroom = (config.power.upsCapacity - upsCharge).coerceAtLeast(0.0)
-            val chargePower = minOf(config.power.upsMaxPower, headroom * config.power.upsEfficiency / dt)
-            if (chargePower > 0.0) requested[ups] = chargePower
-        }
-
         val reactor = if (isBroken("grid/reactor")) 0.0 else config.power.reactorPower
         val solar = if (isBroken("grid/solar")) 0.0 else config.power.solarPeak * climateSolar()
-        val generation = reactor + solar + upsOutput()
+        val externalPower = reactor + solar
+        val batteryPower = upsOutput()
+        var load = 0.0
+        for (ids in powerClasses) for (id in ids) load += requested[id] ?: 0.0
+        val discharging = batteryPower > 0.0 && load > externalPower
+        // Charging has class-0 priority, but can only consume external generation. A battery needed
+        // by the actual loads discharges instead (docs/technical-reference.md#world).
+        val ups = UPS
+        if (!discharging && !isBroken(ups) && isPowered(BUS)) {
+            val headroom = (config.power.upsCapacity - upsCharge).coerceAtLeast(0.0)
+            val chargePower = minOf(config.power.upsMaxPower, headroom / (config.power.upsEfficiency * dt))
+            if (chargePower > 0.0) requested[ups] = chargePower
+        }
+        val generation = externalPower + if (discharging) batteryPower else 0.0
 
         granted.clear()
         var served = 0.0
@@ -900,11 +904,9 @@ class WorldKernel(
             curtailed = true
         }
         // The battery is the last generator in the merit order: whatever the sources did not cover came from it.
-        val fromBattery = (served - reactor - solar).coerceAtLeast(0.0).coerceAtMost(upsOutput())
-        // A discharging battery does not charge from its own output: the charge grant of this step is void.
-        val charge = if (fromBattery > 0.0) 0.0 else granted[ups] ?: 0.0
-        if (fromBattery > 0.0) granted[ups] = 0.0
-        val upsWasWorking = upsOutput() > 0.0
+        val fromBattery = (served - externalPower).coerceAtLeast(0.0).coerceAtMost(batteryPower)
+        val charge = granted[ups] ?: 0.0
+        val upsWasWorking = batteryPower > 0.0
         upsCharge = (upsCharge - fromBattery * dt / config.power.upsEfficiency + charge * dt * config.power.upsEfficiency)
             .coerceIn(0.0, config.power.upsCapacity)
         // A charge transition changes source connectivity at the next phase-3 network pass.
@@ -1088,7 +1090,7 @@ class WorldKernel(
             val had = id in poweredBefore
             val has = id in poweredNow
             if (had != has) {
-                // docs/simulation/trigger-conditions.md, section 3: the house and its appliances hear about it.
+                // docs/technical-reference.md#world: the house and its appliances hear about it.
                 val recipients = listOf(id) + people.appliances.filter { it.parent == id }.map { it.id }
                 events += KernelEvent(if (has) "PowerRestored" else "PowerLost", id, null, JsonObject(emptyMap()), recipients)
             }

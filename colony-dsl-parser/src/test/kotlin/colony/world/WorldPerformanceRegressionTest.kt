@@ -89,8 +89,12 @@ class WorldPerformanceRegressionTest {
         val frostWorld = WorldKernel(manifest, freezing, buildTopology(manifest, freezing), 1.0)
         assertTrue(frostWorld.hasWater(house))
         val frozen = frostWorld.step(0, emptyList(), emptyList(), emptySet())
+        assertTrue(frostWorld.hasWater(house))
+        assertTrue(frozen.any { it.type == "ObjectBroken" && it.entityId == topology.waterPipe.getValue(house) })
+        assertFalse(frozen.any { it.type == "WaterLost" && it.entityId == house })
+        val next = frostWorld.step(1, emptyList(), emptyList(), emptySet())
         assertFalse(frostWorld.hasWater(house))
-        assertTrue(frozen.any { it.type == "WaterLost" && it.entityId == house })
+        assertTrue(next.any { it.type == "WaterLost" && it.entityId == house })
     }
 
     @Test fun omittedSnapshotsPreserveAllTickFactsAndTheNextFullSnapshot() {

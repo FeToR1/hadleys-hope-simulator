@@ -53,6 +53,7 @@
       "poleHealth": 100.0,
       "priorities": {
         "Pump": 0,
+        "Ups": 0,
         "Heater": 1,
         "Kettle": 2
       }

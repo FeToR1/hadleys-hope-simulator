@@ -69,7 +69,7 @@ data class PowerConfig(
     /** Energy the uninterruptible supply holds, in joules. */
     val upsCapacity: Double = 1.8e9,
     /** Charge the battery starts the run with, in joules; a scenario drains or empties it to test blackouts. */
-    val upsInitialCharge: Double = 1.8e9,
+    val upsInitialCharge: Double = upsCapacity,
     val upsMaxPower: Double = 300_000.0,
     val upsEfficiency: Double = 0.95,
     val housesPerPole: Int = 20,
