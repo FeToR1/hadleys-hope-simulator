@@ -88,8 +88,30 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     private val subscriptions = behaviors.mapValues { (_, behavior) -> behavior.handlers.mapNotNull { it.eventId }.toSet() }
     private val eventIds = prepared.program.events.associate { it.name to it.id }
     private val childrenOf = objects.values.filter { it.parent != null }.groupBy { it.parent!! }
+    private data class EntityDescriptor(val instance: Instance, val type: String, val usesPower: Boolean,
+                                        val connected: List<String>)
+    private val entityDescriptors = objects.values.map { instance -> EntityDescriptor(instance,
+        if (instance.kind == "Human") "civilian" else instance.kind.lowercase(),
+        Capability.POWER_REQUEST in contracts.getValue(instance.kind).capabilities, listOfNotNull(instance.parent)) }
+    /** Dense mutable cache keys are private; all trees exposed in snapshots stay immutable. */
+    private class MetricCache {
+        var temperature: Double? = null
+        var scenarioTemperature: JsonElement? = null
+        var waterLevel: Double? = null
+        var occupants: Int? = null
+        var spend: Long? = null
+        var passengerCount: JsonElement? = null
+        var passengerCapacity: JsonElement? = null
+        var squadSize: JsonElement? = null
+        var stress: JsonElement? = null
+        var health: Double = Double.NaN
+        var power: Double? = null
+    }
+    private val metricCaches = Array(entityDescriptors.size) { MetricCache() }
+    private val entitySnapshots = arrayOfNulls<EntitySnapshot>(entityDescriptors.size)
     private var previousFixtures = emptyList<colony.world.FixtureState>()
     private var fixtureEntities = emptyList<EntitySnapshot>()
+    private var previousPumpPower: Double? = null
     /** Power granted in the previous step: what a device sees as power_granted. */
     private var granted = emptyMap<String, Double>()
 
@@ -105,7 +127,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
      * state (docs/technical-reference.md#contract). Lists are sorted by (distance, id) and drop destroyed objects.
      */
     private fun observe(id: String, instance: Instance): JsonObject {
-        kernel?.let { return JsonObject(it.view(instance, observed.getValue(id))) }
+        kernel?.let { return JsonObject(it.lazyView(instance, observed.getValue(id))) }
         val fields = contracts.getValue(instance.kind).viewFields
         val view = views.getValue(id).toMutableMap()
         if ("position" in fields) view["position"] = positionJson(positions.getValue(id))
@@ -224,21 +246,22 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
         return events
     }
 
-    fun step(): TickSnapshot {
+    fun step(captureSnapshot: Boolean = true): TickSnapshot {
         val startedAt = System.nanoTime()
         check(!failed) { "Run failed; create a fresh run before continuing" }
         check(tick < prepared.scenario.ticks) { "Run complete" }
         try {
             val changeEvents = applyChanges()
             val changeDeliveries = changeEvents.flatMap(::deliveriesOf)
-            // Materialize all observations before executing any VM (snapshot isolation).
+            // The world remains read-only until the fleet completes; fields are cached when first read.
+            kernel?.beginObservationPhase()
             val messageInboxes = pending.groupBy({ it.target }, { DeliveredEvent(it.eventId, it.fields, it.sender, it.sequence) })
             val worldInboxes = (pendingWorld + changeDeliveries).groupBy({ it.recipient }, { it.event })
             val frames = objects.mapValues { (id, instance) ->
                 VmFrame(tick, observe(id, instance), messageInboxes[id].orEmpty() + worldInboxes[id].orEmpty())
             }
             val observedAt = System.nanoTime()
-            val results = fleet.step(frames)
+            val results = try { fleet.step(frames) } finally { kernel?.endObservationPhase() }
             val executedAt = System.nanoTime()
             val delivered = pending.size + pendingWorld.size + changeDeliveries.size
             val outgoing = results.values.flatMap { it.events }
@@ -320,86 +343,131 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
             pending = outgoing
             pendingWorld = events.flatMap(::deliveriesOf)
             val worldAt = System.nanoTime()
-            val entities = objects.map { (id, instance) ->
-                val state = results.getValue(id).state
-                EntitySnapshot(id = id, pid = fleet.pids[id], type = when (instance.kind) { "Human" -> "civilian"; else -> instance.kind.lowercase() },
-                    status = if (healthOf(id) <= 0) "dead" else "nominal",
-                    metrics = buildJsonObject {
-                        if (kernel != null) {
-                            kernel.temperatureOf(id)?.let { put("temperature", it) }
-                            if (instance.kind == "House") {
-                                put("water_level", if (kernel.hasWater(id)) 100.0 else 0.0)
-                                put("occupants", kernel.occupants(id))
-                                put("spend", kernel.spentBy(id))
-                            }
-                            if (instance.kind == "Rover") {
-                                val view = kernel.view(instance, setOf("passenger_count", "passenger_capacity"))
-                                view["passenger_count"]?.let { put("passenger_count", it) }
-                                view["passenger_capacity"]?.let { put("passenger_capacity", it) }
-                            }
-                            if (instance.kind == "Marine") {
-                                kernel.view(instance, setOf("squad_size"))["squad_size"]?.let { put("squad_size", it) }
-                            }
-                        } else {
-                            views.getValue(id)["temperature"]?.let { put("temperature", it) }
-                            views.getValue(id)["water_temperature"]?.let { put("temperature", it) }
-                        }
-                        state["stress"]?.let { put("stress", it) }
-                        put("health", healthOf(id))
-                        if (Capability.POWER_REQUEST in contracts.getValue(instance.kind).capabilities) {
-                            put("power_consumption", kernel?.grantedOf(id) ?: power[id] ?: 0.0)
-                        }
-                    }, connectedTo = listOfNotNull(instance.parent, kernel?.vehicleOf(id)), coordinates = positionOf(id), parentId = instance.parent, vmState = state)
-            }
-            // The grid and the water network have no program of their own, but an observer has to see them.
-            val fixtureStates = kernel?.fixtureState().orEmpty()
-            // Only the pump has a changing consumption metric; all other fixture metrics are health.
-            val pumpPower = kernel?.grantedOf("water/pump")
-            if (previousFixtures != fixtureStates || fixtureEntities.firstOrNull { it.id == "water/pump" }
-                    ?.metrics?.get("power_consumption")?.jsonPrimitive?.double != pumpPower) {
-                fixtureEntities = fixtureStates.map { fixture ->
-                EntitySnapshot(
-                    id = fixture.id, pid = null, type = if (fixture.kind == "fence") "fence" else "power_node",
-                    status = if (fixture.health <= 0) "dead" else if (!fixture.powered) "warning" else "nominal",
-                    metrics = buildJsonObject {
-                        put("health", fixture.health)
-                        if (fixture.id == "water/pump") put("power_consumption", kernel!!.grantedOf(fixture.id))
-                    },
-                    connectedTo = fixture.feeds, coordinates = Coordinates(fixture.at.x, fixture.at.y),
-                    parentId = null, vmState = buildJsonObject {
-                        put("kind", fixture.kind)
-                        // A fence segment is a line; the observer draws it between its ends.
-                        fixture.from?.let { put("from", buildJsonObject { put("x", it.x); put("y", it.y) }) }
-                        fixture.to?.let { put("to", buildJsonObject { put("x", it.x); put("y", it.y) }) }
-                    },
-                )
+            val capturedEntities = if (captureSnapshot) {
+                val entities = entityDescriptors.mapIndexed { ordinal, descriptor ->
+                    val instance = descriptor.instance
+                    val id = instance.id
+                    val state = results.getValue(id).state
+                    val world = kernel
+                    val roverView = if (world != null && instance.kind == "Rover")
+                        world.view(instance, ROVER_METRICS) else null
+                    val squadSize = if (world != null && instance.kind == "Marine")
+                        world.view(instance, MARINE_METRICS)["squad_size"] else null
+                    val temperature = world?.temperatureOf(id)
+                    val scenarioTemperature = if (world == null) views.getValue(id)["water_temperature"] ?: views.getValue(id)["temperature"] else null
+                    val waterLevel = if (world != null && instance.kind == "House") if (world.hasWater(id)) 100.0 else 0.0 else null
+                    val occupants = if (world != null && instance.kind == "House") world.occupants(id) else null
+                    val spend = if (world != null && instance.kind == "House") world.spentBy(id) else null
+                    val passengerCount = roverView?.get("passenger_count")
+                    val passengerCapacity = roverView?.get("passenger_capacity")
+                    val stress = state["stress"]
+                    val currentHealth = healthOf(id)
+                    val powerConsumption = if (descriptor.usesPower) world?.grantedOf(id) ?: power[id] ?: 0.0 else null
+                    val previous = entitySnapshots[ordinal]
+                    val cache = metricCaches[ordinal]
+                    val metricsUnchanged = previous != null &&
+                        cache.temperature == temperature && cache.scenarioTemperature == scenarioTemperature && cache.waterLevel == waterLevel &&
+                        cache.occupants == occupants && cache.spend == spend && cache.passengerCount == passengerCount &&
+                        cache.passengerCapacity == passengerCapacity && cache.squadSize == squadSize && cache.stress == stress &&
+                        cache.health == currentHealth && cache.power == powerConsumption
+                    val metrics = if (metricsUnchanged) previous!!.metrics else buildJsonObject {
+                        temperature?.let { put("temperature", it) }
+                        scenarioTemperature?.let { put("temperature", it) }
+                        waterLevel?.let { put("water_level", it) }
+                        occupants?.let { put("occupants", it) }
+                        spend?.let { put("spend", it) }
+                        passengerCount?.let { put("passenger_count", it) }
+                        passengerCapacity?.let { put("passenger_capacity", it) }
+                        squadSize?.let { put("squad_size", it) }
+                        stress?.let { put("stress", it) }
+                        put("health", currentHealth)
+                        powerConsumption?.let { put("power_consumption", it) }
+                    }
+                    if (!metricsUnchanged) {
+                        cache.temperature = temperature
+                        cache.scenarioTemperature = scenarioTemperature
+                        cache.waterLevel = waterLevel
+                        cache.occupants = occupants
+                        cache.spend = spend
+                        cache.passengerCount = passengerCount
+                        cache.passengerCapacity = passengerCapacity
+                        cache.squadSize = squadSize
+                        cache.stress = stress
+                        cache.health = currentHealth
+                        cache.power = powerConsumption
+                    }
+                    val vehicle = world?.vehicleOf(id)
+                    val connected = if (vehicle == null) descriptor.connected else
+                        previous?.connectedTo?.takeIf { it.size == descriptor.connected.size + 1 && it.lastOrNull() == vehicle } ?: listOfNotNull(instance.parent, vehicle)
+                    val coordinates = if (world != null) {
+                        val point = world.positionOf(id)
+                        previous?.coordinates?.takeIf { it.x.toBits() == point.x.toBits() && it.y.toBits() == point.y.toBits() }
+                            ?: Coordinates(point.x, point.y)
+                    } else positions.getValue(id)
+                    val status = if (currentHealth <= 0) "dead" else "nominal"
+                    val pid = fleet.pids[id]
+                    if (previous != null && previous.metrics === metrics && previous.vmState == state &&
+                        previous.connectedTo == connected && previous.coordinates == coordinates && previous.status == status && previous.pid == pid) previous
+                    else EntitySnapshot(id, pid, descriptor.type, status, metrics, connected, coordinates, instance.parent, state)
+                        .also { entitySnapshots[ordinal] = it }
                 }
-                previousFixtures = fixtureStates
-            }
-            val fixtures = fixtureEntities
-            val sites = kernel?.let { world ->
-                val at = world.minePosition
-                val workers = entities.filter { entity ->
-                    entity.type == "civilian" && entity.metrics["health"]?.jsonPrimitive?.double?.let { it > 0 } == true &&
-                        entity.vmState["activity"]?.jsonPrimitive?.content == "Mining" && world.vehicleOf(entity.id) == null &&
-                        hypot(entity.coordinates.x - at.x, entity.coordinates.y - at.y) < 1.0
+                // The grid and the water network have no program of their own, but an observer has to see them.
+                val fixtureStates = kernel?.fixtureState().orEmpty()
+                // Only the pump has a changing consumption metric; all other fixture metrics are health.
+                val pumpPower = kernel?.grantedOf("water/pump")
+                if (previousFixtures !== fixtureStates || previousPumpPower != pumpPower) {
+                    fixtureEntities = fixtureStates.mapIndexed { ordinal, fixture ->
+                    val previous = fixtureEntities.getOrNull(ordinal)
+                    if (previous != null && previousFixtures[ordinal] === fixture &&
+                        (fixture.id != "water/pump" || previousPumpPower == pumpPower)) previous
+                    else EntitySnapshot(
+                        id = fixture.id, pid = null, type = if (fixture.kind == "fence") "fence" else "power_node",
+                        status = if (fixture.health <= 0) "dead" else if (!fixture.powered) "warning" else "nominal",
+                        metrics = buildJsonObject {
+                            put("health", fixture.health)
+                            if (fixture.id == "water/pump") put("power_consumption", kernel!!.grantedOf(fixture.id))
+                        },
+                        connectedTo = fixture.feeds, coordinates = previous?.coordinates ?: Coordinates(fixture.at.x, fixture.at.y),
+                        parentId = null, vmState = previous?.vmState ?: buildJsonObject {
+                            put("kind", fixture.kind)
+                            // A fence segment is a line; the observer draws it between its ends.
+                            fixture.from?.let { put("from", buildJsonObject { put("x", it.x); put("y", it.y) }) }
+                            fixture.to?.let { put("to", buildJsonObject { put("x", it.x); put("y", it.y) }) }
+                        },
+                    )
+                    }
+                    previousFixtures = fixtureStates
+                    previousPumpPower = pumpPower
                 }
-                listOf(EntitySnapshot(
-                    id = "site/mine", pid = null, type = "mine", status = "nominal",
-                    metrics = buildJsonObject { put("workers", workers.size) },
-                    connectedTo = workers.map { it.id }, coordinates = Coordinates(at.x, at.y),
-                    vmState = buildJsonObject { put("shift", if (workers.isEmpty()) "Idle" else "Working") },
-                ))
-            }.orEmpty()
+                val fixtures = fixtureEntities
+                val sites = kernel?.let { world ->
+                    val at = world.minePosition
+                    val workers = entities.filter { entity ->
+                        entity.type == "civilian" && entity.metrics["health"]?.jsonPrimitive?.double?.let { it > 0 } == true &&
+                            entity.vmState["activity"]?.jsonPrimitive?.content == "Mining" && world.vehicleOf(entity.id) == null &&
+                            hypot(entity.coordinates.x - at.x, entity.coordinates.y - at.y) < 1.0
+                    }
+                    listOf(EntitySnapshot(
+                        id = "site/mine", pid = null, type = "mine", status = "nominal",
+                        metrics = buildJsonObject { put("workers", workers.size) },
+                        connectedTo = workers.map { it.id }, coordinates = Coordinates(at.x, at.y),
+                        vmState = buildJsonObject { put("shift", if (workers.isEmpty()) "Idle" else "Working") },
+                    ))
+                }.orEmpty()
+                entities + fixtures + sites
+            } else emptyList()
             return TickSnapshot(runId = runId, runtimeMode = fleet.mode, seed = prepared.scenario.seed.toString(), tickId = tick,
-                timestamp = ((tick + 1) * dt * 1000).toLong(), entities = entities + fixtures + sites,
-                effects = intents.mapIndexed { index, it -> TraceEvent(it.source, it.operation.name, it.arguments, it.source in ableToAct, refs[index]) },
+                timestamp = ((tick + 1) * dt * 1000).toLong(), full = captureSnapshot, entities = capturedEntities,
+                effects = if (captureSnapshot) intents.mapIndexed { index, it -> TraceEvent(it.source, it.operation.name, it.arguments, it.source in ableToAct, refs[index]) } else emptyList(),
                 events = changeEvents + events, postings = kernel?.lastPostings.orEmpty(),
                 deliveredEvents = delivered).also {
                     lastTimings = StepTimings((observedAt - startedAt) / 1e6, (executedAt - observedAt) / 1e6,
                         (worldAt - executedAt) / 1e6, (System.nanoTime() - worldAt) / 1e6)
                     tick++
                 }
-        } catch (failure: Exception) { failed = true; close(); throw failure }
+        } catch (failure: Exception) { kernel?.endObservationPhase(); failed = true; close(); throw failure }
     }
 }
+
+private val ROVER_METRICS = setOf("passenger_count", "passenger_capacity")
+private val MARINE_METRICS = setOf("squad_size")
