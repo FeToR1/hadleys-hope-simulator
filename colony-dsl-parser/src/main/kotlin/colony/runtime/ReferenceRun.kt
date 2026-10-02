@@ -2,6 +2,7 @@ package colony.runtime
 
 import colony.bytecode.Op
 import colony.semantics.Capability
+import colony.semantics.KindContract
 import colony.semantics.SemanticEnvironment
 import colony.world.KernelEvent
 import colony.world.Point
@@ -56,7 +57,8 @@ private val APPLIANCES = setOf("Heater", "Kettle")
  * that a scenario change causes. Events cross tick boundaries as the spec requires.
  */
 class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUID().toString(),
-                   private val fleet: VmFleet = ReferenceFleet(prepared)) : AutoCloseable {
+                   private val fleet: VmFleet = ReferenceFleet(prepared),
+                   private val kindContracts: Map<String, KindContract> = SemanticEnvironment().kindContracts) : AutoCloseable {
     val runtimeMode: String get() = fleet.mode
     override fun close() = fleet.close()
     private data class Delivery(val recipient: String, val event: DeliveredEvent)
@@ -76,7 +78,6 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     private var failed = false
     private var eventCounter = 0L
     private var worldSequence = 0L
-    private val contracts = SemanticEnvironment().kindContracts
     /** A frame carries only what the entity's program reads (the frame is a projection, not a copy of the world). */
     private val behaviors = objects.mapValues { (_, instance) -> prepared.program.behaviors.single { it.name == instance.behavior } }
     private val observed = behaviors.mapValues { it.value.observes.toSet() }
@@ -85,6 +86,19 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     private val childrenOf = objects.values.filter { it.parent != null }.groupBy { it.parent!! }
     /** Power granted in the previous step: what a device sees as power_granted. */
     private var granted = emptyMap<String, Double>()
+
+    init {
+        // A contract field the world cannot compute would otherwise kill the run mid-tick; the spec wants a
+        // binding error before the first step (docs/simulation/calculations.md, section 1).
+        kernel?.let { world ->
+            for ((kind, samples) in objects.values.groupBy { it.kind }) {
+                val contract = kindContracts[kind]
+                    ?: error("Kind $kind has no observation contract; the scenario cannot be bound")
+                val failure = runCatching { world.view(samples.first(), contract.viewFields.keys) }.exceptionOrNull() ?: continue
+                error("Kind $kind declares observations the world cannot compute: ${failure.message}")
+            }
+        }
+    }
 
     private fun healthOf(id: String): Double = kernel?.healthOf(id) ?: health.getValue(id)
     private fun positionOf(id: String): Coordinates =
@@ -99,7 +113,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
      */
     private fun observe(id: String, instance: Instance): JsonObject {
         kernel?.let { return JsonObject(it.view(instance, observed.getValue(id))) }
-        val fields = contracts.getValue(instance.kind).viewFields
+        val fields = kindContracts.getValue(instance.kind).viewFields
         val view = views.getValue(id).toMutableMap()
         if ("position" in fields) view["position"] = positionJson(positions.getValue(id))
         // Without a world the harness has no settlement plan, so a place is simply where the manifest put it.
@@ -140,7 +154,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     /** Power reaches an object when its own connection and, for an appliance, its house's connection are up. */
     private fun powerOn(id: String): Boolean {
         val instance = objects.getValue(id)
-        if ("power_connected" !in contracts.getValue(instance.kind).viewFields) return true
+        if ("power_connected" !in kindContracts.getValue(instance.kind).viewFields) return true
         return flag(id, "power_connected") && (instance.parent?.let { flag(it, "power_connected") } ?: true)
     }
 
@@ -158,14 +172,20 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
 
     /**
      * Kernel facts become journal entries. A break that follows damage in the same step is linked to the hit
-     * that caused it; frost and other causes outside a request have no cause inside the world.
+     * that caused it; cold and freezing have no request behind them, so [chainedCause] supplies the cause from
+     * the journal's memory of what the world did to the same object before.
      */
     private fun convert(facts: List<KernelEvent>): List<WorldEvent> {
         val lastDamage = HashMap<String, String>()
         return facts.map { fact ->
-            val event = worldEvent(fact.type, fact.entityId, fact.actorId, fact.causeRef ?: lastDamage[fact.entityId],
-                fact.fields, fact.recipients)
+            val event = worldEvent(fact.type, fact.entityId, fact.actorId,
+                fact.causeRef ?: lastDamage[fact.entityId] ?: chainedCause(fact), fact.fields, fact.recipients)
             if (fact.type == "DamageApplied") lastDamage[fact.entityId] = event.id
+            when (fact.type) {
+                "ObjectBroken" -> lastBreakEvent[fact.entityId] = event.id
+                "PowerLost" -> lastPowerLossEvent[fact.entityId] = event.id
+                "RepairCompleted" -> lastRepairEvent[fact.entityId] = event.id
+            }
             event
         }
     }
@@ -182,6 +202,31 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                 vehicleId = event.target,
                 destination = Point(x, y),
             )
+        }
+    }
+
+    /** The journal's long-range memory: which break, power loss and repair an object saw last. */
+    private val lastBreakEvent = HashMap<String, String>()
+    private val lastPowerLossEvent = HashMap<String, String>()
+    private val lastRepairEvent = HashMap<String, String>()
+
+    /**
+     * The cause of a world-internal transition (docs/simulation/trigger-conditions.md, section 8): a frozen pipe
+     * or a cold death traces to the power loss of the house it belongs to; a power or water loss traces to the
+     * break that severed the network; a repair and the restoration it brings trace to the break they answer.
+     */
+    private fun chainedCause(fact: KernelEvent): String? {
+        val world = kernel ?: return null
+        val reason = fact.fields["reason"]?.jsonPrimitive?.content
+        return when {
+            fact.type == "PowerLost" -> world.topology.powerFeed[fact.entityId]?.let { lastBreakEvent[it] }
+            fact.type == "WaterLost" -> world.topology.waterPipe[fact.entityId]?.let { lastBreakEvent[it] }
+            fact.type == "ObjectBroken" && reason == "freezing" ->
+                world.topology.waterPipe.entries.firstOrNull { it.value == fact.entityId }?.key?.let { lastPowerLossEvent[it] }
+            fact.type == "EntityDied" -> objects.getValue(fact.entityId).parent?.let { lastPowerLossEvent[it] }
+            fact.type == "RepairCompleted" -> lastBreakEvent[fact.entityId] ?: lastRepairEvent[fact.entityId]
+            fact.type == "PowerRestored" -> world.topology.powerFeed[fact.entityId]?.let { lastRepairEvent[it] }
+            else -> null
         }
     }
 
@@ -205,8 +250,9 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
             if (on == powerBefore.getValue(id)) continue
             val parent = instance.parent
             if (parent != null && powerOn(parent) != powerBefore.getValue(parent)) continue // covered by the house event
+            // docs/simulation/trigger-conditions.md, section 3: the house and its appliances, not the residents.
             val recipients = if (instance.kind == "House") {
-                listOf(id) + childrenOf[id].orEmpty().filter { it.kind == "Human" || powerOn(it.id) != powerBefore.getValue(it.id) }.map { it.id }
+                listOf(id) + childrenOf[id].orEmpty().filter { it.kind in APPLIANCES }.map { it.id }
             } else listOf(id)
             events += worldEvent(if (on) "PowerRestored" else "PowerLost", id, null, null, JsonObject(emptyMap()), recipients)
         }
@@ -336,7 +382,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                         }
                         state["stress"]?.let { put("stress", it) }
                         put("health", healthOf(id))
-                        if (Capability.POWER_REQUEST in contracts.getValue(instance.kind).capabilities) {
+                        if (Capability.POWER_REQUEST in kindContracts.getValue(instance.kind).capabilities) {
                             put("power_consumption", kernel?.grantedOf(id) ?: power[id] ?: 0.0)
                         }
                     }, connectedTo = listOfNotNull(instance.parent, kernel?.vehicleOf(id)), coordinates = positionOf(id), parentId = instance.parent, vmState = state)

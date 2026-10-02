@@ -130,20 +130,21 @@ class WorldEventsTest {
     private fun change(tick: Long, target: String, name: String, value: Boolean) =
         ObservationChange(tick, "g-1/$target", buildJsonObject { put(name, value) })
 
-    @Test fun aLostHousePowerConnectionReachesTheHouseItsApplianceAndItsResidentsWithTheNewObservation() {
+    @Test fun aLostHousePowerConnectionReachesTheHouseAndItsAppliancesWithTheNewObservation() {
         val run = run(mapOf("house" to house, "heater" to heater, "resident" to resident), ticks = 8, changes = listOf(
             change(3, "house", "power_connected", false), change(6, "house", "power_connected", true)))
         val snapshots = (0 until 8).map { run.step() }
 
         val lost = snapshots[3].eventsOf("PowerLost").single()
         assertEquals("g-1/house", lost.entityId)
-        assertEquals(setOf("g-1/house", "g-1/heater", "g-1/resident"), lost.recipients.toSet())
+        assertEquals(setOf("g-1/house", "g-1/heater"), lost.recipients.toSet())
         assertNull(lost.causationId, "a scenario input has no cause inside the world")
         assertEquals(0, snapshots[2].state("g-1/house", "power_lost").int)
         // The transition is into this snapshot: the event and the observation arrive in the same frame.
         assertEquals(1, snapshots[3].state("g-1/house", "power_lost").int)
         assertEquals(1, snapshots[3].state("g-1/heater", "power_lost").int)
-        assertEquals(1, snapshots[3].state("g-1/resident", "power_lost").int)
+        // docs/simulation/trigger-conditions.md, section 3: residents are not recipients of a house power event.
+        assertEquals(0, snapshots[3].state("g-1/resident", "power_lost").int)
         assertEquals(false, snapshots[3].state("g-1/heater", "connected").boolean, "an appliance follows its house")
         assertEquals(true, snapshots[2].state("g-1/heater", "connected").boolean)
 
