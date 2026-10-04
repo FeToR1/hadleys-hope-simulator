@@ -43,6 +43,17 @@ describe('StateManager', () => {
     expect(manager.snapshot().entities.size).toBe(2);
     expect(manager.snapshot().tickId).toBe(0);
   });
+
+  it('keeps creatine sales as income instead of charging them as spend', () => {
+    const manager = new StateManager();
+    manager.ingest({ ...initial(), postings: [
+      { tick: 0, owner: 'home-1', kind: 'electricity', amount: 100 },
+      { tick: 0, owner: 'colony', kind: 'creatine_sale', amount: 250 },
+    ] });
+    expect(manager.snapshot().spendByOwner.get('home-1')).toBe(100);
+    expect(manager.snapshot().spendByOwner.has('colony')).toBe(false);
+    expect(manager.snapshot().incomeByOwner?.get('colony')).toBe(250);
+  });
 });
 
 describe('observed run log', () => {

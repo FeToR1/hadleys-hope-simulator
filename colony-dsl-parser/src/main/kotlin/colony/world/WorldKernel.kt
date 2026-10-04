@@ -53,6 +53,16 @@ class WorldKernel(
     private val stepSeconds: Double,
 ) {
     private val people = Population(manifest)
+    private fun stableIdOrder(instance: Instance) = instance.id.substringBefore('/').substringAfterLast('-').toIntOrNull() ?: Int.MAX_VALUE
+    private val strictRoverRoles = config.ecosystem.enabled || config.defense.enabled || config.creatine.enabled
+    private val crewRovers = (if (strictRoverRoles) people.rovers.filter { it.behavior == "RepairCrew" } else people.rovers)
+        .sortedWith(compareBy(::stableIdOrder, { it.id }))
+    private val transportRovers = (if (strictRoverRoles) people.rovers.filter { it.behavior == "PassengerRover" } else people.rovers)
+        .sortedWith(compareBy(::stableIdOrder, { it.id }))
+    private val cargoRovers = people.rovers.filter { it.behavior == "CargoRover" }.sortedWith(compareBy(::stableIdOrder, { it.id }))
+    private val finiteRepairMaterials = config.ecosystem.enabled || config.defense.enabled || config.creatine.enabled
+    private val crewMaterials = crewRovers.associate { it.id to config.repair.materials.toDouble() }.toMutableMap()
+    private var depotMaterials = config.repair.initialDepotMaterials.toDouble()
     // Static topology is indexed once; snapshot creation must not scan the city for every fixture.
     private val fixtureFeeds: Map<String, List<String>> = run {
         val feeds = HashMap<String, MutableList<String>>()
@@ -68,11 +78,15 @@ class WorldKernel(
     private fun applianceCell(p: Point) = kotlin.math.floor(p.x / applianceCellSize).toLong() to
         kotlin.math.floor(p.y / applianceCellSize).toLong()
     private val applianceCells = people.appliances.groupBy { applianceCell(Point(it.x, it.y)) }
-    private val powerClasses = (manifest.instances.map { it.id to it.kind } + (PUMP to "Pump") + (UPS to "Ups"))
+    private val powerClasses = (manifest.instances.map { it.id to it.kind } +
+        topology.fixtures.filter { it.kind in setOf(FixtureKind.AIR_DEFENSE, FixtureKind.GROUND_TURRET, FixtureKind.BURNER) }
+            .map { it.id to when (it.kind) { FixtureKind.BURNER -> "Burner"; FixtureKind.GROUND_TURRET -> "GroundDefense"; else -> "AirDefense" } } +
+        (PUMP to "Pump") + (UPS to "Ups"))
         .groupBy { config.power.priorityOf(it.second) }.toSortedMap()
         .values.map { consumers -> consumers.map { it.first }.sorted() }
     private val dt = stepSeconds
-    private var elapsedSeconds = 0.0
+    var elapsedSeconds: Double = 0.0
+        private set
     private var currentTick = -1L
     private val routineSlots = people.residents.sortedBy { it.id }.mapIndexed { index, resident -> resident.id to index }.toMap()
     private val deviceChildren = people.childrenOf.mapValues { (_, children) ->
@@ -83,10 +97,10 @@ class WorldKernel(
     private val workplaceViews = listOf(topology.mine, topology.services, topology.medicalCenter).associateWith(::pointJson)
     private val meetingView = pointJson(topology.meeting)
     private val crewDepots: Map<String, Point> = run {
-        val crews = people.rovers.filter { it.id.startsWith("crew-") }.sortedBy { it.id }
-        val transports = people.rovers.filter { it.id.startsWith("transport-") }.sortedBy { it.id }
-        val cargos = people.rovers.filter { it.id.startsWith("cargo-") }.sortedBy { it.id }
-        if (crews.size <= 4 || people.houses.size < 100) {
+        val crews = crewRovers
+        val transports = transportRovers
+        val cargos = cargoRovers
+        if (!strictRoverRoles || crews.size <= 4 || people.houses.size < 100) {
             emptyMap()
         } else {
             val minX = people.houses.minOf { it.x }
@@ -153,7 +167,6 @@ class WorldKernel(
     private val energyMeter = HashMap<String, Double>()
     private val waterMeter = HashMap<String, Double>()
     private val roundingCarry = HashMap<String, Double>()
-    private val jobs = LinkedHashMap<String, RepairJob>()
     private val passengerVehicle = LinkedHashMap<String, String>()
     private val vehiclePassengers = LinkedHashMap<String, LinkedHashSet<String>>()
     private val vehicleRouteTarget = LinkedHashMap<String, Point>()
@@ -165,7 +178,6 @@ class WorldKernel(
     private val blockedBy = HashMap<String, String>()
     /** Xenomorphs a squad has driven off, and until when they keep away. */
     private val routedUntil = HashMap<String, Double>()
-    private var nextJobId = 0L
     private var upsCharge = config.power.upsInitialCharge
     private var poweredNow = emptySet<String>()
     private var waterNow = emptySet<String>()
@@ -176,6 +188,11 @@ class WorldKernel(
     @Volatile private var observationPhase: ObservationProjectionPhase? = null
     private val observationSeats = ConcurrentHashMap<String, List<String>>()
     private val monthlyTotals = HashMap<String, Long>()
+    private val periodTotals = HashMap<String, Long>()
+    private val lifetimeIncome = HashMap<String, Long>()
+    private val periodIncome = HashMap<String, Long>()
+    private var lastClosedExpenses: Map<String, Long> = emptyMap()
+    private var lastClosedIncome: Map<String, Long> = emptyMap()
     private var lastBilledTick = 0L
     private var lastMonthTick = 0L
 
@@ -184,10 +201,19 @@ class WorldKernel(
     val creatineManager = CreatineManager(config.creatine)
     val crocodilePool = CrocodilePool(128)
     val airDefenseUnits = HashMap<String, AirDefenseUnit>()
+    val groundDefenseUnits = HashMap<String, GroundDefenseUnit>()
+    private val infrastructureEnergyMeter = HashMap<String, Double>()
     val taskQueue = TaskQueue(spatialIndex)
+    val ecosystemController = EcosystemController(config.ecosystem, manifest.seed)
+    var ecosystemZones: List<EcosystemZoneSnapshot> = emptyList()
+        private set
+    private var ecosystemServiceTargets: Map<String, EcosystemServiceTarget> = emptyMap()
+    var unavailableHumans: Set<String> = emptySet()
+        private set
     val respiratorEquipped = HashMap<String, Boolean>()
+    var respiratorStockRemaining: Double = config.sea.initialRespirators.toDouble()
+        private set
     val roverCreatineCargo = HashMap<String, Double>()
-    val workerCreatineCargo = HashMap<String, Double>()
     val roverLogisticsTarget = HashMap<String, String>()
     var totalCrocodilesSpawned = 0L
     var totalCrocodilesDeflected = 0L
@@ -203,7 +229,7 @@ class WorldKernel(
             // Sources, pipes and fences do not consume grid power.
             val powered = when (fixture.kind) {
                 FixtureKind.REACTOR, FixtureKind.SOLAR, FixtureKind.UPS, FixtureKind.PIPE, FixtureKind.FENCE,
-                FixtureKind.DEPOSITORY, FixtureKind.MEDICAL_CENTER -> currentHealth > 0
+                FixtureKind.DEPOSITORY, FixtureKind.MEDICAL_CENTER, FixtureKind.MINE -> currentHealth > 0
                 else -> isPowered(fixture.id)
             }
             val previous = fixtureSnapshots.getOrNull(index)
@@ -219,7 +245,7 @@ class WorldKernel(
         changed?.let { fixtureSnapshots = it }
         return fixtureSnapshots
     }
-    val activeJobs: Collection<RepairJob> get() = jobs.values.filter { it.availableAtTick <= currentTick }
+    val activeJobs: Collection<RepairJob> get() = taskQueue.allJobs.filter { it.availableAtTick <= currentTick }
     /** Lines posted during the step that has just finished, for the journal and the dashboard. */
     var lastPostings: List<Posting> = emptyList()
         private set
@@ -238,10 +264,18 @@ class WorldKernel(
         for (fixture in topology.fixtures) {
             health[fixture.id] = fullHealth(fixture.id)
             position[fixture.id] = fixture.at
-            spatialIndex.update(fixture.id, fixture.at)
+            if (fixture.kind == FixtureKind.FENCE && fixture.from != null && fixture.to != null) {
+                spatialIndex.updateSegment(fixture.id, fixture.from, fixture.to)
+            } else spatialIndex.update(fixture.id, fixture.at)
             if (fixture.kind == FixtureKind.AIR_DEFENSE) {
                 val isRoof = fixture.id.contains("roof")
-                airDefenseUnits[fixture.id] = AirDefenseUnit(fixture.id, fixture.at, isRoofMounted = isRoof)
+                airDefenseUnits[fixture.id] = AirDefenseUnit(fixture.id, fixture.at, isRoofMounted = isRoof).also {
+                    it.ammoRemaining = config.defense.initialAmmoPerUnit.toDouble()
+                }
+            }
+            if (fixture.kind == FixtureKind.GROUND_TURRET) {
+                groundDefenseUnits[fixture.id] = GroundDefenseUnit(fixture.id, fixture.at,
+                    ammoRemaining = config.defense.initialAmmoPerUnit.toDouble())
             }
         }
 
@@ -256,6 +290,15 @@ class WorldKernel(
             val minY = people.houses.minOf { it.y }
             val maxY = people.houses.maxOf { it.y }
             seaController.configureSettlementBounds(minX, maxX, minY, maxY)
+            if (config.ecosystem.enabled) {
+                val halfZone = config.ecosystem.zoneSize / 2.0
+                ecosystemController.configureBounds(Box(
+                    if (maxX > minX) minX else minX - halfZone,
+                    if (maxY > minY) minY else minY - halfZone,
+                    if (maxX > minX) maxX else maxX + halfZone,
+                    if (maxY > minY) maxY else maxY + halfZone,
+                ), topology.seaCoastX, topology.depository)
+            }
         }
         for ((crewId, pt) in crewDepots) {
             position[crewId] = pt
@@ -275,14 +318,22 @@ class WorldKernel(
     fun hasWater(id: String): Boolean = id in waterNow
     fun occupants(houseId: String): Int = occupantsOf[houseId] ?: 0
     fun isBroken(id: String): Boolean = healthOf(id) <= 0.0
-    fun monthlyReport(): Map<String, Long> = monthlyTotals.toMap()
+    /** Expenses accumulated in the currently open calendar month. */
+    fun monthlyReport(): Map<String, Long> = periodTotals.toMap()
+    /** Compatibility alias for [monthlyReport]; reports only the currently open calendar month. */
+    fun periodReport(): Map<String, Long> = periodTotals.toMap()
+    /** The most recently closed month's totals, kept separate from the new open period. */
+    fun lastClosedMonthlyReport(): Map<String, Long> = lastClosedExpenses
+    fun incomeReport(): Map<String, Long> = lifetimeIncome.toMap()
+    fun periodIncomeReport(): Map<String, Long> = periodIncome.toMap()
+    fun lastClosedIncomeReport(): Map<String, Long> = lastClosedIncome
     fun vehicleOf(id: String): String? = passengerVehicle[id]
     /** The same site the residents observe as their workplace; exposed to the observer, not re-inferred by the UI. */
     val minePosition: Point get() = topology.mine
     private fun fullHealth(id: String): Double = when (topology.byId[id]?.kind) {
         FixtureKind.POLE -> config.power.poleHealth
         FixtureKind.FENCE -> config.fence.health
-        FixtureKind.AIR_DEFENSE -> 100.0
+        FixtureKind.AIR_DEFENSE, FixtureKind.MINE -> 100.0
         FixtureKind.DEPOSITORY, FixtureKind.MEDICAL_CENTER -> 200.0
         else -> 100.0
     }
@@ -336,20 +387,24 @@ class WorldKernel(
             "visible_infrastructure" -> targets(id, topology.poles.filter { it.id != BUS && !isBroken(it.id) }.map { it.id } +
                 listOfNotNull(blockedBy[id]?.takeUnless(::isBroken)), config.sight.xenomorphRadius)
             // People indoors or inside a rover are out of reach; marines are not prey.
-            "visible_humans" -> targets(id, people.residents.filter { resident ->
-                !isBroken(resident.id) && resident.id !in passengerVehicle &&
+            "visible_humans" -> nearbyTargets(id, config.sight.xenomorphRadius) { targetId ->
+                val resident = people.byId[targetId] ?: return@nearbyTargets false
+                resident.kind == "Human" && !isBroken(resident.id) && resident.id !in passengerVehicle &&
                     positionOf(resident.id).distanceTo(positionOf(resident.parent ?: resident.id)) > HOUSE_ZONE
-            }.map { it.id }, config.sight.xenomorphRadius)
+            }
             "patrol_waypoint" -> pointJson(patrolPoint(id))
             "routed" -> JsonPrimitive(isRouted(id))
+            "attack_active" -> JsonPrimitive(ecosystemController.attackActive(id, elapsedSeconds))
             "home" -> homeViews[instance.parent ?: id] ?: pointJson(positionOf(instance.parent ?: id))
             "workplace" -> workplaceViews[workplaceOf(id)] ?: pointJson(workplaceOf(id))
+            "medical_required" -> JsonPrimitive(config.creatine.enabled && healthOf(id) < config.creatine.lowHealthThreshold)
             "meeting_point" -> meetingView
             "routine_slot" -> JsonPrimitive(routineSlots[id] ?: 0)
             "day_minute" -> JsonPrimitive(residentDayMinute(id))
-            "depot" -> vehicleRouteTarget[id]?.let(::pointJson) ?: depotViews[id] ?: pointJson(depotOf(instance))
+            "depot" -> ecosystemServiceTargets[id]?.target?.let(::pointJson)
+                ?: vehicleRouteTarget[id]?.let(::pointJson) ?: depotViews[id] ?: pointJson(depotOf(instance))
             "active_jobs" -> jobList(id)
-            "materials_remaining" -> JsonPrimitive(config.repair.materials)
+            "materials_remaining" -> JsonPrimitive(crewMaterials[id] ?: config.repair.materials.toDouble())
             "speed_eff" -> JsonPrimitive(config.repair.roverSpeed)
             "work_radius" -> JsonPrimitive(config.repair.workRadius)
             "boarding_radius" -> JsonPrimitive(config.transport.boardRadius)
@@ -361,7 +416,8 @@ class WorldKernel(
             "available_vehicles" -> targets(id, availableTransportVehicles(id), if (squadOf(id) == null) config.transport.walkRadius else config.sight.sightRadius)
             "in_vehicle" -> JsonPrimitive(id in passengerVehicle)
             "dispatch_ready" -> JsonPrimitive(elapsedSeconds >= config.marine.responseDelaySeconds)
-            "visible_xenomorphs" -> targets(id, listOfNotNull(squadTarget(id)), radius = null)
+            "visible_xenomorphs" -> targets(id, listOfNotNull(squadTarget(id)).filter { people.byId[it]?.kind == "Xenomorph" }, radius = null)
+            "visible_predators" -> targets(id, listOfNotNull(squadTarget(id)).filter { people.byId[it]?.kind == "Predator" }, radius = null)
             "squad_size" -> JsonPrimitive(marineSquad(id).count { !isBroken(it.id) })
             "squad_leader" -> JsonPrimitive(isMarineLeader(id))
             "squad_ready" -> JsonPrimitive(squadReady(id))
@@ -372,7 +428,7 @@ class WorldKernel(
     /** The jobs a crew can see, nearest first, with the distance the crew has to drive. */
     private fun jobList(observerId: String): JsonArray {
         val here = positionOf(observerId)
-        return JsonArray(jobs.values
+        return JsonArray(taskQueue.allJobs
             .filter { it.availableAtTick <= currentTick }
             .sortedWith(compareBy({ here.distanceTo(it.at) }, { it.target }))
             .take(config.sight.listLimit)
@@ -391,13 +447,11 @@ class WorldKernel(
     private fun availableTransportVehicles(passengerId: String): List<String> {
         val squad = squadOf(passengerId) ?: return vehiclesForResident(passengerId)
         val members = marineSquad(passengerId).filter { !isBroken(it.id) }
-        if (squad != null && (members.size !in config.marine.minSquadSize..config.marine.maxSquadSize ||
-                    members.size > config.transport.passengerCapacity)) return emptyList()
+        if (members.size !in config.marine.minSquadSize..config.marine.maxSquadSize ||
+            members.size > config.transport.passengerCapacity) return emptyList()
         // A squad keeps the first vehicle it boards, even when its target has moved since boarding.
         val reserved = members.firstNotNullOfOrNull { passengerVehicle[it.id] }
-        val hasTransportFleet = people.rovers.any { it.id.startsWith("transport-") }
-        return people.rovers.filter { rover ->
-            if (hasTransportFleet && !rover.id.startsWith("transport-")) return@filter false
+        return transportRovers.filter { rover ->
             val riders = vehiclePassengers[rover.id].orEmpty()
             !isBroken(rover.id) && riders.size < config.transport.passengerCapacity &&
                 (reserved == null || reserved == rover.id) &&
@@ -415,9 +469,7 @@ class WorldKernel(
      */
     private fun vehiclesForResident(residentId: String): List<String> {
         val workplace = workplaceOf(residentId)
-        val hasTransportFleet = people.rovers.any { it.id.startsWith("transport-") }
-        return people.rovers.filter { rover ->
-            if (hasTransportFleet && !rover.id.startsWith("transport-")) return@filter false
+        return transportRovers.filter { rover ->
             val riders = vehiclePassengers[rover.id].orEmpty()
             !isBroken(rover.id) && atDepot(rover) && riders.none { squadOf(it) != null } &&
                 (riders.isEmpty() || vehicleRouteTarget[rover.id]?.distanceTo(workplace)?.let { it <= 1e-6 } == true && !transportReady(rover.id)) &&
@@ -472,9 +524,9 @@ class WorldKernel(
 
     private fun nearestVisibleXenomorph(marineId: String): String? {
         val here = positionOf(marineId)
-        return people.xenomorphs.asSequence()
+        return people.groundThreats.asSequence()
             // Behind a fence the squads defend the colony: they go after intruders, not what roams outside.
-            .filter { it.kind == "Xenomorph" && !isBroken(it.id) && !isRouted(it.id) && topology.fenceBox?.contains(positionOf(it.id)) != false }
+            .filter { !isBroken(it.id) && !isRouted(it.id) && topology.fenceBox?.contains(positionOf(it.id)) != false }
             .map { it.id to here.distanceTo(positionOf(it.id)) }
             .filter { it.second <= config.sight.sightRadius }
             .sortedWith(compareBy({ it.second }, { it.first }))
@@ -534,14 +586,13 @@ class WorldKernel(
             val squad = squadOf(request.passengerId)
             val riders = vehiclePassengers[request.vehicleId].orEmpty()
             val sameSquad = squad != null && riders.isNotEmpty() && riders.all { squadOf(it) == squad }
-            val hasTransportFleet = people.rovers.any { it.id.startsWith("transport-") }
             val reason = when {
                 !request.destination.x.isFinite() || !request.destination.y.isFinite() -> "invalid_destination"
                 passenger == null -> "unknown_passenger"
                 passenger.kind != "Human" && passenger.kind != "Marine" -> "passenger_not_transportable"
                 request.passengerId !in accepted || isBroken(request.passengerId) -> "passenger_unable"
                 vehicle == null -> "unknown_vehicle"
-                vehicle.kind != "Rover" || (hasTransportFleet && !vehicle.id.startsWith("transport-")) -> "target_not_rover"
+                vehicle.kind != "Rover" || vehicle !in transportRovers -> "target_not_rover"
                 isBroken(request.vehicleId) -> "vehicle_broken"
                 passengerVehicle.containsKey(request.passengerId) -> "already_in_vehicle"
                 positionOf(request.passengerId).distanceTo(positionOf(request.vehicleId)) > config.transport.boardRadius -> "out_of_boarding_range"
@@ -580,8 +631,26 @@ class WorldKernel(
         return if ((routineSlots[id] ?: 0) % 4 == 2) topology.services else topology.mine
     }
 
+    private fun isMiningWorkerAtMine(resident: Instance): Boolean {
+        val slot = routineSlots[resident.id] ?: return false
+        val cohort = slot % 4
+        if (cohort != 0 && cohort != 3) return false
+        if (resident.id in unavailableHumans || isBroken(resident.id) || healthOf(resident.id) < config.creatine.lowHealthThreshold || resident.id in passengerVehicle) return false
+        if (positionOf(resident.id).distanceTo(topology.mine) > 1.0) return false
+        val offset = (slot % 3) * 5
+        val onShift = if (people.houses.size >= 1000) {
+            ((elapsedSeconds + (slot * 37) % 1200) % 1200.0) < 750.0
+        } else {
+            val minute = residentDayMinute(resident.id)
+            val start = if (cohort == 3) 840 + offset else 480 + offset
+            val end = if (cohort == 3) 1200 + offset else 840 + offset
+            minute in start.toLong() until end.toLong()
+        }
+        return onShift
+    }
+
     private fun residentDayMinute(id: String): Long {
-        if (people.houses.size < 1000) {
+        if (!config.creatine.enabled || people.houses.size < 1000) {
             return (config.human.startMinute + (elapsedSeconds / 60).toLong()) % 1440
         }
         val slot = routineSlots[id] ?: 0
@@ -635,18 +704,28 @@ class WorldKernel(
         } else {
             candidates
         }
-        return JsonArray(filteredCandidates.asSequence()
+        return targetObjects(observerId, filteredCandidates, radius)
+    }
+
+    private fun nearbyTargets(observerId: String, radius: Double, include: (String) -> Boolean): JsonArray {
+        if (radius < 0.0) return JsonArray(emptyList())
+        val here = positionOf(observerId)
+        val candidates = spatialIndex.queryRadius(here, radius).filter(include)
+        return targetObjects(observerId, candidates, radius)
+    }
+
+    private fun targetObjects(observerId: String, candidates: List<String>, radius: Double?): JsonArray {
+        val here = positionOf(observerId)
+        return JsonArray(candidates.asSequence()
             .map { id -> id to (topology.byId[id]?.takeIf { it.kind == FixtureKind.FENCE }?.nearestPointTo(here) ?: positionOf(id)) }
             .map { (id, at) -> Triple(id, at, at.distanceTo(here)) }
             .filter { radius == null || it.third <= radius }
             .sortedWith(compareBy({ it.third }, { it.first }))
             .take(config.sight.listLimit)
-            .map { (id, at, distance) ->
-                buildJsonObject {
-                    put("id", id); put("kind", kindOf(id)); put("position", pointJson(at))
-                    put("distance", distance); put("health", healthOf(id))
-                }
-            }.toList())
+            .map { (id, at, distance) -> buildJsonObject {
+                put("id", id); put("kind", kindOf(id)); put("position", pointJson(at))
+                put("distance", distance); put("health", healthOf(id))
+            } }.toList())
     }
 
     private fun kindOf(id: String): String =
@@ -795,9 +874,10 @@ class WorldKernel(
     init {
         // Xenomorphs come from the wilds: with a fence they appear outside it, each at its own place.
         if (topology.fenceBox != null) {
-            for (xenomorph in people.byId.values.filter { it.kind == "Xenomorph" }) {
-                position[xenomorph.id] = roamingPoint(xenomorph.id)
-                advancePatrol(xenomorph.id)
+            for (predator in people.groundThreats) {
+                position[predator.id] = roamingPoint(predator.id)
+                spatialIndex.update(predator.id, position.getValue(predator.id))
+                advancePatrol(predator.id)
             }
         }
     }
@@ -818,6 +898,7 @@ class WorldKernel(
         currentTick = tick
         val events = ArrayList<KernelEvent>()
         tickPostings.clear()
+        replenishRepairMaterials()
         val poweredBefore = poweredNow
         val waterBefore = waterNow
 
@@ -840,10 +921,11 @@ class WorldKernel(
         applyTransportRequests(transportRequests, accepted, events)
         applyRepairs(tick, intents, accepted, events)
         stepSea(tick, events)
-        stepThreatsAndDefense(tick, events)
         stepCreatineEconomy(tick, events)
         recomputeNetworks()
         distributePower(intents, accepted)
+        stepEcosystem(events)
+        stepThreatsAndDefense(tick, events)
         integrate(tick, events)
         applyMovement(intents, accepted, events)
         recomputeOccupants()
@@ -858,6 +940,7 @@ class WorldKernel(
 
     private fun stepSea(tick: Long, events: MutableList<KernelEvent>) {
         if (!config.sea.enabled) return
+        respiratorStockRemaining = minOf(config.sea.initialRespirators.toDouble(), respiratorStockRemaining + config.sea.respiratorRestockPerSecond * dt)
         val seaResult = seaController.step(elapsedSeconds, dt)
         if (seaResult.fogStarted) {
             events += KernelEvent("FogStarted", "sea", null, buildJsonObject { put("depth", seaResult.currentFogDepth) })
@@ -876,7 +959,7 @@ class WorldKernel(
                     val after = (before - dmg).coerceAtLeast(0.0)
                     health[house.id] = after
                     seaController.recordErosionDamage(dmg)
-                    if (after < 85.0 && house.id !in jobs) {
+                    if (after < 85.0 && !taskQueue.hasJob(house.id)) {
                         openJob(house.id, tick, "device", fastDispatch = true)
                     }
                     if (before > 0.0 && after <= 0.0) {
@@ -904,20 +987,97 @@ class WorldKernel(
                 if (isBroken(resident.id) || resident.id in passengerVehicle) continue
                 val pos = positionOf(resident.id)
                 if (seaController.isInFog(pos)) {
-                    val hasRespirator = respiratorEquipped[resident.id] == true
-                    if (!hasRespirator) {
-                        // Worker equips respirator upon encountering fog
+                    var hasRespirator = respiratorEquipped[resident.id] == true
+                    if (!hasRespirator && respiratorStockRemaining >= 1.0) {
+                        respiratorStockRemaining -= 1.0
                         respiratorEquipped[resident.id] = true
+                        hasRespirator = true
+                        events += KernelEvent("RespiratorIssued", resident.id, "settlement",
+                            buildJsonObject { put("remaining", respiratorStockRemaining) }, listOf(resident.id))
+                    }
+                    if (!hasRespirator && config.sea.fogSuffocationDamageRate > 0.0) {
+                        val before = healthOf(resident.id)
+                        val after = (before - config.sea.fogSuffocationDamageRate * dt).coerceAtLeast(0.0)
+                        health[resident.id] = after
+                        events += KernelEvent("DamageApplied", resident.id, "sea_fog", buildJsonObject {
+                            put("target", resident.id); put("amount", before - after); put("reason", "sea_fog_suffocation")
+                        }, listOf(resident.id))
+                        if (before > 0.0 && after <= 0.0) events += breakOf(tick, resident.id, "sea_fog_suffocation", "sea_fog")
                     }
                 } else {
                     respiratorEquipped[resident.id] = false
                 }
             }
+        } else {
+            for (resident in people.residents) respiratorEquipped[resident.id] = false
         }
     }
 
+    private fun stepEcosystem(events: MutableList<KernelEvent>) {
+        if (!config.ecosystem.enabled) return
+        val entities = ArrayList<EcosystemEntity>(manifest.instances.size + topology.fixtures.size + crocodilePool.allCrocodiles().size)
+        for (instance in manifest.instances) {
+            val kind = when {
+                instance.kind == "House" -> "house"
+                instance.kind == "Human" -> "civilian"
+                instance.kind == "Xenomorph" -> "xenomorph"
+                instance.kind == "Predator" -> "predator"
+                instance.kind == "Rover" && (instance.behavior == "CleanupRover" || instance.id.substringBefore('/').startsWith("cleanup-")) -> "cleanup-rover"
+                instance.kind == "Rover" && (instance.behavior == "Forester" || instance.id.substringBefore('/').startsWith("forester-")) -> "forester"
+                instance.kind == "Rover" -> "rover"
+                else -> continue
+            }
+            entities += EcosystemEntity(instance.id, kind, positionOf(instance.id), healthOf(instance.id),
+                available = !isBroken(instance.id) && instance.id !in passengerVehicle,
+                inSeaVapor = seaController.isFogActive && seaController.isInFog(positionOf(instance.id)),
+                respiratorEquipped = respiratorEquipped[instance.id] == true)
+        }
+        for (fixture in topology.fixtures) {
+            val kind = when (fixture.kind) {
+                FixtureKind.AIR_DEFENSE -> "air_defense"
+                FixtureKind.GROUND_TURRET -> "ground_turret"
+                FixtureKind.FENCE -> "fence"
+                FixtureKind.DEPOSITORY -> "depository"
+                FixtureKind.MEDICAL_CENTER -> "medical_center"
+                FixtureKind.MINE -> "mine"
+                FixtureKind.REACTOR, FixtureKind.SOLAR, FixtureKind.UPS, FixtureKind.PUMP, FixtureKind.BURNER,
+                FixtureKind.POLE, FixtureKind.PIPE -> "power_node"
+            }
+            entities += EcosystemEntity(fixture.id, if (fixture.kind == FixtureKind.BURNER) "burner" else kind,
+                fixture.at, healthOf(fixture.id), available = !isBroken(fixture.id))
+        }
+        for (crocodile in crocodilePool.allCrocodiles()) if (crocodile.active) {
+            entities += EcosystemEntity(crocodile.id, "crocodile", crocodile.position, crocodile.health)
+        }
+        val burnGrants = topology.fixtures.asSequence().filter { it.kind == FixtureKind.BURNER }
+            .associate { it.id to grantedOf(it.id) }
+        val result = ecosystemController.step(elapsedSeconds, dt, entities, burnGrants)
+        ecosystemZones = result.zones
+        ecosystemServiceTargets = result.serviceTargets.associateBy { it.actorId }
+        unavailableHumans = result.unavailableHumans
+        for (fact in result.events) {
+            events += KernelEvent(fact.type, fact.entityId, fact.actorId, buildJsonObject {
+                fact.fields.toSortedMap().forEach { (key, value) -> put(key, JsonPrimitive(value)) }
+            })
+        }
+        for (damage in result.damages) {
+            val before = healthOf(damage.targetId)
+            if (!before.isFinite() || before <= 0.0 || !damage.amount.isFinite() || damage.amount <= 0.0) continue
+            val after = (before - damage.amount).coerceAtLeast(0.0)
+            health[damage.targetId] = after
+            events += KernelEvent("DamageApplied", damage.targetId, damage.actorId, buildJsonObject {
+                put("target", damage.targetId); put("amount", before - after); put("reason", damage.reason)
+            }, listOfNotNull(damage.actorId, ownerOf(damage.targetId)).distinct())
+            if (before > 0.0 && after <= 0.0) {
+                networksDirty = true
+                events += breakOf(currentTick, damage.targetId, damage.reason, damage.actorId)
+            }
+        }
+        for (posting in result.postings) post(currentTick, posting.owner, posting.kind, posting.amount)
+    }
+
     private fun stepThreatsAndDefense(tick: Long, events: MutableList<KernelEvent>) {
-        if (!config.sea.enabled && people.xenomorphs.isNotEmpty()) return
+        if (!config.defense.enabled) return
         // Spawn flying crocodiles from the forest borders with doubled frequency (17.5s)
         val spawnInterval = 17.5
         if (elapsedSeconds > 0 && (elapsedSeconds % spawnInterval) < dt) {
@@ -958,7 +1118,19 @@ class WorldKernel(
 
         // Update Air Defense cooldowns
         for (unit in airDefenseUnits.values) {
+            unit.health = healthOf(unit.id)
+            if (unit.health <= 0.0) unit.broken = true
             unit.updateCooldown(dt)
+            if (unit.isOperational && isPowered(unit.id) && grantedOf(unit.id) >= config.defense.powerPerUnit) {
+                unit.ammoRemaining = minOf(config.defense.initialAmmoPerUnit.toDouble(), unit.ammoRemaining + config.defense.ammoRestockPerSecond * dt)
+            }
+        }
+        for (unit in groundDefenseUnits.values) {
+            unit.health = healthOf(unit.id)
+            unit.updateCooldown(dt)
+            if (unit.isOperational && isPowered(unit.id) && grantedOf(unit.id) >= config.defense.powerPerUnit) {
+                unit.ammoRemaining = minOf(config.defense.initialAmmoPerUnit.toDouble(), unit.ammoRemaining + config.defense.ammoRestockPerSecond * dt)
+            }
         }
 
         // Update crocodiles, engage with air defense, bombard buildings
@@ -974,7 +1146,9 @@ class WorldKernel(
             val nearbyDefense = spatialIndex.queryRadius(croc.position, 110.0)
             for (unitId in nearbyDefense) {
                 val unit = airDefenseUnits[unitId] ?: continue
-                if (unit.tryEngage(croc)) {
+                val hasPower = isPowered(unit.id) && grantedOf(unit.id) >= config.defense.powerPerUnit
+                if (unit.tryEngage(croc, hasPower)) {
+                    post(tick, "settlement", "defense_ammo", config.defense.ammoCostPerRound, "${unit.id} fired at ${croc.id}")
                     totalCrocodilesDeflected++
                     events += KernelEvent("AirDefenseFired", unit.id, croc.id, buildJsonObject {
                         put("crocodile", croc.id); put("health", croc.health); put("deflected", croc.isDeflected)
@@ -1004,6 +1178,7 @@ class WorldKernel(
                             put("target", houseId); put("amount", dmg); put("reason", "crocodile_strike")
                         })
                         if (afterH <= 0.0) {
+                            networksDirty = true
                             events += breakOf(tick, houseId, "crocodile_strike", croc.id)
                         }
                         croc.attackCooldown = 3.0
@@ -1012,22 +1187,35 @@ class WorldKernel(
                 }
             }
         }
+        // Ground defenses use the same finite ammo and power budget as air defenses.
+        for ((_, unit) in groundDefenseUnits.toSortedMap()) {
+            if (!unit.isOperational || healthOf(unit.id) <= 0.0) continue
+            val hasPower = isPowered(unit.id) && grantedOf(unit.id) >= config.defense.powerPerUnit
+            if (!hasPower) continue
+            val targetId = spatialIndex.queryRadius(unit.position, unit.range)
+                .asSequence()
+                .filter { target -> people.groundThreats.any { it.id == target } && healthOf(target) > 0.0 }
+                .sortedWith(compareBy<String>({ unit.position.distanceTo(positionOf(it)) }, { it }))
+                .firstOrNull() ?: continue
+            if (!unit.tryEngage(positionOf(targetId), hasPower)) continue
+            val before = healthOf(targetId)
+            val after = (before - unit.damagePerShot).coerceAtLeast(0.0)
+            health[targetId] = after
+            post(tick, "settlement", "defense_ammo", config.defense.ammoCostPerRound, "${unit.id} fired at $targetId")
+            events += KernelEvent("GroundDefenseFired", unit.id, targetId, buildJsonObject {
+                put("target", targetId); put("damage", before - after); put("ammo_remaining", unit.ammoRemaining)
+            })
+            if (before > 0.0 && after <= 0.0) {
+                networksDirty = true
+                events += breakOf(tick, targetId, "ground_turret", unit.id)
+            }
+        }
     }
 
     private fun stepCreatineEconomy(tick: Long, events: MutableList<KernelEvent>) {
         if (!config.creatine.enabled) return
         // 1. Extraction: Miners working at the Mine accumulate raw creatine in mineStock
-        var activeMiners = 0
-        val minersAtMine = mutableListOf<String>()
-        for (resident in people.residents) {
-            if (!isBroken(resident.id) && resident.id !in passengerVehicle) {
-                val pos = positionOf(resident.id)
-                if (pos.distanceTo(topology.mine) <= 35.0) {
-                    activeMiners++
-                    minersAtMine.add(resident.id)
-                }
-            }
-        }
+        val activeMiners = if (isBroken("site/mine")) 0 else people.residents.count(::isMiningWorkerAtMine)
         creatineManager.lastActiveMinersCount = activeMiners
         val synergy = 1.0 + 9.0 * (activeMiners.toDouble() / 5000.0).coerceIn(0.0, 1.0)
         if (activeMiners > 0) {
@@ -1044,46 +1232,12 @@ class WorldKernel(
             }
         }
 
-        // Workers carrying creatine on foot
-        for (resident in people.residents) {
-            if (isBroken(resident.id) || resident.id in passengerVehicle) continue
-            val pos = positionOf(resident.id)
-            if (pos.distanceTo(topology.mine) <= 35.0 && resident.id !in workerCreatineCargo && creatineManager.mineStock >= 2.0) {
-                creatineManager.mineStock -= 2.0
-                workerCreatineCargo[resident.id] = 2.0
-            } else if (pos.distanceTo(topology.depository) <= 30.0 && resident.id in workerCreatineCargo) {
-                val cargo = workerCreatineCargo.remove(resident.id) ?: 0.0
-                if (cargo > 0.0) {
-                    val result = creatineManager.transferToDepository(cargo)
-                    events += KernelEvent("CreatineDeliveredToDepository", resident.id, "storage/creatine", buildJsonObject {
-                        put("delivered", cargo)
-                        put("by_foot", true)
-                        put("stored", result.unitsForStock)
-                    })
-                    val rev = creatineManager.flushRevenue()
-                    if (rev > 0) {
-                        post(tick, "settlement", "creatine_sale", rev, "Export of refined creatine from Depository (foot delivery)")
-                    }
-                }
-            }
-        }
-
         // 2. Dedicated Cargo Rovers: Haul creatine Mine -> Depository -> MedicalCenter
-        val cargoRovers = people.rovers.filter { it.id.startsWith("cargo-") && !isBroken(it.id) }.sortedBy { it.id }
-        if (cargoRovers.isEmpty()) {
-            if (activeMiners > 0) {
-                val baseRate = config.creatine.yieldPerWorkerHour * dt / 3600.0
-                val minedAmount = activeMiners * baseRate * synergy
-                creatineManager.deposit(minedAmount)
-                val rev = creatineManager.flushRevenue()
-                if (rev > 0) {
-                    post(tick, "settlement", "creatine_sale", rev, "Commercial export of refined creatine ($activeMiners miners)")
-                }
-            }
-        } else {
-            val half = cargoRovers.size / 2
-            val mineTeam = cargoRovers.take(half) // cargo-1 .. cargo-25: Mine <-> Depository
-            val medTeam = cargoRovers.drop(half)  // cargo-26 .. cargo-50: Depository <-> MedicalCenter
+        val operationalCargoRovers = cargoRovers.filter { !isBroken(it.id) }
+        if (operationalCargoRovers.isNotEmpty()) {
+            val half = (cargoRovers.size + 1) / 2
+            val mineTeam = operationalCargoRovers.filter { it in cargoRovers.take(half) }
+            val medTeam = operationalCargoRovers.filter { it in cargoRovers.drop(half) }
 
             // Team 1: Mine <-> Depository (raw haul)
             for (rover in mineTeam) {
@@ -1208,7 +1362,7 @@ class WorldKernel(
 
     /** Residents who ask to walk to where a rover stands at its depot are walking to that rover. */
     private fun walkersFrom(intents: List<VmIntent>, accepted: Set<String>): Map<String, List<String>> {
-        val waiting = people.rovers.filter { !isBroken(it.id) && atDepot(it) }
+        val waiting = transportRovers.filter { !isBroken(it.id) && atDepot(it) }
         if (waiting.isEmpty()) return emptyMap()
         val out = LinkedHashMap<String, MutableList<String>>()
         for (intent in intents) {
@@ -1226,9 +1380,18 @@ class WorldKernel(
     private fun applyDamage(tick: Long, intents: List<VmIntent>, refs: List<String>, accepted: Set<String>, events: MutableList<KernelEvent>) {
         intents.forEachIndexed { index, intent ->
             if (intent.operation != Op.DAMAGE_REQUEST || intent.source !in accepted) return@forEachIndexed
+            if (intent.source in unavailableHumans) return@forEachIndexed
+            if (config.ecosystem.predator.enabled && people.byId[intent.source]?.kind in GROUND_THREAT_KINDS &&
+                !ecosystemController.attackActive(intent.source, elapsedSeconds)) {
+                events += KernelEvent("ActionRejected", intent.source, intent.source,
+                    buildJsonObject { put("action", "damage"); put("reason", "predator_resting") }, listOf(intent.source), refs[index])
+                return@forEachIndexed
+            }
             val target = intent.arguments[0].jsonPrimitive.content
             if (target !in health) return@forEachIndexed
-            val amount = intent.arguments[1].jsonPrimitive.double
+            val baseAmount = intent.arguments[1].jsonPrimitive.double
+            val amount = if (config.ecosystem.predator.enabled && people.byId[intent.source]?.kind in GROUND_THREAT_KINDS)
+                baseAmount * ecosystemController.mutationOf(intent.source, elapsedSeconds).damageMultiplier else baseAmount
             val reason = intent.arguments[2].jsonPrimitive.content
             val before = health.getValue(target)
             health[target] = (before - amount).coerceAtLeast(0.0)
@@ -1249,7 +1412,7 @@ class WorldKernel(
     /** A broken object becomes a job for the crews; a dead person or creature is only a fact of the world. */
     private fun breakOf(tick: Long, target: String, reason: String, actor: String?): KernelEvent {
         val instance = people.byId[target]
-        if (instance != null && instance.kind in setOf("Human", "Marine", "Xenomorph")) {
+        if (instance != null && instance.kind in setOf("Human", "Marine", "Xenomorph", "Predator")) {
             return KernelEvent("EntityDied", target, actor, buildJsonObject { put("entity", target) })
         }
         openJob(target, tick)
@@ -1260,17 +1423,16 @@ class WorldKernel(
     }
 
     private fun openJob(target: String, brokenAtTick: Long, customKind: String? = null, fastDispatch: Boolean = false) {
-        if (target in jobs) return
+        if (taskQueue.hasJob(target)) return
         val kind = customKind ?: topology.byId[target]?.kind?.repairKey ?: "device"
         val delayTicks = if (fastDispatch) 2L else kotlin.math.ceil(config.repair.dispatchDelaySeconds / dt).toLong()
-        val job = taskQueue.enqueueOrUpdate(
+        taskQueue.enqueueOrUpdate(
             targetId = target,
             kind = kind,
             position = positionOf(target),
             duration = config.repair.durationOf(kind),
             availableAtTick = brokenAtTick + delayTicks,
         )
-        jobs[target] = job
     }
 
     /** The house that pays for an object: its own house for an entity, the served house for a pipe; the grid itself has none. */
@@ -1281,11 +1443,17 @@ class WorldKernel(
 
     /** Phase 2. A crew makes progress while it stands next to the object it asked to repair. */
     private fun applyRepairs(tick: Long, intents: List<VmIntent>, accepted: Set<String>, events: MutableList<KernelEvent>) {
-        for (intent in intents) {
-            if (intent.operation != Op.REPAIR_REQUEST || intent.source !in accepted) continue
+        val claimedTargets = HashSet<String>()
+        for (intent in intents.filter { it.operation == Op.REPAIR_REQUEST && it.source in accepted }.sortedBy { it.source }) {
+            if (intent.source !in crewMaterials) {
+                events += KernelEvent("RepairRejected", intent.source, intent.source,
+                    buildJsonObject { put("reason", "wrong_rover_role") }, listOf(intent.source))
+                continue
+            }
             if (isBroken(intent.source) || vehiclePassengers[intent.source]?.isNotEmpty() == true) continue
             val target = intent.arguments[0].jsonPrimitive.content
-            val job = jobs[target]
+            if (target in claimedTargets) continue
+            val job = taskQueue.getJob(target)
             if (job == null || job.availableAtTick > currentTick) {
                 events += KernelEvent("RepairRejected", intent.source, intent.source,
                     buildJsonObject { put("reason", "no_such_job") }, listOf(intent.source))
@@ -1296,20 +1464,45 @@ class WorldKernel(
                     buildJsonObject { put("reason", "out_of_range") }, listOf(intent.source))
                 continue
             }
+            if (finiteRepairMaterials && (crewMaterials[intent.source] ?: 0.0) < 1.0) {
+                events += KernelEvent("RepairRejected", intent.source, intent.source,
+                    buildJsonObject { put("reason", "out_of_materials") }, listOf(intent.source))
+                continue
+            }
+            claimedTargets += target
             val done = job.done + dt
-            if (done < job.duration) { jobs[target] = job.copy(done = done); continue }
-            jobs.remove(target)
+            if (done < job.duration) { taskQueue.update(job.copy(done = done)); continue }
             taskQueue.complete(target)
+            if (finiteRepairMaterials) crewMaterials[intent.source] = (crewMaterials[intent.source] ?: 0.0) - 1.0
             health[target] = fullHealth(target)
             if (target in airDefenseUnits) {
                 airDefenseUnits[target]?.repair()
             }
+            groundDefenseUnits[target]?.repair()
             networksDirty = true
             frostExposure[target]?.let { frostExposure[target] = 0.0 }
-            val cost = config.repair.partsOf(job.kind) + Math.round(config.repair.hourlyRate * job.duration / 3600.0)
+            val materialsCost = if (finiteRepairMaterials) config.repair.materialCost else config.repair.partsOf(job.kind)
+            val cost = materialsCost + Math.round(config.repair.hourlyRate * job.duration / 3600.0)
             post(tick, ownerOf(target) ?: "settlement", "repair", cost, target)
             events += KernelEvent("RepairCompleted", target, intent.source,
                 buildJsonObject { put("object", target) }, listOfNotNull(intent.source, ownerOf(target)).distinct())
+        }
+    }
+
+    private fun replenishRepairMaterials() {
+        if (!finiteRepairMaterials || crewRovers.isEmpty()) return
+        if (config.repair.depotRestockPerSecond > 0.0) {
+            val supplied = config.repair.depotRestockPerSecond * dt
+            depotMaterials += supplied
+        }
+        for (rover in crewRovers) {
+            if (positionOf(rover.id).distanceTo(depotOf(rover)) > config.repair.workRadius) continue
+            val needed = (config.repair.materials - (crewMaterials[rover.id] ?: 0.0)).coerceAtLeast(0.0)
+            val transfer = minOf(needed, depotMaterials)
+            if (transfer > 0.0) {
+                crewMaterials[rover.id] = (crewMaterials[rover.id] ?: 0.0) + transfer
+                depotMaterials -= transfer
+            }
         }
     }
 
@@ -1357,6 +1550,17 @@ class WorldKernel(
         }
         // The pump is part of the settlement rather than a program, so the kernel asks for it.
         if (isPowered(PUMP) && !isBroken(PUMP)) requested[PUMP] = config.water.pumpPower
+        if (config.defense.enabled) for ((id, unit) in airDefenseUnits) {
+            if (unit.isOperational && healthOf(id) > 0.0 && isPowered(id)) requested[id] = config.defense.powerPerUnit
+        }
+        if (config.defense.enabled) for ((id, unit) in groundDefenseUnits) {
+            if (unit.isOperational && healthOf(id) > 0.0 && isPowered(id)) requested[id] = config.defense.powerPerUnit
+        }
+        if (config.ecosystem.enabled && config.ecosystem.plankton.enabled) {
+            for (fixture in topology.fixtures.filter { it.kind == FixtureKind.BURNER }) {
+                if (isPowered(fixture.id) && !isBroken(fixture.id)) requested[fixture.id] = config.ecosystem.plankton.burnPowerPerSecond
+            }
+        }
         val reactor = if (isBroken("grid/reactor")) 0.0 else config.power.reactorPower
         val solar = if (isBroken("grid/solar")) 0.0 else config.power.solarPeak * climateSolar()
         val externalPower = reactor + solar
@@ -1402,6 +1606,12 @@ class WorldKernel(
         val upsWasWorking = batteryPower > 0.0
         upsCharge = (upsCharge - fromBattery * dt / config.power.upsEfficiency + charge * dt * config.power.upsEfficiency)
             .coerceIn(0.0, config.power.upsCapacity)
+        if (config.defense.enabled) for (id in airDefenseUnits.keys + groundDefenseUnits.keys) {
+            infrastructureEnergyMeter.merge(id, (granted[id] ?: 0.0) * dt, Double::plus)
+        }
+        if (config.ecosystem.enabled && config.ecosystem.plankton.enabled) for (fixture in topology.fixtures.filter { it.kind == FixtureKind.BURNER }) {
+            infrastructureEnergyMeter.merge(fixture.id, (granted[fixture.id] ?: 0.0) * dt, Double::plus)
+        }
         // A charge transition changes source connectivity at the next phase-3 network pass.
         if (upsWasWorking != (upsOutput() > 0.0)) networksDirty = true
     }
@@ -1492,28 +1702,48 @@ class WorldKernel(
         }
         for (intent in intents) {
             if (intent.operation != Op.MOTION_REQUEST || intent.source !in accepted || isBroken(intent.source)) continue
+            if (intent.source in unavailableHumans) continue
             if (intent.source in ridersAtStart) continue
             val target = intent.arguments[0].jsonObject
-            val goal = Point(target.getValue("x").jsonPrimitive.double, target.getValue("y").jsonPrimitive.double)
+            val requestedGoal = Point(target.getValue("x").jsonPrimitive.double, target.getValue("y").jsonPrimitive.double)
+            val here = positionOf(intent.source)
+            val goal = routeThroughGateway(here, requestedGoal)
             val isRover = people.byId[intent.source]?.kind == "Rover"
             if (vehiclePassengers[intent.source]?.isNotEmpty() == true &&
-                (!transportReady(intent.source) || vehicleRouteTarget[intent.source]?.distanceTo(goal)?.let { it > 1e-6 } == true)) continue
+                (!transportReady(intent.source) || vehicleRouteTarget[intent.source]?.distanceTo(requestedGoal)?.let { it > 1e-6 } == true)) continue
             val requestedSpeed = intent.arguments[1].jsonPrimitive.double.coerceAtLeast(0.0)
-            val speed = if (isRover) minOf(requestedSpeed, config.repair.roverSpeed) else requestedSpeed
-            val here = positionOf(intent.source)
+            val mutationSpeed = if (config.ecosystem.predator.enabled && people.byId[intent.source]?.kind in GROUND_THREAT_KINDS)
+                ecosystemController.mutationOf(intent.source, elapsedSeconds).speedMultiplier else 1.0
+            val baseSpeed = if (isRover) minOf(requestedSpeed, config.repair.roverSpeed) else requestedSpeed
+            val speed = baseSpeed * mutationSpeed * ecosystemController.movementMultiplier(here)
             val distance = here.distanceTo(goal)
             if (distance <= 1e-9) {
                 // A patroller already standing on its waypoint is sent on, or it would wait there for ever.
-                if (people.byId[intent.source]?.kind == "Xenomorph" && goal.distanceTo(patrolPoint(intent.source)) < 1.0) advancePatrol(intent.source)
+                if (people.byId[intent.source]?.kind in GROUND_THREAT_KINDS && goal.distanceTo(patrolPoint(intent.source)) < 1.0) advancePatrol(intent.source)
                 continue
             }
-            var ratio = minOf(1.0, speed * dt / distance)
+            val cleanupCrew = people.byId[intent.source]?.let {
+                it.kind == "Rover" && (it.behavior == "CleanupRover" || it.id.substringBefore('/').startsWith("cleanup-"))
+            } == true
+            val travelBudget = if (cleanupCrew) minOf(speed * dt, ecosystemController.movementBudgetMeters(intent.source)) else speed * dt
+            var ratio = minOf(1.0, travelBudget / distance)
             var newPosition = if (ratio >= 1.0) goal else Point(here.x + (goal.x - here.x) * ratio, here.y + (goal.y - here.y) * ratio)
-            if (people.byId[intent.source]?.kind == "Xenomorph") {
+            if (people.byId[intent.source]?.kind in GROUND_THREAT_KINDS) {
                 fenceStop(intent.source, here, newPosition)?.let { stop -> newPosition = stop; ratio = 0.0 }
             }
+            val forester = people.byId[intent.source]?.let { it.behavior == "Forester" || it.id.substringBefore('/').startsWith("forester-") } == true
+            if (!forester && people.byId[intent.source]?.kind !in GROUND_THREAT_KINDS) {
+                val forestStop = ecosystemController.firstForestBlock(here, newPosition)
+                if (forestStop != null) {
+                    newPosition = forestStop
+                    ratio = if (distance <= 1e-9) 0.0 else here.distanceTo(newPosition) / distance
+                } else if (ecosystemController.isBlocked(newPosition)) {
+                    newPosition = here
+                    ratio = 0.0
+                }
+            }
             // One that has left the settlement roams on from where it came out, not from where it went in.
-            if (people.byId[intent.source]?.kind == "Xenomorph" && settlementArea.contains(here) && !settlementArea.contains(newPosition)) {
+            if (people.byId[intent.source]?.kind in GROUND_THREAT_KINDS && settlementArea.contains(here) && !settlementArea.contains(newPosition)) {
                 patrolAlong[intent.source] = perimeterAlong(newPosition)
             }
             position[intent.source] = newPosition
@@ -1529,11 +1759,11 @@ class WorldKernel(
                     unboard(intent.source, events)
                 }
             }
-            if (ratio >= 1.0) {
+            if (ratio >= 1.0 && goal.distanceTo(requestedGoal) <= 1e-6) {
                 events += KernelEvent("ArrivalConfirmed", intent.source, intent.source,
                     buildJsonObject { put("point", pointJson(goal)) }, listOf(intent.source))
                 // A patroller that reached its corner is sent on to the next one.
-                if (people.byId[intent.source]?.kind == "Xenomorph" && goal.distanceTo(patrolPoint(intent.source)) < 1.0) advancePatrol(intent.source)
+                if (people.byId[intent.source]?.kind in GROUND_THREAT_KINDS && goal.distanceTo(patrolPoint(intent.source)) < 1.0) advancePatrol(intent.source)
             }
         }
     }
@@ -1546,12 +1776,26 @@ class WorldKernel(
         val box = topology.fenceBox ?: return null
         if (box.contains(from) == box.contains(to)) { blockedBy.remove(id); return null }
         val crossing = borderCrossing(box, from, to)
+        if (topology.gates.any { it.distanceTo(crossing) <= topology.gateWidth / 2.0 }) {
+            blockedBy.remove(id)
+            return null
+        }
         val segment = topology.fence.minWith(compareBy({ it.nearestPointTo(crossing).distanceTo(crossing) }, { it.id }))
-        if (isBroken(segment.id)) { blockedBy.remove(id); return null }
+        if (segment.nearestPointTo(crossing).distanceTo(crossing) > 1e-6 || isBroken(segment.id)) { blockedBy.remove(id); return null }
         blockedBy[id] = segment.id
         val length = from.distanceTo(crossing)
         val keep = if (length <= 0.0) 0.0 else ((length - FENCE_GAP) / length).coerceAtLeast(0.0)
         return Point(from.x + (crossing.x - from.x) * keep, from.y + (crossing.y - from.y) * keep)
+    }
+
+    /** Route boundary crossings through a configured opening instead of sending service traffic through walls. */
+    private fun routeThroughGateway(from: Point, destination: Point): Point {
+        val box = topology.fenceBox ?: return destination
+        if (topology.gates.isEmpty() || box.contains(from) == box.contains(destination)) return destination
+        val crossing = borderCrossing(box, from, destination)
+        if (topology.gates.any { it.distanceTo(crossing) <= topology.gateWidth / 2.0 }) return destination
+        val gate = topology.gates.minWith(compareBy<Point>({ from.distanceTo(it) }, { it.x }, { it.y }))
+        return if (from.distanceTo(gate) <= topology.gateWidth / 2.0) destination else gate
     }
 
     /** Where the segment from [p] to [q] meets the border of [box], one end being inside and the other outside. */
@@ -1603,19 +1847,39 @@ class WorldKernel(
     private fun bill(tick: Long, events: MutableList<KernelEvent>) {
         val seconds = (tick + 1) * dt
         val interval = config.tariffs.billingIntervalSeconds
-        if (seconds < (lastBilledTick + 1) * interval) return
-        lastBilledTick = (seconds / interval).toLong()
+        val billingDue = seconds >= (lastBilledTick + 1) * interval
+        val month = config.tariffs.monthSeconds
+        val monthDue = seconds >= (lastMonthTick + 1) * month
+        if (billingDue || monthDue) {
+            flushMeters(tick)
+        }
+        if (billingDue) {
+            lastBilledTick = (seconds / interval).toLong()
+        }
+        if (monthDue) {
+            lastMonthTick = (seconds / month).toLong()
+            val expenses = periodTotals.values.sum()
+            val income = periodIncome.values.sum()
+            events += KernelEvent("MonthClosed", "settlement", null,
+                buildJsonObject { put("month", lastMonthTick); put("total", expenses); put("expenses", expenses); put("income", income); put("balance", income - expenses) })
+            lastClosedExpenses = periodTotals.toMap()
+            lastClosedIncome = periodIncome.toMap()
+            periodTotals.clear()
+            periodIncome.clear()
+        }
+    }
+
+    private fun flushMeters(tick: Long) {
+        for ((id, joules) in infrastructureEnergyMeter) {
+            val kind = if (topology.byId[id]?.kind == FixtureKind.BURNER) "burn_electricity" else "defense_electricity"
+            postRounded(tick, "settlement", kind, joules / 3.6e6 * config.tariffs.electricityPerKwh)
+        }
+        infrastructureEnergyMeter.clear()
         for (house in people.houses) {
             val joules = energyMeter.remove(house.id) ?: 0.0
             val cubic = waterMeter.remove(house.id) ?: 0.0
             postRounded(tick, house.id, "electricity", joules / 3.6e6 * config.tariffs.electricityPerKwh)
             postRounded(tick, house.id, "water", cubic * config.tariffs.waterPerCubicMetre)
-        }
-        val month = config.tariffs.monthSeconds
-        if (seconds >= (lastMonthTick + 1) * month) {
-            lastMonthTick = (seconds / month).toLong()
-            events += KernelEvent("MonthClosed", "settlement", null,
-                buildJsonObject { put("month", lastMonthTick); put("total", monthlyTotals.values.sum()) })
         }
     }
 
@@ -1633,7 +1897,13 @@ class WorldKernel(
         val posting = Posting(tick, owner, kind, amount, detail)
         postings.addLast(posting)
         tickPostings += posting
-        monthlyTotals.merge(owner, amount, Long::plus)
+        if (kind == "creatine_sale") {
+            lifetimeIncome.merge(owner, amount, Long::plus)
+            periodIncome.merge(owner, amount, Long::plus)
+        } else {
+            monthlyTotals.merge(owner, amount, Long::plus)
+            periodTotals.merge(owner, amount, Long::plus)
+        }
         if (postings.size > MAX_POSTINGS) postings.removeFirst()
     }
 

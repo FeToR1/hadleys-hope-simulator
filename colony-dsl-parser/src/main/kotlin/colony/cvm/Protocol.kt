@@ -14,6 +14,10 @@ object Protocol {
     const val RESULT = 4
     const val STOP = 5
     const val FAULT = 6
+    const val BATCH_INIT = 7
+    const val BATCH_READY = 8
+    const val BATCH_FRAME = 9
+    const val BATCH_RESULT = 10
 
     /** The v1 intrinsic each intent opcode stands for, so intents read the same on both sides. */
     fun intentName(opcode: Int): String = when (opcode) {

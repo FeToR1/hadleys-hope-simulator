@@ -102,7 +102,9 @@ public:
         while (current_ < chunks_.size() && count > chunks_[current_].capacity - chunks_[current_].used) ++current_;
         if (current_ == chunks_.size()) {
             if (count > capacity_ - reserved_) throw StepError("value arena exhausted");
-            const size_t size = std::min(capacity_ - reserved_, std::max(size_t(256), count));
+            // Shared-process contexts keep one frame arena each. A modest first chunk avoids reserving 256 Values
+            // for thousands of contexts that only decode scalar frames; larger allocations still grow on demand.
+            const size_t size = std::min(capacity_ - reserved_, std::max(size_t(32), count));
             chunks_.push_back({std::make_unique<Value[]>(size), size, 0});
             reserved_ += size;
         }

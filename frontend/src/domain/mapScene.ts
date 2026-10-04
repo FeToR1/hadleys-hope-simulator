@@ -6,6 +6,7 @@ export interface SceneMarker extends MapMarker {
   key: string;
   clustered: boolean;
   position: { x: number; y: number };
+  composition?: Partial<Record<EntityState['type'], number>>;
 }
 const CELL = 140;
 const severity = { nominal: 0, warning: 1, critical: 2, dead: 3 };
@@ -41,13 +42,37 @@ export class MapSceneIndex {
       }
     }
     const clusters = new Map<string, SceneMarker>();
+    const districts = new Map<string, SceneMarker>();
     const visible: SceneMarker[] = [];
-    // Quantized world cells avoid reshuffling groups during small camera/zoom changes.
-    const size = CELL * 2 ** Math.max(0, Math.ceil(Math.log2(64 / (Math.max(scale, 0.001) * CELL))));
+    // House icons stay 16 screen pixels wide and their hit targets are 46 pixels
+    // wide. Start grouping when the normal 70-world-pixel house spacing would
+    // put those targets on top of one another. Power-of-two cells keep groups
+    // stable as the camera moves and let the existing spatial hash cull work.
+    const houseSpacingOnScreen = 70 * scale;
+    const clusterableScale = houseSpacingOnScreen < 46;
+    const size = 2 ** Math.ceil(Math.log2(48 / Math.max(scale, 0.001)));
+    const overviewScale = scale < 0.15;
+    const districtTypes = ['house', 'civilian', 'power_node', 'air_defense', 'ground_turret', 'rover'];
     for (const marker of candidates) {
       const p = marker.entity.coordinates;
       if (p.x < left || p.x > right || p.y < top || p.y > bottom) continue;
-      const groupable = scale < 0.4 && ['house', 'civilian', 'power_node'].includes(marker.entity.type) && marker.entity.id !== this.selectedId;
+      if (overviewScale && districtTypes.includes(marker.entity.type) && marker.entity.id !== this.selectedId) {
+        const key = `district:${size}:${Math.floor(p.x / size)}:${Math.floor(p.y / size)}`;
+        const existing = districts.get(key);
+        if (existing) {
+          const previous = existing.members.length; const added = marker.members.length;
+          existing.members.push(...marker.members);
+          existing.position.x = (existing.position.x * previous + p.x * added) / (previous + added);
+          existing.position.y = (existing.position.y * previous + p.y * added) / (previous + added);
+          const hasHouse = existing.entity.type === 'house';
+          const incomingHouse = marker.entity.type === 'house';
+          if ((incomingHouse && !hasHouse) ||
+            (incomingHouse === hasHouse && severity[marker.entity.status] > severity[existing.entity.status])) existing.entity = marker.entity;
+        } else districts.set(key, { ...marker, key, clustered: true, members: [...marker.members],
+          position: { ...p } });
+        continue;
+      }
+      const groupable = clusterableScale && ['house', 'civilian', 'power_node'].includes(marker.entity.type) && marker.entity.id !== this.selectedId;
       if (!groupable) {
         visible.push({ ...marker, key: `entity:${marker.entity.id}`, clustered: false, position: p });
         continue;
@@ -62,7 +87,25 @@ export class MapSceneIndex {
         if (severity[marker.entity.status] > severity[existing.entity.status]) existing.entity = marker.entity;
       } else clusters.set(key, { ...marker, members: [...marker.members], key, clustered: true, position: { ...p } });
     }
-    for (const cluster of clusters.values()) visible.push(cluster);
+    for (const district of districts.values()) {
+      const cellX = Math.floor(district.position.x / size); const cellY = Math.floor(district.position.y / size);
+      if (district.members.length < 2) {
+        visible.push({ ...district, key: `entity:${district.entity.id}`, clustered: false, position: district.entity.coordinates });
+        continue;
+      }
+      district.position = { x: cellX * size + size / 2, y: cellY * size + size / 2 };
+      district.composition = district.members.reduce<Partial<Record<EntityState['type'], number>>>((counts, member) => {
+        counts[member.type] = (counts[member.type] ?? 0) + 1;
+        return counts;
+      }, {});
+      visible.push(district);
+    }
+    for (const cluster of clusters.values()) {
+      // A one-item cell remains an ordinary selectable marker; it should not
+      // become a misleading cluster that zooms when clicked.
+      if (cluster.members.length > 1) visible.push(cluster);
+      else visible.push({ ...cluster, key: `entity:${cluster.entity.id}`, clustered: false, position: cluster.entity.coordinates });
+    }
     return visible;
   }
 }

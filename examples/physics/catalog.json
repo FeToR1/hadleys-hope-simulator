@@ -47,6 +47,16 @@
         }
       }
     },
+    "cleanup": {
+      "objects": {
+        "rover": { "kind": "Rover", "behavior": "CleanupRover" }
+      }
+    },
+    "forester": {
+      "objects": {
+        "rover": { "kind": "Rover", "behavior": "Forester" }
+      }
+    },
     "transport": {
       "objects": {
         "rover": {
@@ -59,7 +69,7 @@
       "objects": {
         "rover": {
           "kind": "Rover",
-          "behavior": "PassengerRover"
+          "behavior": "CargoRover"
         }
       }
     },
@@ -68,6 +78,14 @@
         "xenomorph": {
           "kind": "Xenomorph",
           "behavior": "Xenomorph"
+        }
+      }
+    },
+    "predator": {
+      "objects": {
+        "predator": {
+          "kind": "Predator",
+          "behavior": "GroundPredator"
         }
       }
     },

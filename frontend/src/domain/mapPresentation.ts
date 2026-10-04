@@ -13,27 +13,35 @@ export const MAP_TYPES = {
     shape: '<path d="M18 3L31 9V20Q27 29 18 34Q9 29 5 20V9Z" fill="#143d3e" stroke="#64d6c1" stroke-width="2"/><path d="M11 17V13Q11 7 18 7Q25 7 25 13V17Z" fill="#64d6c1"/><path d="M12 17H24V21H12Z" fill="#0c232c"/><path d="M13 25L18 29L23 25" fill="none" stroke="#a5eee0" stroke-width="2"/>' },
   xenomorph: { label: 'Ксеноморфы', singular: 'Ксеноморф', color: '#ee819e', size: 25,
     shape: '<path d="M18 2L34 18L18 34L2 18Z" fill="#341d32" stroke="#ee819e" stroke-width="1.5"/><path d="M11 19Q6 5 20 7Q29 7 25 18L21 24H15Z" fill="#c26083"/><path d="M12 14L17 17L24 13M15 22L18 25L21 22M24 22Q33 27 22 31" fill="none" stroke="#ffd2df" stroke-width="1.5"/>' },
+  predator: { label: 'Хищники', singular: 'Хищник Кляксы', color: '#fb923c', size: 25,
+    shape: '<path d="M5 26L8 15L14 10L23 11L31 17L28 25L22 29H10Z" fill="#4c2918" stroke="#fb923c" stroke-width="1.8"/><path d="M9 15L7 6L16 11M23 11L30 6L29 16M11 21L16 18M22 18L27 21M14 26L18 29L22 26" fill="none" stroke="#ffedd5" stroke-width="2"/>' },
   power_node: { label: 'Узлы сети', singular: 'Узел сети', color: '#48d597', size: 20,
     shape: '<circle cx="18" cy="18" r="12" fill="#48d597"/>' },
   fence: { label: 'Забор', singular: 'Секция забора', color: '#8ea3b9', size: 20,
     shape: '<path d="M3 13H33M3 25H33" stroke="#8ea3b9" stroke-width="2"/><path d="M7 6V31M18 6V31M29 6V31" stroke="#c4d2df" stroke-width="3"/>' },
   air_defense: { label: 'ПВО', singular: 'Система ПВО', color: '#38bdf8', size: 30,
     shape: '<circle cx="18" cy="18" r="14" fill="#0c2338" stroke="#38bdf8" stroke-width="2"/><line x1="18" y1="18" x2="18" y2="5" stroke="#7dd3fc" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="18" x2="27" y2="9" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/><circle cx="18" cy="18" r="4" fill="#38bdf8"/>' },
+  ground_turret: { label: 'Наземные турели', singular: 'Наземная турель', color: '#f97316', size: 30,
+    shape: '<path d="M5 29H31L27 23H9Z" fill="#542d1b" stroke="#fb923c" stroke-width="2"/><path d="M13 23V15A5 5 0 0 1 23 15V23Z" fill="#7c2d12" stroke="#fb923c" stroke-width="2"/><path d="M18 15V5M18 8H30" stroke="#fed7aa" stroke-width="3"/>' },
+  burner: { label: 'Установки очистки', singular: 'Установка очистки', color: '#f59e0b', size: 28,
+    shape: '<path d="M18 3C22 10 13 12 20 18C24 13 28 18 27 23A9 9 0 0 1 9 23C8 17 14 13 18 3Z" fill="#7c2d12" stroke="#fbbf24" stroke-width="2"/><path d="M18 20C22 24 19 29 16 29C12 27 14 23 18 20Z" fill="#fde68a"/>' },
   crocodile: { label: 'Крокодилы', singular: 'Летающий крокодил', color: '#10b981', size: 28,
     shape: '<path d="M4 18L14 10L24 12L34 18L24 24L14 26Z" fill="#064e3b" stroke="#10b981" stroke-width="1.8"/><path d="M14 10L18 2L22 10M14 26L18 34L22 26" stroke="#34d399" stroke-width="1.8" fill="#065f46"/><circle cx="28" cy="16" r="1.5" fill="#fef08a"/><path d="M30 18L34 18" stroke="#ef4444" stroke-width="1.5"/>' },
   depository: { label: 'Склады', singular: 'Склад креатина', color: '#f59e0b', size: 40,
     shape: '<rect x="4" y="8" width="28" height="22" rx="2" fill="#3b2909" stroke="#f59e0b" stroke-width="1.8"/><path d="M4 14H32M4 22H32M18 8V30" stroke="#f59e0b" stroke-width="1.2"/><circle cx="18" cy="19" r="3" fill="#fbbf24"/>' },
   medical_center: { label: 'Медцентры', singular: 'Медицинский центр', color: '#ec4899', size: 42,
     shape: '<rect x="4" y="6" width="28" height="24" rx="4" fill="#381024" stroke="#ec4899" stroke-width="1.8"/><path d="M18 11V25M11 18H25" stroke="#f472b6" stroke-width="4" stroke-linecap="round"/>' },
+  ecology_zone: { label: 'Зоны экологии', singular: 'Экологическая зона', color: '#84cc16', size: 22,
+    shape: '<path d="M18 3C11 10 7 15 7 21a11 11 0 0 0 22 0C29 15 24 9 18 3Z" fill="#263c14" stroke="#84cc16" stroke-width="2"/><path d="M13 23c3-6 7-8 12-9" fill="none" stroke="#bef264" stroke-width="2"/>' },
   other: { label: 'Другие объекты', singular: 'Объект', color: '#a4aec2', size: 20,
     shape: '<rect x="7" y="7" width="22" height="22" rx="4" fill="#233249" stroke="#a4aec2" stroke-width="2"/><path d="M14 18H22M18 14V22" stroke="#a4aec2" stroke-width="2"/>' },
 } as const;
 
 export type MapKind = keyof typeof MAP_TYPES;
-export const MOBILE_LAYERS = ['civilian', 'rover', 'marine', 'xenomorph', 'crocodile'] as const;
+export const MOBILE_LAYERS = ['civilian', 'rover', 'marine', 'xenomorph', 'predator', 'crocodile'] as const;
 export type MobileLayer = (typeof MOBILE_LAYERS)[number];
 export type MapLayers = Record<MobileLayer, boolean>;
-export const DEFAULT_MAP_LAYERS: MapLayers = { civilian: true, rover: true, marine: true, xenomorph: true, crocodile: true };
+export const DEFAULT_MAP_LAYERS: MapLayers = { civilian: true, rover: true, marine: true, xenomorph: true, predator: true, crocodile: true };
 export const MAP_STATUS = {
   nominal: { label: 'Норма', color: '#48d597', mark: '' },
   warning: { label: 'Внимание', color: '#f2c94c', mark: '!' },
@@ -49,11 +57,14 @@ export const shortMapLabel = (entity: EntityState): string => {
   if (entity.type === 'air_defense') return 'ПВО';
   if (entity.type === 'depository') return 'СКЛАД';
   if (entity.type === 'medical_center') return 'МЕДЦЕНТР';
+  if (entity.type === 'ecology_zone') return `ЗОНА ${entity.id.split('/').pop() ?? ''}`;
   const index = entity.id.match(/(?:home|house|crew|transport|alien|marines|rover|croc|ads)-(\d+)/)?.[1];
   if (entity.type === 'house' && index) return `ДОМ ${index.padStart(2, '0')}`;
   if (entity.type === 'marine') return `М ${index ? `${index}·` : ''}${entity.id.match(/(?:marine-?)(\d+)$/)?.[1] ?? ''}`;
   const number = index ?? entity.id.match(/(\d+)$/)?.[1];
   if (entity.type === 'rover' && number) {
+    if (entity.id.startsWith('cleanup-')) return `УБОР ${number}`;
+    if (entity.id.startsWith('forester-')) return `ЛЕС ${number}`;
     if (entity.id.startsWith('crew-')) return `РЕМ ${number}`;
     if (entity.id.startsWith('cargo-')) return `ГРУЗ ${number}`;
     if (entity.id.startsWith('transport-')) return `ТАКСИ ${number}`;
@@ -61,6 +72,7 @@ export const shortMapLabel = (entity: EntityState): string => {
   }
   if (entity.type === 'civilian' && number) return `Ж ${number}`;
   if (entity.type === 'xenomorph' && number) return `К ${number}`;
+  if (entity.type === 'predator' && number) return `Х ${number}`;
   if (entity.type === 'crocodile' && number) return `КРОК ${number}`;
   return entity.id;
 };
@@ -90,7 +102,8 @@ export function createMapMarkers(entities: readonly EntityState[], layers: MapLa
   for (const mine of mines) for (const id of mine.connectedTo) workersAtMine.set(id, mine);
   const markers = new Map<string, MapMarker>();
   for (const entity of entities) {
-    if (entity.type === 'heater' || entity.type === 'kettle' || entity.type === 'fence' || entity.type === 'fog' || entity.id.startsWith('weather/') || (isMobile(entity.type) && !layers[entity.type])) continue;
+    // Ecology zones are represented by optional area overlays, never point markers.
+    if (entity.type === 'heater' || entity.type === 'kettle' || entity.type === 'fence' || entity.type === 'fog' || entity.type === 'ecology_zone' || entity.id.startsWith('weather/') || (isMobile(entity.type) && !layers[entity.type])) continue;
     // Workers are inside the mine; its counter represents them. A selected worker stays visible.
     const mine = workersAtMine.get(entity.id);
     if (entity.type === 'civilian' && entity.id !== selectedId && mine &&
@@ -99,7 +112,7 @@ export function createMapMarkers(entities: readonly EntityState[], layers: MapLa
     const vehicle = entity.connectedTo.map((id) => byId.get(id)).find((candidate) => candidate?.type === 'rover' &&
       Math.hypot(candidate.coordinates.x - entity.coordinates.x, candidate.coordinates.y - entity.coordinates.y) < 0.1);
     if (entity.type !== 'rover' && vehicle && layers.rover && entity.id !== selectedId) continue;
-    const groupable = entity.type === 'civilian' || entity.type === 'marine' || entity.type === 'xenomorph' || entity.type === 'crocodile';
+    const groupable = entity.type === 'civilian' || entity.type === 'marine' || entity.type === 'xenomorph' || entity.type === 'predator' || entity.type === 'crocodile';
     const key = groupable ? `${entity.type}:${Math.round(entity.coordinates.x * 2)}:${Math.round(entity.coordinates.y * 2)}` : entity.id;
     const existing = markers.get(key);
     if (existing) {

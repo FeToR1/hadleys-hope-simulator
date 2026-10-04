@@ -15,20 +15,25 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.io.path.*
 
 @Serializable data class BrokerConfig(val artifact: String, val executable: String, val runId: String,
-    val parentPid: Long, val manifest: RunManifest, val timeoutMillis: Long, val workers: Int = 8)
-@Serializable data class BrokerRequest(val version: Int = 1, val frames: Map<String, VmFrame>)
+    val parentPid: Long, val manifest: RunManifest, val timeoutMillis: Long, val workers: Int = 1,
+    val startupTimeoutMillis: Long = 120_000)
+@Serializable data class BrokerRequest(val version: Int = 1, val tick: Long, val batchIndex: Int, val batchCount: Int,
+    val frames: Map<String, VmFrame>)
 @Serializable data class BrokerReply(val version: Int = 1, val pids: Map<String, Int> = emptyMap(),
-    val results: Map<String, VmResult> = emptyMap(), val error: String? = null)
+    val results: Map<String, VmResult> = emptyMap(), val error: String? = null,
+    val batchIndex: Int = 0, val batchCount: Int = 1, val tick: Long? = null)
 
-/** Kernel -> separate broker -> one native OS process for each entity. No thread per VM. */
+/** Kernel -> broker -> bounded pool of native processes, each sharing its loaded program across contexts. */
 class ProcessFleet(prepared: PreparedRun, executable: Path, runId: String,
-                   private val timeoutMillis: Long = 10_000, startupTimeoutMillis: Long = 120_000) : VmFleet {
+                   private val timeoutMillis: Long = 10_000, startupTimeoutMillis: Long = 120_000,
+                   private val workers: Int = configuredNativeWorkers()) : VmFleet {
     override val mode = "process"
-    override val workerCount = 8
+    override val workerCount: Int
     override val pids: Map<String, Int>
     val brokerPid: Long get() = broker.pid()
+    private val manifestIds = prepared.manifest.instances.map { it.id }
     private val closed = AtomicBoolean(false)
-    private val directory: Path = Files.createTempDirectory("colony-process-run-")
+    private val directory: Path = Files.createTempDirectory("colony-shared-run-")
     private val rpc = Executors.newSingleThreadExecutor { task -> Thread(task, "kernel-broker-io").apply { isDaemon = true } }
     private val broker: Process
     private val input: DataInputStream
@@ -39,12 +44,12 @@ class ProcessFleet(prepared: PreparedRun, executable: Path, runId: String,
     init {
         try {
             require(executable.isRegularFile()) { "Native VM not found: $executable; build native/ first" }
-            require(timeoutMillis > 0 && startupTimeoutMillis > 0)
+            require(timeoutMillis > 0 && startupTimeoutMillis > 0 && workers in 1..32)
             require(prepared.sources.isNotEmpty()) { "Native execution requires the package sources" }
             val artifact = directory.resolve("program.cvm")
             artifact.writeBytes(ArtifactWriter.write(compileToCvm(prepared.sources, prepared.scenario.step)))
             val config = BrokerConfig(artifact.toString(), executable.toAbsolutePath().toString(), runId,
-                ProcessHandle.current().pid(), prepared.manifest, timeoutMillis)
+                ProcessHandle.current().pid(), prepared.manifest, timeoutMillis, workers, startupTimeoutMillis)
             val file = directory.resolve("broker.json")
             file.writeText(brokerJson.encodeToString(config))
             val java = Path.of(System.getProperty("java.home"), "bin", if (System.getProperty("os.name").startsWith("Windows")) "java.exe" else "java")
@@ -59,9 +64,12 @@ class ProcessFleet(prepared: PreparedRun, executable: Path, runId: String,
         try {
             val ready = exchange(startupTimeoutMillis) { readBroker<BrokerReply>(input) }
             require(ready.pids.keys == prepared.manifest.instances.map { it.id }.toSet()) { "Broker READY does not match the manifest" }
-            require(ready.pids.values.toSet().size == ready.pids.size) { "Each entity must have its own process" }
+            require(ready.pids.values.toSet().size == minOf(workers, prepared.manifest.instances.size.coerceAtLeast(1))) {
+                "Native process count exceeds the configured shared executor pool"
+            }
             pids = ready.pids
-            children = pids.values.map { ProcessHandle.of(it.toLong()).orElseThrow { IllegalStateException("VM $it exited during startup") } }
+            workerCount = pids.values.toSet().size
+            children = pids.values.toSet().map { ProcessHandle.of(it.toLong()).orElseThrow { IllegalStateException("VM $it exited during startup") } }
         } catch (failure: Exception) { close(); throw failure }
     }
 
@@ -69,8 +77,31 @@ class ProcessFleet(prepared: PreparedRun, executable: Path, runId: String,
         check(!closed.get()) { "Native run is closed" }
         require(frames.keys == pids.keys) { "Frame set does not match the manifest" }
         val reply = exchange(timeoutMillis) {
-            writeBroker(output, BrokerRequest(frames = frames))
-            readBroker<BrokerReply>(input)
+            val ordered = manifestIds.map { it to frames.getValue(it) }
+            require(ordered.all { it.second.tick == ordered.first().second.tick }) { "Frames span multiple ticks" }
+            val batches = ordered.chunked(NATIVE_BROKER_BATCH_SIZE)
+            batches.forEachIndexed { index, batch ->
+                writeBroker(output, BrokerRequest(tick = batch.first().second.tick, batchIndex = index, batchCount = batches.size,
+                    frames = batch.toMap()))
+            }
+            val first = readBroker<BrokerReply>(input)
+            if (first.error != null) first
+            else {
+                require(first.batchIndex == 0 && first.batchCount == batches.size && first.tick == ordered.first().second.tick) { "Invalid broker result batch header" }
+                val merged = LinkedHashMap<String, VmResult>()
+                fun merge(reply: BrokerReply, index: Int) {
+                    require(reply.version == 1 && reply.error == null && reply.batchIndex == index && reply.batchCount == batches.size &&
+                        reply.tick == ordered.first().second.tick) {
+                        "Invalid broker result packet $index"
+                    }
+                    require(reply.results.keys.none { it in merged }) { "Duplicate result entity in broker barrier" }
+                    merged.putAll(reply.results)
+                }
+                merge(first, 0)
+                for (index in 1 until batches.size) merge(readBroker(input), index)
+                require(merged.keys == frames.keys) { "Incomplete broker barrier" }
+                first.copy(results = merged)
+            }
         }
         require(reply.results.keys == frames.keys) { "Incomplete broker barrier" }
         return reply.results
@@ -109,6 +140,12 @@ class ProcessFleet(prepared: PreparedRun, executable: Path, runId: String,
         runCatching { Files.deleteIfExists(directory) }
     }
 }
+
+internal const val NATIVE_BROKER_BATCH_SIZE = 512
+
+internal fun configuredNativeWorkers(): Int = System.getenv("HH_NATIVE_WORKERS")?.let {
+    it.toIntOrNull() ?: error("HH_NATIVE_WORKERS must be a positive integer")
+} ?: 1
 
 internal val brokerJson = Json { encodeDefaults = true }
 private const val MAX_BROKER_MESSAGE = 64 * 1024 * 1024

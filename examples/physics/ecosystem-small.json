@@ -3,41 +3,36 @@
   "catalog": "catalog.json",
   "seed": 426,
   "step": "1s",
-  "ticks": 86400,
+  "ticks": 300,
   "populations": [
     {
-      "template": "forester",
-      "count": 12,
-      "prefix": "forester"
-    },
-    {
-      "template": "predator",
-      "count": 12,
-      "prefix": "predator"
-    },
-    {
-      "template": "cleanup",
-      "count": 50,
-      "prefix": "cleanup"
-    },
-    {
       "template": "crew",
-      "count": 50,
+      "count": 2,
       "prefix": "crew"
     },
     {
-      "template": "resource",
-      "count": 50,
-      "prefix": "cargo"
+      "template": "cleanup",
+      "count": 2,
+      "prefix": "cleanup"
+    },
+    {
+      "template": "forester",
+      "count": 1,
+      "prefix": "forester"
     },
     {
       "template": "transport",
-      "count": 50,
+      "count": 1,
       "prefix": "transport"
     },
     {
+      "template": "predator",
+      "count": 2,
+      "prefix": "predator"
+    },
+    {
       "template": "household",
-      "count": 5000,
+      "count": 80,
       "prefix": "home"
     }
   ],
@@ -141,13 +136,13 @@
       "enabled": true,
       "coastalZoneWidth": 120.0,
       "erosionDamageRate": 0.15,
-      "fogPeriodSeconds": 180.0,
-      "fogDurationSeconds": 75.0,
-      "fogMaxPenetration": 350.0,
-      "fogAdvanceSpeed": 8.0,
+      "fogPeriodSeconds": 90.0,
+      "fogDurationSeconds": 35.0,
+      "fogMaxPenetration": 500.0,
+      "fogAdvanceSpeed": 10.0,
       "fogSuffocationDamageRate": 4.0,
-      "initialRespirators": 25000,
-      "respiratorRestockPerSecond": 0
+      "initialRespirators": 500,
+      "respiratorRestockPerSecond": 0.0
     },
     "creatine": {
       "enabled": true,
@@ -159,19 +154,18 @@
     },
     "defense": {
       "enabled": true,
-      "initialAmmoPerUnit": 240,
-      "powerPerUnit": 1800.0,
-      "ammoRestockPerSecond": 0.0002
+      "initialAmmoPerUnit": 40,
+      "powerPerUnit": 1800.0
     },
     "ecosystem": {
       "enabled": true,
-      "zoneSize": 140.0,
-      "crocodileManurePerSecond": 0.15,
+      "zoneSize": 70.0,
+      "crocodileManurePerSecond": 0.5,
       "forest": {
         "enabled": true,
-        "initialBiomassPerZone": 100.0,
+        "initialBiomassPerZone": 20.0,
         "regrowthPerSecond": 0.5,
-        "clearingPerSecond": 2.0
+        "clearingPerSecond": 5.0
       },
       "predator": {
         "enabled": true,
@@ -184,43 +178,43 @@
       },
       "cleanup": {
         "enabled": true,
-        "loadCapacity": 600.0,
-        "cleanPerSecond": 2.0,
+        "loadCapacity": 20.0,
+        "cleanPerSecond": 3.0,
         "unloadAt": {
           "x": 0.0,
           "y": 0.0
         },
         "unloadRadius": 12.0,
-        "costPerUnit": 2,
-        "initialFuel": 100000.0,
-        "fuelPerUnit": 0.04,
-        "fuelPerMetre": 0.1,
-        "fuelPricePerUnit": 100
+        "costPerUnit": 3,
+        "fuelPricePerUnit": 100,
+        "initialFuel": 1000.0,
+        "fuelPerUnit": 0.3,
+        "fuelPerMetre": 0.3
       },
       "plankton": {
         "enabled": true,
-        "coastalWidth": 120.0,
-        "wavePeriodSeconds": 3600.0,
-        "initialBiomassPerCoastalZone": 500.0,
-        "regrowthPerSecond": 0.05,
-        "damagePerSecond": 0.04,
-        "burningPerSecond": 5.0,
-        "burnFuelPerBiomass": 0.2,
-        "burnPowerPerSecond": 4000.0,
-        "initialBurnFuel": 10000.0,
-        "fuelCostPerUnit": 3
+        "coastalWidth": 160.0,
+        "wavePeriodSeconds": 60.0,
+        "initialBiomassPerCoastalZone": 40.0,
+        "regrowthPerSecond": 0.2,
+        "damagePerSecond": 0.2,
+        "burningPerSecond": 3.0,
+        "burnFuelPerBiomass": 0.5,
+        "burnPowerPerSecond": 5000.0,
+        "initialBurnFuel": 200.0,
+        "fuelCostPerUnit": 100
       },
       "humanFactors": {
         "enabled": true,
-        "availabilityCycleSeconds": 1800.0,
-        "unavailableSeconds": 120.0,
-        "boredomSeconds": 180.0,
-        "vandalPeriodSeconds": 2400.0,
+        "availabilityCycleSeconds": 120.0,
+        "unavailableSeconds": 20.0,
+        "boredomSeconds": 30.0,
+        "vandalPeriodSeconds": 45.0,
         "vandalDamage": 5.0,
-        "vandalChancePercent": 8,
-        "alcoholPeriodSeconds": 3600.0,
-        "alcoholDurationSeconds": 180.0,
-        "vandalRadius": 12.0
+        "vandalChancePercent": 35,
+        "vandalRadius": 12.0,
+        "alcoholPeriodSeconds": 90.0,
+        "alcoholDurationSeconds": 12.0
       }
     }
   }

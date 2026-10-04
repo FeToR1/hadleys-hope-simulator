@@ -120,6 +120,7 @@ class LargeScaleSettlementTest {
             range = 150.0,
             damagePerShot = 25.0
         )
+        ads.ammoRemaining = 1.0
         assertFalse(ads.broken, "ADS starts functional")
         assertTrue(ads.isOperational, "ADS is operational")
 
@@ -194,8 +195,11 @@ class LargeScaleSettlementTest {
         assertEquals(0L, manager.pendingSalesRevenue)
 
         // Healing a wounded worker
+        val medicalBeforeTreatment = manager.medicalCenterStock
         val healed = manager.tryHeal(currentHealth = 40.0)
         assertTrue(healed, "Worker was healed using creatine")
+        assertEquals(medicalBeforeTreatment - config.healCost, manager.medicalCenterStock, 0.001,
+            "treatment consumes only stock physically held at the medical center")
         assertEquals(initialStock + 10.0 - 5.0, manager.stock, 0.001, "Stock deducted by healCost")
 
         // Patient with full health does not consume creatine

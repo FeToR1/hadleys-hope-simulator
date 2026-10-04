@@ -1,6 +1,6 @@
 # Архитектура и Руководство: Симуляция Поселка (5000 домов, Экосистема, ПВО и Креатин)
 
-Данный документ содержит полное описание архитектуры, взаимосвязей подсистем, алгоритмов и инструкций по запуску для разработчиков команды и LLM/AI-агентов.
+Этот документ описывает исходные подсистемы обновления на 5000 домов. Исправления после слияний и проверенное покрытие нового ТЗ приведены в [отчёте аудита](review-last-three-commits.md). Зональную экологию реализует `EcosystemController`, физические последствия применяет `WorldKernel`. Старые численные примеры ниже не заменяют замер актуального сценария.
 
 ---
 
@@ -10,7 +10,7 @@
 
 1. **Масштабирование 5000 домов:**
    - Сетка расширена с 300 до 5000 домов (более 20 000 параллельных контекстов: дома, обогреватели, чайники, жители, бригады, роверы).
-   - Для исключения алгоритмической сложности $O(N^2)$ при проверке близости, видимости и коллизий внедрён 2D Spatial Hash Grid (`SpatialIndex`), обеспечивающий запросы за $O(1)$.
+   - Для исключения алгоритмической сложности $O(N^2)$ при проверке близости, видимости и коллизий внедрён 2D Spatial Hash Grid (`SpatialIndex`), сокращающий поиск до посещаемых ячеек и найденных кандидатов. Запросы зависят от радиуса и плотности; сложность не является постоянной.
 2. **Топология среды и биомы:**
    - **Атмосфера:** Земная, комфортная (+19 °C), свободное дыхание жителей по всей территории по умолчанию.
    - **Лесной массив:** Окружает посёлок с трёх сторон — Запад (W), Север (N) и Юг (S). Из леса появляются воздушные угрозы.
@@ -62,7 +62,7 @@ flowchart TD
     end
 
     subgraph SimulationCore ["Ядро мира (WorldKernel)"]
-        Spatial["SpatialIndex\n(2D Spatial Hash Grid, O(1))"]
+        Spatial["SpatialIndex\n(2D Spatial Hash Grid)"]
         Tasks["TaskQueue\n(Очередь ремонта строений и ПВО)"]
         Creatine["CreatineManager\n(Склад, Продажа, Исцеление)"]
         CVM["Нативная C++ VM (hh-vm.exe) /\nJVM Fleet"]
@@ -96,18 +96,18 @@ flowchart TD
 
 | Путь к файлу | Назначение и ключевые компоненты |
 |---|---|
-| [`colony-dsl-parser/src/main/kotlin/colony/world/SpatialIndex.kt`](file:///b:/hadleys-hope-simulator-main/colony-dsl-parser/src/main/kotlin/colony/world/SpatialIndex.kt) | 2D Spatial Hash Grid. Индексация координат, поиск соседей в радиусе `queryRadius` за $O(1)$. |
-| [`colony-dsl-parser/src/main/kotlin/colony/world/SeaController.kt`](file:///b:/hadleys-hope-simulator-main/colony-dsl-parser/src/main/kotlin/colony/world/SeaController.kt) | Контроллер моря: эрозия прибрежных строений, цикл морского тумана, зона поражения. |
-| [`colony-dsl-parser/src/main/kotlin/colony/world/DefenseAndThreats.kt`](file:///b:/hadleys-hope-simulator-main/colony-dsl-parser/src/main/kotlin/colony/world/DefenseAndThreats.kt) | Классы `TrajectoryNoise` (1D Perlin), `FlyingCrocodile`, пул `CrocodilePool`, орудия `AirDefenseUnit`. |
-| [`colony-dsl-parser/src/main/kotlin/colony/world/CreatineManager.kt`](file:///b:/hadleys-hope-simulator-main/colony-dsl-parser/src/main/kotlin/colony/world/CreatineManager.kt) | Логика экономики креатина: учёт добычи, коммерческая продажа в гроссбух, исцеление жителей. |
-| [`colony-dsl-parser/src/main/kotlin/colony/world/TaskQueue.kt`](file:///b:/hadleys-hope-simulator-main/colony-dsl-parser/src/main/kotlin/colony/world/TaskQueue.kt) | Глобальная очередь ремонтных задач с привязкой к координатам и spatial-индексу. |
-| [`colony-dsl-parser/src/main/kotlin/colony/world/Topology.kt`](file:///b:/hadleys-hope-simulator-main/colony-dsl-parser/src/main/kotlin/colony/world/Topology.kt) | Генерация топологии: дома, ЛЭП, водопровод, склад, медцентр, ПВО по периметру и крышам. |
-| [`colony-dsl-parser/src/main/kotlin/colony/world/WorldKernel.kt`](file:///b:/hadleys-hope-simulator-main/colony-dsl-parser/src/main/kotlin/colony/world/WorldKernel.kt) | Главный физический цикл: интеграция моря, угроз, ПВО, креатина, респираторов и ремонта. |
-| [`examples/physics/settlement-5000.json`](file:///b:/hadleys-hope-simulator-main/examples/physics/settlement-5000.json) | Конфигурация сценария на 5000 домов: земной климат (+19 °C), активное море, ПВО, креатин. |
-| [`frontend/src/domain/mapPresentation.ts`](file:///b:/hadleys-hope-simulator-main/frontend/src/domain/mapPresentation.ts) | Определение типов `air_defense`, `crocodile`, `depository`, `medical_center` и их SVG-иконок. |
-| [`frontend/src/components/SettlementMap.tsx`](file:///b:/hadleys-hope-simulator-main/frontend/src/components/SettlementMap.tsx) | Отрисовка карты на Pixi.js: отображение леса, моря, динамического тумана, юнитов ПВО и угроз. |
-| [`frontend/src/components/Sidebar.tsx`](file:///b:/hadleys-hope-simulator-main/frontend/src/components/Sidebar.tsx) | Информационная панель сущностей: состояние ПВО, запас креатина, урон от моря, респираторы. |
-| [`frontend/src/components/SpendPanel.tsx`](file:///b:/hadleys-hope-simulator-main/frontend/src/components/SpendPanel.tsx) | Финансовый отчёт с отображением строк дохода от экспорта креатина (`creatine_sale`). |
+| [`colony-dsl-parser/src/main/kotlin/colony/world/SpatialIndex.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/SpatialIndex.kt) | 2D Spatial Hash Grid. Индексация координат, поиск соседей в посещаемых ячейках радиуса `queryRadius`. |
+| [`colony-dsl-parser/src/main/kotlin/colony/world/SeaController.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/SeaController.kt) | Контроллер моря: эрозия прибрежных строений, цикл морского тумана, зона поражения. |
+| [`colony-dsl-parser/src/main/kotlin/colony/world/DefenseAndThreats.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/DefenseAndThreats.kt) | Классы `TrajectoryNoise` (1D Perlin), `FlyingCrocodile`, пул `CrocodilePool`, орудия `AirDefenseUnit`. |
+| [`colony-dsl-parser/src/main/kotlin/colony/world/CreatineManager.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/CreatineManager.kt) | Логика экономики креатина: учёт добычи, коммерческая продажа в гроссбух, исцеление жителей. |
+| [`colony-dsl-parser/src/main/kotlin/colony/world/TaskQueue.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/TaskQueue.kt) | Глобальная очередь ремонтных задач с привязкой к координатам и spatial-индексу. |
+| [`colony-dsl-parser/src/main/kotlin/colony/world/Topology.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/Topology.kt) | Генерация топологии: дома, ЛЭП, водопровод, склад, медцентр, ПВО по периметру и крышам. |
+| [`colony-dsl-parser/src/main/kotlin/colony/world/WorldKernel.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/WorldKernel.kt) | Главный физический цикл: интеграция моря, угроз, ПВО, креатина, респираторов и ремонта. |
+| [`examples/physics/settlement-5000.json`](../examples/physics/settlement-5000.json) | Конфигурация сценария на 5000 домов: земной климат (+19 °C), активное море, ПВО, креатин. |
+| [`frontend/src/domain/mapPresentation.ts`](../frontend/src/domain/mapPresentation.ts) | Определение типов `air_defense`, `crocodile`, `depository`, `medical_center` и их SVG-иконок. |
+| [`frontend/src/components/SettlementMap.tsx`](../frontend/src/components/SettlementMap.tsx) | Отрисовка карты на Pixi.js: отображение леса, моря, динамического тумана, юнитов ПВО и угроз. |
+| [`frontend/src/components/Sidebar.tsx`](../frontend/src/components/Sidebar.tsx) | Информационная панель сущностей: состояние ПВО, запас креатина, урон от моря, респираторы. |
+| [`frontend/src/components/SpendPanel.tsx`](../frontend/src/components/SpendPanel.tsx) | Финансовый отчёт с отображением строк дохода от экспорта креатина (`creatine_sale`). |
 
 ---
 
@@ -115,11 +115,11 @@ flowchart TD
 
 ### Вариант 1: Быстрый запуск, перезапуск и остановка в один клик из VS Code
 
-В проекте настроены задачи [`.vscode/tasks.json`](file:///b:/hadleys-hope-simulator-main/.vscode/tasks.json):
+В проекте настроены задачи [`.vscode/tasks.json`](../.vscode/tasks.json):
 
 1. **Запуск симулятора (с автоматической очисткой прошлой сессии):**
    - Нажмите **`Ctrl + Shift + B`** (или `Terminal` → `Run Build Task...`).
-   - Скрипт **автоматически завершает любые старые процессы бэкенда и фронтенда**, освобождает порты 8080 и 5173 и запускает свежую сессию.
+   - Скрипт **завершает прежние процессы этого проекта**, освобождает порты 8080 и 5173 и запускает свежую сессию.
 2. **Остановка текущей сессии:**
    - Откройте меню `Terminal` → `Run Task...` (Выполнить задачу) → выберите **`Остановить симуляцию (5000 домов)`**.
    - Это гарантированно выключит и JVM-сервер, и Vite, освободит порты и оперативную память.
@@ -170,13 +170,13 @@ npm run dev
 
 ## 5. Запуск тестов и проверка работоспособности
 
-Все компоненты покрыты автоматическими тестами:
+Проверки компонентов (актуальный результат и ограничения — в отчёте аудита):
 
 1. **Тесты симуляции и компилятора (Gradle / Kotlin):**
    ```powershell
    .\colony-dsl-parser\gradlew.bat -p colony-dsl-parser test
    ```
-   Включает интеграционный тест [`LargeScaleSettlementTest`](file:///b:/hadleys-hope-simulator-main/colony-dsl-parser/src/test/kotlin/colony/world/LargeScaleSettlementTest.kt), проверяющий 5000 домов, Spatial Indexing, эрозию моря, туман, ПВО, крокодилов и экономику креатина.
+   Включает интеграционный тест [`LargeScaleSettlementTest`](../colony-dsl-parser/src/test/kotlin/colony/world/LargeScaleSettlementTest.kt), проверяющий 5000 домов, Spatial Indexing, эрозию моря, туман, ПВО, крокодилов и экономику креатина.
 
 2. **Тесты фронтенда (Vitest):**
    ```powershell

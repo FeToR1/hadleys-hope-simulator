@@ -57,7 +57,7 @@ fun main(args: Array<String>) {
             "run", "run-native" -> {
                 val prepared = prepareScenario(input)
                 val id = java.util.UUID.randomUUID().toString()
-                val run = ReferenceRun(prepared, id, if (args[0] == "run-native") nativeFleet(prepared, id) else ReferenceFleet(prepared))
+                val run = ReferenceRun(prepared, id, if (args[0] == "run") ReferenceFleet(prepared) else nativeFleet(prepared, id))
                 val compact = kotlinx.serialization.json.Json { encodeDefaults = true }
                 run.use {
                     val writer = if (args.size == 3) Path.of(args[2]).bufferedWriter() else System.out.bufferedWriter()

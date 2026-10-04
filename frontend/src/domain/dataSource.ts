@@ -151,7 +151,10 @@ export function parseHealth(value: unknown): BrokerHealth | undefined {
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
-const validMetric = (v: unknown): boolean => (typeof v === 'number' && Number.isFinite(v)) || typeof v === 'boolean' || v === null || v === undefined;
+const validMetric = (key: string, value: unknown): boolean =>
+  (typeof value === 'number' && Number.isFinite(value)) || typeof value === 'boolean' || value === undefined ||
+  (key === 'refusal_reason' && ['broken', 'no_power', 'no_ammo', 'cooldown'].includes(String(value))) ||
+  (key === 'mutation' && ['armored', 'swift', 'venomous', 'pack', 'baseline'].includes(String(value)));
 
 /** Validate and normalize one entity at the observer boundary. */
 export function parseObserverEntity(entity: unknown): TickBatch['entities'][number] {
@@ -159,7 +162,7 @@ export function parseObserverEntity(entity: unknown): TickBatch['entities'][numb
     !(entity.pid === null || (Number.isSafeInteger(entity.pid) && Number(entity.pid) > 0)) ||
     typeof entity.type !== 'string' || entity.type === '' ||
     !['nominal', 'warning', 'critical', 'dead'].includes(String(entity.status)) ||
-    !record(entity.metrics) || !Object.values(entity.metrics).every(validMetric) ||
+    !record(entity.metrics) || !Object.entries(entity.metrics).every(([key, value]) => validMetric(key, value)) ||
     !Array.isArray(entity.connectedTo) || !entity.connectedTo.every((id) => typeof id === 'string') ||
     !record(entity.coordinates) || !finite(entity.coordinates.x) || !finite(entity.coordinates.y) ||
     !(entity.parentId === undefined || entity.parentId === null || typeof entity.parentId === 'string') ||
@@ -174,7 +177,7 @@ export function parseObserverEntity(entity: unknown): TickBatch['entities'][numb
 /** Validate per-tick data separately so compact ticks need only validate changed entities. */
 export function parseObserverEnvelope(value: unknown): Omit<TickBatch, 'entities'> {
   if (!record(value) || value.version !== 1 || typeof value.runId !== 'string' || !value.runId ||
-    typeof value.seed !== 'string' || !['reference', 'process'].includes(String(value.runtimeMode)) ||
+    typeof value.seed !== 'string' || !['reference', 'process', 'shared-process'].includes(String(value.runtimeMode)) ||
     value.full !== true || !Number.isSafeInteger(value.tickId) || Number(value.tickId) < 0 ||
     !finite(value.timestamp) || !Array.isArray(value.entities)) throw new Error('Invalid observer envelope');
   return { ...value, effects: parseEffects(value.effects), events: parseEvents(value.events),

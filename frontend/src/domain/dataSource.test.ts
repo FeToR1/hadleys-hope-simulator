@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LiveBrokerSource, parseHealth, parseTickBatch } from './dataSource';
 import { StateManager } from './stateManager';
+import { ObserverDecoder } from './observerDecoder';
 
 describe('live stream lifecycle', () => {
   class FakeStream extends EventTarget {
@@ -189,6 +190,33 @@ describe('observer protocol v1', () => {
     expect(() => parseTickBatch({ ...batch, entities: [...batch.entities, ...batch.entities] })).toThrow();
     expect(() => parseTickBatch({ ...batch, entities: [{ ...batch.entities[0], metrics: { temperature: 'hot' } }] })).toThrow();
     expect(() => parseTickBatch({ ...batch, tickId: -1 })).toThrow();
+  });
+  it('accepts only declared explanation strings on full and compact entity snapshots', () => {
+    const defense = { ...batch.entities[0], type: 'ground_turret', metrics: {
+      ammo_remaining: 0, shots_fired: 2, defense_ready: false, power_connected: true, refusal_reason: 'no_ammo',
+    } };
+    expect(parseTickBatch({ ...batch, entities: [defense] }).entities[0].metrics.refusal_reason).toBe('no_ammo');
+    expect(() => parseTickBatch({ ...batch, entities: [{ ...defense, metrics: { refusal_reason: 'some arbitrary text' } }] })).toThrow();
+    expect(() => parseTickBatch({ ...batch, entities: [{ ...defense, metrics: { health: Number.POSITIVE_INFINITY } }] })).toThrow();
+
+    const decoder = new ObserverDecoder();
+    const full = decoder.decode({ version: 2, runId: 'compact', runtimeMode: 'reference', seed: '1', full: true,
+      tickId: 0, timestamp: 0, entities: [defense], removed: [] });
+    expect(full.entities[0].metrics.refusal_reason).toBe('no_ammo');
+    const next = decoder.decode({ version: 2, runId: 'compact', runtimeMode: 'reference', seed: '1', full: false,
+      baseTick: 0, tickId: 1, timestamp: 1, entities: [{ id: defense.id, metrics: { refusal_reason: 'cooldown' } }], removed: [] });
+    expect(next.entities[0].metrics.refusal_reason).toBe('cooldown');
+    expect(() => decoder.decode({ version: 2, runId: 'compact', runtimeMode: 'reference', seed: '1', full: false,
+      baseTick: 1, tickId: 2, timestamp: 2, entities: [{ id: defense.id, metrics: { refusal_reason: 'malformed' } }], removed: [] })).toThrow();
+  });
+
+  it('preserves Klyaksa predators and their mutations as a distinct entity type', () => {
+    const predator = { ...batch.entities[0], id: 'predator-1/predator', type: 'predator', metrics: { health: 100, mutation: 'swift' } };
+    const parsed = parseTickBatch({ ...batch, entities: [predator] });
+    expect(parsed.entities[0]).toMatchObject({ type: 'predator', metrics: { mutation: 'swift' } });
+    const compact = new ObserverDecoder().decode({ version: 2, runId: 'predators', runtimeMode: 'reference', seed: '1',
+      full: true, tickId: 0, timestamp: 0, entities: [predator], removed: [] });
+    expect(compact.entities[0].type).toBe('predator');
   });
 });
 

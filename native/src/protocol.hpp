@@ -17,6 +17,7 @@ struct ProtocolError : std::runtime_error {
 
 enum MessageType : uint8_t {
     MSG_INIT = 1, MSG_READY = 2, MSG_FRAME = 3, MSG_RESULT = 4, MSG_STOP = 5, MSG_FAULT = 6,
+    MSG_BATCH_INIT = 7, MSG_BATCH_READY = 8, MSG_BATCH_FRAME = 9, MSG_BATCH_RESULT = 10,
 };
 
 constexpr uint16_t kProtocolVersion = 1;

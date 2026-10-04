@@ -1,5 +1,7 @@
 package colony.runtime
 
+import colony.bytecode.SourceFile
+import colony.bytecode.compileSource
 import colony.cvm.NativeVmConnection
 import kotlinx.serialization.json.*
 import java.nio.file.Path
@@ -8,8 +10,8 @@ import kotlin.test.*
 
 class ProcessFleetTest {
     private fun prepared() = prepareScenario(Path.of("../examples/integration/small.json"))
-    private fun fleet(p: PreparedRun) = ProcessFleet(p, assertNotNull(NativeVmConnection.executable()), "test")
-    private fun handles(f: ProcessFleet) = (f.pids.values.map { it.toLong() } + f.brokerPid)
+    private fun fleet(p: PreparedRun, workers: Int = 1) = ProcessFleet(p, assertNotNull(NativeVmConnection.executable()), "test", workers = workers)
+    private fun handles(f: ProcessFleet) = (f.pids.values.toSet().map { it.toLong() } + f.brokerPid)
         .map { ProcessHandle.of(it).orElseThrow() }
     private fun assertStopped(processes: List<ProcessHandle>) {
         processes.forEach { it.onExit().get(10, TimeUnit.SECONDS); assertFalse(it.isAlive, "PID ${it.pid()} leaked") }
@@ -19,8 +21,9 @@ class ProcessFleetTest {
         val p = prepared()
         val f = fleet(p)
         val processes = handles(f)
-        assertEquals(p.manifest.instances.size + 1, processes.size)
+        assertEquals(f.workerCount + 1, processes.size)
         assertEquals(processes.size, processes.map { it.pid() }.toSet().size)
+        assertTrue(f.workerCount < p.manifest.instances.size, "native contexts should share processes")
         assertTrue(processes.all { it.isAlive })
         ReferenceRun(p, "test", f).use { native ->
             ReferenceRun(p, "test").use { reference ->
@@ -36,7 +39,67 @@ class ProcessFleetTest {
         assertStopped(processes)
     }
 
+    @Test fun oneAndTwoSharedNativeExecutorsProduceTheSameOrderedWorld() {
+        val p = prepared()
+        val one = fleet(p, workers = 1)
+        val two = fleet(p, workers = 2)
+        val processes = handles(one) + handles(two)
+        assertEquals(1, one.pids.values.toSet().size)
+        assertEquals(2, two.pids.values.toSet().size)
+        ReferenceRun(p, "shared-barrier", one).use { first ->
+            ReferenceRun(p, "shared-barrier", two).use { second ->
+                repeat(40) { tick ->
+                    val left = first.step()
+                    val right = second.step().let { snapshot -> snapshot.copy(entities = snapshot.entities.map { it.copy(pid = null) }) }
+                    val normalizedLeft = left.copy(entities = left.entities.map { it.copy(pid = null) })
+                    assertTrue(jsonEquivalent(brokerJson.encodeToJsonElement(normalizedLeft), brokerJson.encodeToJsonElement(right)), "Executor count changed tick $tick")
+                }
+            }
+        }
+        assertStopped(processes)
+    }
+
     @Test fun deadVmAbortsBarrierAndCleansUpTheWholeRun() = failedProcess(false)
+
+    @Test fun failureInSecondNativeShardDoesNotCommitFirstShardIntent() {
+        val source = """
+            behavior Attack for Xenomorph {
+                enum Cause { Test }
+                param should_fail: Bool;
+                state attempts: Real64 = 0.0;
+                every 1s as act {
+                    if should_fail { attempts = attempts / 0.0; } else {
+                        if let target = nearest(view.visible_humans) { damage.request(target.id, 100hp, Test); }
+                    }
+                }
+            }
+            behavior Idle for Human { }
+            behavior Home for House { }
+        """.trimIndent()
+        val program = compileSource(source)
+        val template = Template(linkedMapOf(
+            "a_good" to ObjectSpec("Xenomorph", "Attack", buildJsonObject { put("should_fail", false) }),
+            "b_bad" to ObjectSpec("Xenomorph", "Attack", buildJsonObject { put("should_fail", true) }),
+            "z_target" to ObjectSpec("Human", "Idle"),
+            "zz_home" to ObjectSpec("House", "Home"),
+        ))
+        val world = prepareScenario(Path.of("../examples/physics/cascade.json")).scenario.world!!
+        val scenario = Scenario(catalog = "failure", ticks = 3, populations = listOf(Population("failure", 1, "failure")), world = world)
+        val prepared = expandScenario(scenario, Catalog(sources = listOf("failure.cly"), templates = mapOf("failure" to template)), program)
+            .copy(sources = listOf(SourceFile("failure.cly", source)))
+        val executable = assertNotNull(NativeVmConnection.executable())
+        val fleet = ProcessFleet(prepared, executable, "partial-tick", workers = 2)
+        val goodId = "failure-1/a_good"
+        val badId = "failure-1/b_bad"
+        val targetId = "failure-1/z_target"
+        assertTrue(fleet.pids.getValue(goodId) != fleet.pids.getValue(badId), "the successful intent and failure must run in different shards")
+        ReferenceRun(prepared, "partial-tick", fleet).use { run ->
+            val failure = assertFailsWith<IllegalStateException> { run.step() }
+            assertTrue(failure.message.orEmpty().contains(badId), "the failing VM context must cause the barrier failure: $failure")
+            assertEquals(100.0, run.kernel!!.healthOf(targetId), "no damage intent is committed when any VM fails")
+            assertFailsWith<IllegalStateException> { run.step() }
+        }
+    }
 
     @Test fun roverTransportsTheWholeSquadAndNativeSnapshotsMatchReference() {
         val base = prepareScenario(Path.of("../examples/physics/cascade.json"))

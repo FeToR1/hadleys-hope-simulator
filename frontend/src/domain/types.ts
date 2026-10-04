@@ -1,4 +1,4 @@
-export const KNOWN_ENTITY_TYPES = ['house', 'mine', 'heater', 'kettle', 'civilian', 'xenomorph', 'rover', 'marine', 'power_node', 'fence', 'air_defense', 'crocodile', 'depository', 'medical_center', 'fog'] as const;
+export const KNOWN_ENTITY_TYPES = ['house', 'mine', 'heater', 'kettle', 'civilian', 'xenomorph', 'predator', 'rover', 'marine', 'power_node', 'fence', 'air_defense', 'ground_turret', 'burner', 'crocodile', 'depository', 'medical_center', 'fog', 'ecology_zone'] as const;
 /** Kinds the observer may add later are shown generically instead of invalidating the whole snapshot. */
 export type EntityType = (typeof KNOWN_ENTITY_TYPES)[number] | 'other';
 
@@ -27,9 +27,25 @@ export interface EntityMetrics {
   respirator_equipped?: boolean;
   broken?: boolean;
   ammo?: number;
+  ammo_remaining?: number;
+  shots_fired?: number;
+  defense_ready?: boolean;
+  power_connected?: boolean;
+  available?: boolean;
+  refusal_reason?: 'broken' | 'no_power' | 'no_ammo' | 'cooldown';
+  mutation?: 'armored' | 'swift' | 'venomous' | 'pack' | 'baseline';
+  shared_fuel_remaining?: number;
   width?: number;
   height?: number;
   depth?: number;
+  forest_biomass?: number;
+  manure?: number;
+  plankton_biomass?: number;
+  min_x?: number;
+  min_y?: number;
+  max_x?: number;
+  max_y?: number;
+  sea_coast_x?: number;
 }
 
 /** One line of the world's ledger: who was charged, what for, and how much. */
@@ -77,7 +93,7 @@ export interface WorldEvent {
 export interface TickBatch {
   version?: 1;
   runId?: string;
-  runtimeMode?: 'reference' | 'process';
+  runtimeMode?: 'reference' | 'process' | 'shared-process';
   seed?: string;
   scenario?: 'storm' | 'weekend' | 'xenomorph' | 'marines';
   full?: boolean;
@@ -116,7 +132,7 @@ export interface StateSnapshot {
   runId: string;
   revision: number;
   seed: string;
-  runtimeMode: 'reference' | 'process' | null;
+  runtimeMode: 'reference' | 'process' | 'shared-process' | null;
   tickId: number;
   timestamp: number;
   entities: ReadonlyMap<string, EntityState>;
@@ -126,6 +142,7 @@ export interface StateSnapshot {
   /** Recent ledger lines, oldest first, and the total charged per owner. */
   postings: readonly Posting[];
   spendByOwner: ReadonlyMap<string, number>;
+  incomeByOwner?: ReadonlyMap<string, number>;
   /** One row per recent step, oldest first: what the charts plot. */
   trend: readonly import('./trend').TrendSample[];
   attractorHistory: readonly PhasePoint[];

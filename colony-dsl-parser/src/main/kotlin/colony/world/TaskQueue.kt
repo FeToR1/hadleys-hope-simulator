@@ -20,6 +20,12 @@ class TaskQueue(
 
     fun getJob(targetId: String): RepairJob? = activeJobs[targetId]
 
+    fun update(job: RepairJob): Boolean {
+        if (job.target !in activeJobs) return false
+        activeJobs[job.target] = job
+        return true
+    }
+
     /**
      * Enqueues or updates a repair task for a damaged target entity.
      */
@@ -63,6 +69,7 @@ class TaskQueue(
     }
 
     fun findNearestJob(from: Point, maxRadius: Double = 500.0, currentTick: Long = 0L): RepairJob? {
+        require(maxRadius.isFinite() && maxRadius >= 0.0) { "Job radius must be finite and nonnegative" }
         val candidateTargets = spatialIndex.queryRadius(from, maxRadius)
         var nearest: RepairJob? = null
         var minDistance = Double.MAX_VALUE
@@ -76,8 +83,6 @@ class TaskQueue(
                 nearest = job
             }
         }
-        return nearest ?: activeJobs.values
-            .filter { it.availableAtTick <= currentTick }
-            .minByOrNull { from.distanceTo(it.at) }
+        return nearest
     }
 }
