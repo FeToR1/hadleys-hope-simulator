@@ -3,6 +3,7 @@ param(
     [ValidateRange(1, 65535)][int]$BackendPort = 8080,
     [ValidateRange(1, 65535)][int]$FrontendPort = 5173,
     [ValidateRange(0.1, 100)][double]$Speed = 10,
+    [string]$Scenario = 'examples/physics/settlement-5000.json',
     [switch]$SkipBuild
 )
 
@@ -10,17 +11,72 @@ $ErrorActionPreference = 'Stop'
 $workspaceRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $resultsDirectory = Join-Path $workspaceRoot 'results'
 New-Item -ItemType Directory -Path $resultsDirectory -Force | Out-Null
+# Auto-detect valid JDK 17 if JAVA_HOME is invalid or points to a non-existent folder
+$validJava = $false
+if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME 'bin/java.exe'))) {
+    $validJava = $true
+} else {
+    $candidates = @(
+        'C:\Users\Григорий\.gradle\jdks\eclipse_adoptium-17-amd64-windows\jdk-17.0.20.1+1',
+        "$env:USERPROFILE\.gradle\jdks\eclipse_adoptium-17-amd64-windows\jdk-17.0.20.1+1",
+        'C:\Program Files\Eclipse Adoptium\jdk-17*',
+        'C:\Program Files\Java\jdk-17*'
+    )
+    foreach ($cand in $candidates) {
+        $resolved = Resolve-Path $cand -ErrorAction SilentlyContinue
+        if ($resolved -and (Test-Path (Join-Path $resolved[0].Path 'bin/java.exe'))) {
+            $env:JAVA_HOME = $resolved[0].Path
+            $validJava = $true
+            break
+        }
+    }
+    if (!$validJava) {
+        $found = Get-ChildItem -Path "$env:USERPROFILE\.gradle\jdks" -Recurse -Filter "java.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($found) {
+            $env:JAVA_HOME = $found.Directory.Parent.FullName
+            $validJava = $true
+        }
+    }
+}
+
+# Avoid Cyrillic path issues with Gradle cache and daemon on Windows
+if (Test-Path 'B:\gradle_user_home') {
+    $env:GRADLE_USER_HOME = 'B:\gradle_user_home'
+}
+if (Test-Path 'B:\temp') {
+    $env:TEMP = 'B:\temp'
+    $env:TMP = 'B:\temp'
+}
+
 if ($BackendPort -eq $FrontendPort) { throw 'Backend and frontend need different ports.' }
-foreach ($port in $BackendPort, $FrontendPort) {
-    if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) {
-        throw "Port $port is already in use. Stop the existing service or choose another port."
+# Ensure any previous session is completely stopped before starting a new one
+$stopScript = Join-Path $PSScriptRoot 'stop-5000.ps1'
+if (Test-Path $stopScript) {
+    & $stopScript -BackendPort $BackendPort -FrontendPort $FrontendPort
+} else {
+    foreach ($port in $BackendPort, $FrontendPort) {
+        $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+        if ($conns) {
+            foreach ($conn in $conns) {
+                $pidToKill = $conn.OwningProcess
+                if ($pidToKill -and $pidToKill -ne $PID) {
+                    Write-Host "Freeing occupied port $port (stopping stale process PID $pidToKill)..." -ForegroundColor Yellow
+                    Stop-Process -Id $pidToKill -Force -ErrorAction SilentlyContinue
+                }
+            }
+            Start-Sleep -Milliseconds 800
+        }
     }
 }
 
 Push-Location $workspaceRoot
 try {
     if (!$SkipBuild) {
-        & '.\colony-dsl-parser\gradlew.bat' -p colony-dsl-parser installDist
+        $gradleArgs = @('-p', 'colony-dsl-parser', 'installDist')
+        if ($env:GRADLE_USER_HOME) {
+            $gradleArgs += @('-g', $env:GRADLE_USER_HOME)
+        }
+        & '.\colony-dsl-parser\gradlew.bat' @gradleArgs
         if ($LASTEXITCODE -ne 0) { throw 'Backend build failed.' }
     }
     if (!$SkipBuild -or !(Test-Path 'frontend/node_modules/vite/bin/vite.js')) {
@@ -45,7 +101,7 @@ try {
         $backend = Start-Process -FilePath $javaExecutable -WindowStyle Hidden -PassThru `
             -WorkingDirectory $workspaceRoot `
             -ArgumentList @('-Xms512m', '-Xmx2g', '-cp', "`"$classpath`"", 'colony.cli.MainKt',
-                'serve', 'examples/physics/full-5000.json', "$BackendPort") `
+                'serve', $Scenario, "$BackendPort") `
             -RedirectStandardOutput (Join-Path $resultsDirectory 'backend-5000.log') `
             -RedirectStandardError (Join-Path $resultsDirectory 'backend-5000.err.log')
         try {
@@ -54,7 +110,7 @@ try {
                 if ($backend.HasExited) { throw 'Backend exited; see results/backend-5000.err.log.' }
                 try {
                     $health = Invoke-RestMethod "http://127.0.0.1:$BackendPort/health" -TimeoutSec 2
-                    $ready = $health.houses -eq 5000 -and $health.contexts -eq 20028
+                    $ready = $health.houses -ge 300 -and $health.contexts -gt 0
                 } catch { }
                 if ($ready) { break }
                 Start-Sleep -Milliseconds 500
@@ -80,9 +136,9 @@ try {
             [pscustomobject]@{
                 BackendPid = $backend.Id; FrontendPid = $frontend.Id
                 BackendUrl = "http://127.0.0.1:$BackendPort"; FrontendUrl = "http://127.0.0.1:$FrontendPort"
-                Scenario = 'examples/physics/full-5000.json'; Mode = 'reference'; Workers = $Workers
+                Scenario = $Scenario; Mode = 'reference'; Workers = $Workers
             } | ConvertTo-Json | Set-Content (Join-Path $resultsDirectory 'local-5000.json') -Encoding UTF8
-            Write-Output "5000 houses, 20028 contexts, reference mode, $Workers behavior workers."
+            Write-Output "5000 houses, reference mode, $Workers behavior workers."
             Write-Output "UI: http://127.0.0.1:$FrontendPort; backend: http://127.0.0.1:$BackendPort"
             Write-Output 'Logs and process IDs: results/local-5000.json, results/*-5000*.log'
         } catch {

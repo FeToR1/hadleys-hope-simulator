@@ -98,7 +98,8 @@ export class LiveBrokerSource {
       if (this.stream !== stream) return;
       try {
         this.options.onBatch(this.decoder.decode(JSON.parse(event.data)));
-      } catch {
+      } catch (error) {
+        console.error('Failed to parse TickBatch:', error);
         this.options.onError('Live Broker прислал некорректный TickBatch');
       }
     };
@@ -150,6 +151,7 @@ export function parseHealth(value: unknown): BrokerHealth | undefined {
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+const validMetric = (v: unknown): boolean => (typeof v === 'number' && Number.isFinite(v)) || typeof v === 'boolean' || v === null || v === undefined;
 
 /** Validate and normalize one entity at the observer boundary. */
 export function parseObserverEntity(entity: unknown): TickBatch['entities'][number] {
@@ -157,7 +159,7 @@ export function parseObserverEntity(entity: unknown): TickBatch['entities'][numb
     !(entity.pid === null || (Number.isSafeInteger(entity.pid) && Number(entity.pid) > 0)) ||
     typeof entity.type !== 'string' || entity.type === '' ||
     !['nominal', 'warning', 'critical', 'dead'].includes(String(entity.status)) ||
-    !record(entity.metrics) || !Object.values(entity.metrics).every(finite) ||
+    !record(entity.metrics) || !Object.values(entity.metrics).every(validMetric) ||
     !Array.isArray(entity.connectedTo) || !entity.connectedTo.every((id) => typeof id === 'string') ||
     !record(entity.coordinates) || !finite(entity.coordinates.x) || !finite(entity.coordinates.y) ||
     !(entity.parentId === undefined || entity.parentId === null || typeof entity.parentId === 'string') ||

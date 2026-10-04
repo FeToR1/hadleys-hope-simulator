@@ -17,15 +17,23 @@ export const MAP_TYPES = {
     shape: '<circle cx="18" cy="18" r="12" fill="#48d597"/>' },
   fence: { label: 'Забор', singular: 'Секция забора', color: '#8ea3b9', size: 20,
     shape: '<path d="M3 13H33M3 25H33" stroke="#8ea3b9" stroke-width="2"/><path d="M7 6V31M18 6V31M29 6V31" stroke="#c4d2df" stroke-width="3"/>' },
+  air_defense: { label: 'ПВО', singular: 'Система ПВО', color: '#38bdf8', size: 30,
+    shape: '<circle cx="18" cy="18" r="14" fill="#0c2338" stroke="#38bdf8" stroke-width="2"/><line x1="18" y1="18" x2="18" y2="5" stroke="#7dd3fc" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="18" x2="27" y2="9" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/><circle cx="18" cy="18" r="4" fill="#38bdf8"/>' },
+  crocodile: { label: 'Крокодилы', singular: 'Летающий крокодил', color: '#10b981', size: 28,
+    shape: '<path d="M4 18L14 10L24 12L34 18L24 24L14 26Z" fill="#064e3b" stroke="#10b981" stroke-width="1.8"/><path d="M14 10L18 2L22 10M14 26L18 34L22 26" stroke="#34d399" stroke-width="1.8" fill="#065f46"/><circle cx="28" cy="16" r="1.5" fill="#fef08a"/><path d="M30 18L34 18" stroke="#ef4444" stroke-width="1.5"/>' },
+  depository: { label: 'Склады', singular: 'Склад креатина', color: '#f59e0b', size: 40,
+    shape: '<rect x="4" y="8" width="28" height="22" rx="2" fill="#3b2909" stroke="#f59e0b" stroke-width="1.8"/><path d="M4 14H32M4 22H32M18 8V30" stroke="#f59e0b" stroke-width="1.2"/><circle cx="18" cy="19" r="3" fill="#fbbf24"/>' },
+  medical_center: { label: 'Медцентры', singular: 'Медицинский центр', color: '#ec4899', size: 42,
+    shape: '<rect x="4" y="6" width="28" height="24" rx="4" fill="#381024" stroke="#ec4899" stroke-width="1.8"/><path d="M18 11V25M11 18H25" stroke="#f472b6" stroke-width="4" stroke-linecap="round"/>' },
   other: { label: 'Другие объекты', singular: 'Объект', color: '#a4aec2', size: 20,
     shape: '<rect x="7" y="7" width="22" height="22" rx="4" fill="#233249" stroke="#a4aec2" stroke-width="2"/><path d="M14 18H22M18 14V22" stroke="#a4aec2" stroke-width="2"/>' },
 } as const;
 
 export type MapKind = keyof typeof MAP_TYPES;
-export const MOBILE_LAYERS = ['civilian', 'rover', 'marine', 'xenomorph'] as const;
+export const MOBILE_LAYERS = ['civilian', 'rover', 'marine', 'xenomorph', 'crocodile'] as const;
 export type MobileLayer = (typeof MOBILE_LAYERS)[number];
 export type MapLayers = Record<MobileLayer, boolean>;
-export const DEFAULT_MAP_LAYERS: MapLayers = { civilian: true, rover: true, marine: true, xenomorph: true };
+export const DEFAULT_MAP_LAYERS: MapLayers = { civilian: true, rover: true, marine: true, xenomorph: true, crocodile: true };
 export const MAP_STATUS = {
   nominal: { label: 'Норма', color: '#48d597', mark: '' },
   warning: { label: 'Внимание', color: '#f2c94c', mark: '!' },
@@ -38,13 +46,22 @@ export const mapIconSvg = (kind: MapKind): string => `<svg xmlns="http://www.w3.
 export const isMobile = (type: EntityType): type is MobileLayer => (MOBILE_LAYERS as readonly string[]).includes(type);
 export const shortMapLabel = (entity: EntityState): string => {
   if (entity.type === 'mine') return 'ШАХТА';
-  const index = entity.id.match(/(?:home|house|crew|transport|alien|marines|rover)-(\d+)/)?.[1];
+  if (entity.type === 'air_defense') return 'ПВО';
+  if (entity.type === 'depository') return 'СКЛАД';
+  if (entity.type === 'medical_center') return 'МЕДЦЕНТР';
+  const index = entity.id.match(/(?:home|house|crew|transport|alien|marines|rover|croc|ads)-(\d+)/)?.[1];
   if (entity.type === 'house' && index) return `ДОМ ${index.padStart(2, '0')}`;
   if (entity.type === 'marine') return `М ${index ? `${index}·` : ''}${entity.id.match(/(?:marine-?)(\d+)$/)?.[1] ?? ''}`;
   const number = index ?? entity.id.match(/(\d+)$/)?.[1];
-  if (entity.type === 'rover' && number) return `${entity.id.startsWith('crew-') ? 'РЕМ' : 'РОВЕР'} ${number}`;
+  if (entity.type === 'rover' && number) {
+    if (entity.id.startsWith('crew-')) return `РЕМ ${number}`;
+    if (entity.id.startsWith('cargo-')) return `ГРУЗ ${number}`;
+    if (entity.id.startsWith('transport-')) return `ТАКСИ ${number}`;
+    return `РОВЕР ${number}`;
+  }
   if (entity.type === 'civilian' && number) return `Ж ${number}`;
   if (entity.type === 'xenomorph' && number) return `К ${number}`;
+  if (entity.type === 'crocodile' && number) return `КРОК ${number}`;
   return entity.id;
 };
 
@@ -73,7 +90,7 @@ export function createMapMarkers(entities: readonly EntityState[], layers: MapLa
   for (const mine of mines) for (const id of mine.connectedTo) workersAtMine.set(id, mine);
   const markers = new Map<string, MapMarker>();
   for (const entity of entities) {
-    if (entity.type === 'heater' || entity.type === 'kettle' || entity.type === 'fence' || (isMobile(entity.type) && !layers[entity.type])) continue;
+    if (entity.type === 'heater' || entity.type === 'kettle' || entity.type === 'fence' || entity.type === 'fog' || entity.id.startsWith('weather/') || (isMobile(entity.type) && !layers[entity.type])) continue;
     // Workers are inside the mine; its counter represents them. A selected worker stays visible.
     const mine = workersAtMine.get(entity.id);
     if (entity.type === 'civilian' && entity.id !== selectedId && mine &&
@@ -82,7 +99,7 @@ export function createMapMarkers(entities: readonly EntityState[], layers: MapLa
     const vehicle = entity.connectedTo.map((id) => byId.get(id)).find((candidate) => candidate?.type === 'rover' &&
       Math.hypot(candidate.coordinates.x - entity.coordinates.x, candidate.coordinates.y - entity.coordinates.y) < 0.1);
     if (entity.type !== 'rover' && vehicle && layers.rover && entity.id !== selectedId) continue;
-    const groupable = entity.type === 'civilian' || entity.type === 'marine' || entity.type === 'xenomorph';
+    const groupable = entity.type === 'civilian' || entity.type === 'marine' || entity.type === 'xenomorph' || entity.type === 'crocodile';
     const key = groupable ? `${entity.type}:${Math.round(entity.coordinates.x * 2)}:${Math.round(entity.coordinates.y * 2)}` : entity.id;
     const existing = markers.get(key);
     if (existing) {

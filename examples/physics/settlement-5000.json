@@ -7,59 +7,52 @@
   "populations": [
     {
       "template": "crew",
-      "count": 4,
+      "count": 50,
       "prefix": "crew"
     },
     {
-      "template": "transport",
-      "count": 2,
-      "prefix": "transport"
+      "template": "resource",
+      "count": 50,
+      "prefix": "cargo"
     },
     {
-      "template": "marine_squad",
-      "count": 2,
-      "prefix": "marines"
+      "template": "transport",
+      "count": 50,
+      "prefix": "transport"
     },
     {
       "template": "household",
       "count": 5000,
       "prefix": "home"
-    },
-    {
-      "template": "alien",
-      "count": 12,
-      "prefix": "alien"
     }
   ],
   "changes": [],
   "world": {
     "version": 1,
     "climate": {
-      "meanTemperature": -30.0,
-      "amplitude": 10.0,
+      "meanTemperature": 19.0,
+      "amplitude": 4.0,
       "dayLengthSeconds": 86400.0,
       "sunriseSeconds": 21600.0,
       "sunsetSeconds": 64800.0,
       "weatherFactor": 0.8
     },
     "power": {
-      "reactorPower": 2000000.0,
-      "solarPeak": 600000.0,
-      "upsCapacity": 1800000000.0,
-      "upsInitialCharge": 1800000000.0,
-      "upsMaxPower": 300000.0,
+      "reactorPower": 35000000.0,
+      "solarPeak": 10000000.0,
+      "upsCapacity": 30000000000.0,
+      "upsMaxPower": 5000000.0,
       "upsEfficiency": 0.95,
       "housesPerPole": 20,
       "poleHealth": 100.0,
       "priorities": {
         "Pump": 0,
-        "Ups": 0,
         "Heater": 1,
         "Kettle": 2
       }
     },
     "water": {
-      "pumpPower": 40000.0,
+      "pumpPower": 600000.0,
       "freezeThresholdIndoor": 5400.0,
       "houseDemand": 6e-06
     },
@@ -93,10 +86,10 @@
     },
     "repair": {
       "duration": {
-        "pole": 300.0,
-        "pipe": 600.0,
-        "device": 180.0,
-        "fence": 240.0
+        "pole": 60.0,
+        "pipe": 80.0,
+        "device": 25.0,
+        "fence": 40.0
       },
       "parts": {
         "pole": 120000,
@@ -106,9 +99,9 @@
       },
       "hourlyRate": 150000,
       "workRadius": 6.0,
-      "dispatchDelaySeconds": 120.0,
+      "dispatchDelaySeconds": 5.0,
       "materials": 24,
-      "roverSpeed": 9.0
+      "roverSpeed": 18.0
     },
     "tariffs": {
       "electricityPerKwh": 900,
@@ -123,16 +116,16 @@
       "xenomorphRadius": 150.0
     },
     "fence": {
-      "enabled": true,
+      "enabled": false,
       "margin": 40.0,
       "segmentLength": 60.0,
       "health": 400.0,
       "roamingDistance": 120.0
     },
     "sea": {
-      "enabled": false,
+      "enabled": true,
       "coastalZoneWidth": 120.0,
-      "erosionDamageRate": 1.2,
+      "erosionDamageRate": 0.15,
       "fogPeriodSeconds": 180.0,
       "fogDurationSeconds": 75.0,
       "fogMaxPenetration": 350.0,
@@ -140,7 +133,7 @@
       "fogSuffocationDamageRate": 4.0
     },
     "creatine": {
-      "enabled": false,
+      "enabled": true,
       "pricePerUnit": 1200,
       "sellFraction": 0.45,
       "healCost": 2.0,

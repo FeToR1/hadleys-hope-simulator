@@ -43,15 +43,30 @@ export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText,
       <button type="button" className="export-button" onClick={onExportCsv}>Экспорт отчета в CSV</button>
       <AttractorWidget mode={attractorMode} history={attractorHistory} points={attractorHistory.length} onExport={onExportAttractorCsv} />
       <div className="sidebar-heading">
-        <div><span className="eyebrow">{selected.type === 'mine' ? 'Место работы' : selected.type}</span><h2>{selected.type === 'mine' ? 'Шахта' : selected.id}</h2></div>
+        <div><span className="eyebrow">{selected.type === 'mine' ? 'Добыча креатина' : selected.type === 'air_defense' ? 'Оборона' : selected.type === 'depository' ? 'Хранилище' : selected.type === 'medical_center' ? 'Медицина' : selected.type}</span><h2>{selected.type === 'mine' ? 'Шахта' : selected.type === 'air_defense' ? 'Система ПВО' : selected.type === 'depository' ? 'Склад креатина' : selected.type === 'medical_center' ? 'Медицинский центр' : selected.id}</h2></div>
         <span className={`status status-${selected.status}`}>{selected.status}</span>
       </div>
-      {selected.type === 'mine' ? <section className="mine-details"><h3>Рабочая смена</h3>
+      {selected.type === 'mine' ? <section className="mine-details"><h3>Рабочая смена (Добыча креатина)</h3>
         <Metric label="Шахтёров на работе" value={selected.metrics.workers} digits={0} />
-        <p className="muted">{(selected.metrics.workers ?? 0) > 0 ? 'Шахтёры прибыли и работают внутри шахты.' : 'Шахта ожидает следующую смену.'}</p>
+        <p className="muted">{(selected.metrics.workers ?? 0) > 0 ? 'Шахтёры прибыли и добывают ценный креатин.' : 'Шахта ожидает следующую смену.'}</p>
+      </section> : selected.type === 'air_defense' ? <section className="ads-details"><h3>Система ПВО</h3>
+        <p><strong>{selected.metrics.broken ? 'ОТКЛЮЧЕНА (Морской туман)' : 'Боеготовность / Сканирование'}</strong></p>
+        {selected.metrics.in_fog && <p className="status status-warning">Находится в зоне морского испарения</p>}
+        <Metric label="Прочность" value={selected.metrics.health} suffix=" hp" />
+      </section> : selected.type === 'crocodile' ? <section className="croc-details"><h3>Летающий крокодил</h3>
+        <p className="status status-critical">Воздушная угроза из леса</p>
+        <Metric label="Здоровье" value={selected.metrics.health} suffix=" hp" />
+      </section> : selected.type === 'depository' ? <section className="depository-details"><h3>Склад креатина</h3>
+        <Metric label="Запас креатина" value={selected.metrics.creatine_stock} digits={0} suffix=" ед." />
+        <p className="muted">Хранилище добытого креатина для продажи и поддержания поселка.</p>
+      </section> : selected.type === 'medical_center' ? <section className="medcenter-details"><h3>Медицинский центр</h3>
+        <Metric label="Запас креатина" value={selected.metrics.creatine_stock} digits={0} suffix=" ед." />
+        <p className="muted">Использует креатин для исцеления раненых жителей и шахтёров.</p>
       </section> : <>
       <p className="pid">PID процесса: <strong>{selected.pid ?? '—'}</strong></p>
       <section><h3>Метрики</h3><Metric label="Температура" value={selected.metrics.temperature} suffix=" °C" /><Metric label="Потребление" value={selected.metrics.power_consumption} suffix=" W" /><Metric label="Вода" value={selected.metrics.water_level} suffix=" %" /><Metric label="Жильцов" value={selected.metrics.occupants} digits={0} /><Metric label="Стресс" value={selected.metrics.stress} /><Metric label="Здоровье" value={selected.metrics.health} suffix=" hp" />
+      {selected.metrics.sea_damage !== undefined && selected.metrics.sea_damage > 0 && <Metric label="Урон от моря" value={selected.metrics.sea_damage} suffix=" dmg" />}
+      {selected.metrics.in_fog && <div className="metric"><span>Туман</span><strong style={{ color: '#f2c94c' }}>В тумане (респиратор: {selected.metrics.respirator_equipped ? 'надет' : 'нет'})</strong></div>}
       {selected.metrics.spend !== undefined && <div className="metric"><span>Начислено</span><strong>{formatMoney(selected.metrics.spend)}</strong></div>}</section>
       <VmState state={selected.vmState} />
       </>}

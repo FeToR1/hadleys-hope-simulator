@@ -55,6 +55,14 @@
         }
       }
     },
+    "resource": {
+      "objects": {
+        "rover": {
+          "kind": "Rover",
+          "behavior": "PassengerRover"
+        }
+      }
+    },
     "alien": {
       "objects": {
         "xenomorph": {

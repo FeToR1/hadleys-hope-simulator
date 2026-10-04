@@ -8,6 +8,38 @@ import kotlinx.serialization.Serializable
  * The defaults describe the settlement of the lab; a scenario overrides what it needs.
  */
 @Serializable
+data class SeaConfig(
+    val enabled: Boolean = false,
+    val coastalZoneWidth: Double = 120.0,
+    val erosionDamageRate: Double = 1.2, // HP per second for coastal buildings
+    val fogPeriodSeconds: Double = 180.0, // Fog cycle period
+    val fogDurationSeconds: Double = 75.0,  // How long fog stays active
+    val fogMaxPenetration: Double = 350.0, // How deep fog penetrates inland from coast
+    val fogAdvanceSpeed: Double = 8.0,     // Metres per second fog front moves inland
+    val fogSuffocationDamageRate: Double = 4.0, // Damage per second for humans in fog without respirator
+    val cloudWidth: Double = 1200.0,       // Width of localized fog bank (meters, ~100 houses)
+    val cloudHeight: Double = 1400.0       // Height of localized fog bank (meters, ~100 houses)
+) {
+    fun validate() {
+        require(coastalZoneWidth >= 0.0 && erosionDamageRate >= 0.0 && fogPeriodSeconds > 0.0) { "Bad sea config" }
+    }
+}
+
+@Serializable
+data class CreatineEconomyConfig(
+    val enabled: Boolean = false,
+    val pricePerUnit: Long = 1_200L,        // Minimal money units earned per sold creatine unit
+    val sellFraction: Double = 0.45,        // Fraction sold for settlement revenue (rest stored for healing)
+    val healCost: Double = 2.0,             // Units of creatine needed to fully heal a human
+    val lowHealthThreshold: Double = 50.0,  // Health below which humans seek medical treatment
+    val yieldPerWorkerHour: Double = 4.0    // Base yield of creatine per hour of miner work
+) {
+    fun validate() {
+        require(pricePerUnit >= 0 && sellFraction in 0.0..1.0 && healCost >= 0.0) { "Bad creatine config" }
+    }
+}
+
+@Serializable
 data class WorldConfig(
     val version: Int = 1,
     val climate: Climate = Climate(),
@@ -21,11 +53,14 @@ data class WorldConfig(
     val tariffs: Tariffs = Tariffs(),
     val sight: SightConfig = SightConfig(),
     val fence: FenceConfig = FenceConfig(),
+    val sea: SeaConfig = SeaConfig(),
+    val creatine: CreatineEconomyConfig = CreatineEconomyConfig(),
 ) {
     fun validate() {
         require(version == 1) { "Unsupported world version $version" }
         climate.validate(); power.validate(); water.validate(); house.validate()
         human.validate(); marine.validate(); transport.validate(); repair.validate(); tariffs.validate(); sight.validate(); fence.validate()
+        sea.validate(); creatine.validate()
     }
 }
 
@@ -127,8 +162,8 @@ data class HouseConfig(
 data class HumanConfig(
     /** Local time at the start of the residents' daily routine, in minutes after midnight. */
     val startMinute: Int = 480,
-    /** A resident starts losing health below this temperature. */
-    val harmThreshold: Double = 5.0,
+    /** A resident starts losing health below this temperature. Comfortable Earth atmosphere. */
+    val harmThreshold: Double = -10.0,
     /** Hit points per kelvin per hour of exposure. */
     val harmPerKelvinHour: Double = 0.5,
     val vandalRadius: Double = 12.0,
