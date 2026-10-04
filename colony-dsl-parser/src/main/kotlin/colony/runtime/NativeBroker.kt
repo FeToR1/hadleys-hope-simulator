@@ -6,7 +6,6 @@ import colony.bytecode.Op
 import kotlinx.serialization.json.*
 import java.io.DataInputStream
 import java.io.DataOutputStream
-import java.io.EOFException
 import java.nio.file.Path
 import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicBoolean
@@ -14,7 +13,9 @@ import kotlin.io.path.*
 
 /** A broker starts a bounded number of shared native executors and publishes results only at the full tick barrier. */
 fun runNativeBroker(configPath: Path) {
-    val config = brokerJson.decodeFromString<BrokerConfig>(configPath.readText())
+    val config = DataInputStream(configPath.inputStream().buffered()).use { stream ->
+        BrokerWire.readConfig(stream).also { require(stream.read() == -1) { "Trailing broker configuration data" } }
+    }
     require(config.workers in 1..32 && config.timeoutMillis > 0)
     val program = ArtifactReader.read(Path.of(config.artifact).readBytes())
     val registry = ConcurrentHashMap.newKeySet<Process>()
@@ -55,16 +56,20 @@ fun runNativeBroker(configPath: Path) {
             entitiesByConnection += ids
             ids.forEach { entityPid[it] = connection.pid }
         }
-        writeBroker(output, BrokerReply(pids = entityPid))
+        BrokerWire.writeReply(output, BrokerReply(pids = entityPid))
         var nextTick = 0L
         while (!stopped.get()) {
-            val firstRequest = try { readBroker<BrokerRequest>(input) } catch (_: EOFException) { break }
+            // EOF between packets is a normal shutdown; a truncated packet is a fault.
+            input.mark(1)
+            if (input.read() == -1) break
+            input.reset()
+            val firstRequest = BrokerWire.readRequest(input)
             require(firstRequest.version == 1 && firstRequest.tick == nextTick && firstRequest.batchIndex == 0 &&
                 firstRequest.batchCount == (entityPid.size + NATIVE_BROKER_BATCH_SIZE - 1) / NATIVE_BROKER_BATCH_SIZE) { "Invalid first frame packet" }
             val packets = ArrayList<BrokerRequest>(firstRequest.batchCount)
             packets += firstRequest
             for (index in 1 until firstRequest.batchCount) {
-                val packet = readBroker<BrokerRequest>(input)
+                val packet = BrokerWire.readRequest(input)
                 require(packet.version == 1 && packet.tick == nextTick && packet.batchIndex == index && packet.batchCount == firstRequest.batchCount) {
                     "Invalid frame packet $index"
                 }
@@ -96,14 +101,14 @@ fun runNativeBroker(configPath: Path) {
             val results = config.manifest.instances.associate { it.id to unordered.getValue(it.id) }
             val resultBatches = results.entries.toList().chunked(NATIVE_BROKER_BATCH_SIZE)
             resultBatches.forEachIndexed { index, batch ->
-                writeBroker(output, BrokerReply(results = batch.associate { it.key to it.value }, batchIndex = index,
+                BrokerWire.writeReply(output, BrokerReply(results = batch.associate { it.key to it.value }, batchIndex = index,
                     batchCount = resultBatches.size, tick = nextTick))
             }
             nextTick++
         }
     } catch (failure: Exception) {
         val cause = (failure as? ExecutionException)?.cause ?: failure
-        runCatching { writeBroker(output, BrokerReply(error = cause.message ?: cause.javaClass.simpleName)) }
+        runCatching { BrokerWire.writeReply(output, BrokerReply(error = cause.message ?: cause.javaClass.simpleName)) }
     } finally {
         stop(); monitor.interrupt()
         connections.forEach { runCatching { it.close() } }

@@ -2,9 +2,6 @@ package colony.runtime
 
 import colony.cvm.ArtifactWriter
 import colony.cvm.compileToCvm
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.net.URLClassLoader
@@ -14,12 +11,12 @@ import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.io.path.*
 
-@Serializable data class BrokerConfig(val artifact: String, val executable: String, val runId: String,
+data class BrokerConfig(val artifact: String, val executable: String, val runId: String,
     val parentPid: Long, val manifest: RunManifest, val timeoutMillis: Long, val workers: Int = 1,
     val startupTimeoutMillis: Long = 120_000)
-@Serializable data class BrokerRequest(val version: Int = 1, val tick: Long, val batchIndex: Int, val batchCount: Int,
+data class BrokerRequest(val version: Int = 1, val tick: Long, val batchIndex: Int, val batchCount: Int,
     val frames: Map<String, VmFrame>)
-@Serializable data class BrokerReply(val version: Int = 1, val pids: Map<String, Int> = emptyMap(),
+data class BrokerReply(val version: Int = 1, val pids: Map<String, Int> = emptyMap(),
     val results: Map<String, VmResult> = emptyMap(), val error: String? = null,
     val batchIndex: Int = 0, val batchCount: Int = 1, val tick: Long? = null)
 
@@ -50,8 +47,8 @@ class ProcessFleet(prepared: PreparedRun, executable: Path, runId: String,
             artifact.writeBytes(ArtifactWriter.write(compileToCvm(prepared.sources, prepared.scenario.step)))
             val config = BrokerConfig(artifact.toString(), executable.toAbsolutePath().toString(), runId,
                 ProcessHandle.current().pid(), prepared.manifest, timeoutMillis, workers, startupTimeoutMillis)
-            val file = directory.resolve("broker.json")
-            file.writeText(brokerJson.encodeToString(config))
+            val file = directory.resolve("broker.bin")
+            DataOutputStream(Files.newOutputStream(file).buffered()).use { BrokerWire.writeConfig(it, config) }
             val java = Path.of(System.getProperty("java.home"), "bin", if (System.getProperty("os.name").startsWith("Windows")) "java.exe" else "java")
             broker = ProcessBuilder(java.toString(), "-Xmx512m", "-cp", runtimeClasspath(), "colony.cli.MainKt", "broker", file.toString())
                 .redirectError(ProcessBuilder.Redirect.INHERIT).start()
@@ -62,7 +59,8 @@ class ProcessFleet(prepared: PreparedRun, executable: Path, runId: String,
         }
         Runtime.getRuntime().addShutdownHook(hook)
         try {
-            val ready = exchange(startupTimeoutMillis) { readBroker<BrokerReply>(input) }
+            val ready = exchange(startupTimeoutMillis) { BrokerWire.readReply(input) }
+            require(ready.results.isEmpty() && ready.tick == null && ready.batchIndex == 0 && ready.batchCount == 1) { "Invalid broker READY header" }
             require(ready.pids.keys == prepared.manifest.instances.map { it.id }.toSet()) { "Broker READY does not match the manifest" }
             require(ready.pids.values.toSet().size == minOf(workers, prepared.manifest.instances.size.coerceAtLeast(1))) {
                 "Native process count exceeds the configured shared executor pool"
@@ -81,10 +79,10 @@ class ProcessFleet(prepared: PreparedRun, executable: Path, runId: String,
             require(ordered.all { it.second.tick == ordered.first().second.tick }) { "Frames span multiple ticks" }
             val batches = ordered.chunked(NATIVE_BROKER_BATCH_SIZE)
             batches.forEachIndexed { index, batch ->
-                writeBroker(output, BrokerRequest(tick = batch.first().second.tick, batchIndex = index, batchCount = batches.size,
+                BrokerWire.writeRequest(output, BrokerRequest(tick = batch.first().second.tick, batchIndex = index, batchCount = batches.size,
                     frames = batch.toMap()))
             }
-            val first = readBroker<BrokerReply>(input)
+            val first = BrokerWire.readReply(input)
             if (first.error != null) first
             else {
                 require(first.batchIndex == 0 && first.batchCount == batches.size && first.tick == ordered.first().second.tick) { "Invalid broker result batch header" }
@@ -94,17 +92,19 @@ class ProcessFleet(prepared: PreparedRun, executable: Path, runId: String,
                         reply.tick == ordered.first().second.tick) {
                         "Invalid broker result packet $index"
                     }
-                    require(reply.results.keys.none { it in merged }) { "Duplicate result entity in broker barrier" }
+                    require(reply.pids.isEmpty() && reply.results.size in 1..NATIVE_BROKER_BATCH_SIZE &&
+                        reply.results.keys.none { it in merged }) { "Invalid or duplicate result entity in broker barrier" }
                     merged.putAll(reply.results)
                 }
                 merge(first, 0)
-                for (index in 1 until batches.size) merge(readBroker(input), index)
+                for (index in 1 until batches.size) merge(BrokerWire.readReply(input), index)
                 require(merged.keys == frames.keys) { "Incomplete broker barrier" }
                 first.copy(results = merged)
             }
         }
         require(reply.results.keys == frames.keys) { "Incomplete broker barrier" }
-        return reply.results
+        // Key-set equality alone cannot establish the effect reduction order.
+        return manifestIds.associateWith { reply.results.getValue(it) }
     }
 
     private fun exchange(deadline: Long, operation: () -> BrokerReply): BrokerReply {
@@ -135,8 +135,8 @@ class ProcessFleet(prepared: PreparedRun, executable: Path, runId: String,
     }
 
     private fun cleanupFiles() {
-        // Only the three files created by this object; never recursively delete an external path.
-        listOf("broker.json", "program.cvm").forEach { runCatching { Files.deleteIfExists(directory.resolve(it)) } }
+        // Only files created by this object; never recursively delete an external path.
+        listOf("broker.bin", "program.cvm").forEach { runCatching { Files.deleteIfExists(directory.resolve(it)) } }
         runCatching { Files.deleteIfExists(directory) }
     }
 }
@@ -146,20 +146,6 @@ internal const val NATIVE_BROKER_BATCH_SIZE = 512
 internal fun configuredNativeWorkers(): Int = System.getenv("HH_NATIVE_WORKERS")?.let {
     it.toIntOrNull() ?: error("HH_NATIVE_WORKERS must be a positive integer")
 } ?: 1
-
-internal val brokerJson = Json { encodeDefaults = true }
-private const val MAX_BROKER_MESSAGE = 64 * 1024 * 1024
-internal inline fun <reified T> writeBroker(output: DataOutputStream, value: T) {
-    val bytes = brokerJson.encodeToString(value).toByteArray(Charsets.UTF_8)
-    require(bytes.size in 1..MAX_BROKER_MESSAGE) { "Broker message exceeds 64 MiB" }
-    output.writeInt(bytes.size); output.write(bytes); output.flush()
-}
-internal inline fun <reified T> readBroker(input: DataInputStream): T {
-    val size = input.readInt()
-    require(size in 1..MAX_BROKER_MESSAGE) { "Invalid broker message length" }
-    val bytes = ByteArray(size); input.readFully(bytes)
-    return brokerJson.decodeFromString(bytes.toString(Charsets.UTF_8))
-}
 
 /** Gradle tests use a URL classloader; installed CLI uses java.class.path. Support both. */
 private fun runtimeClasspath(): String {

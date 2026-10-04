@@ -1,7 +1,6 @@
 package colony.runtime
 
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -191,8 +190,6 @@ class RunController(
         private const val MAX_REPLAY_ENTITIES = 250_000
     }
 }
-
-private val observerJson = Json { encodeDefaults = true }
 
 /** Background thread that calls [RunController.tick] at the configured speed. */
 class RunPacer(private val controller: RunController) : AutoCloseable {

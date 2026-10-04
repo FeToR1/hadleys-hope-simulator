@@ -2,6 +2,9 @@ package colony.runtime
 
 import kotlinx.serialization.json.*
 
+/** JSON belongs to the external observer stream; the kernel/broker transport is binary. */
+internal val observerJson = Json { encodeDefaults = true }
+
 /** Per-connection deltas. A fresh connection or missing tick always gets a complete baseline. */
 class CompactObserver {
     private var previous: TickSnapshot? = null
@@ -73,8 +76,8 @@ class CompactObserver {
         }
         output.append(']')
         // The UI consumes facts and ledger entries; per-tick power/motion requests are not displayed.
-        field("events", brokerJson.encodeToJsonElement(snapshot.events))
-        field("postings", brokerJson.encodeToJsonElement(snapshot.postings))
+        field("events", observerJson.encodeToJsonElement(snapshot.events))
+        field("postings", observerJson.encodeToJsonElement(snapshot.postings))
         field("deliveredEvents", JsonPrimitive(snapshot.deliveredEvents))
         output.append('}')
         val result = output.toString()

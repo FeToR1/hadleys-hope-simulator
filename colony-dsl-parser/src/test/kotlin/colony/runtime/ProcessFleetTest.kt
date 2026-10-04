@@ -32,7 +32,7 @@ class ProcessFleetTest {
                     assertEquals("process", actual.runtimeMode)
                     assertTrue(actual.entities.all { entity -> entity.pid == f.pids[entity.id] })
                     val normalized = actual.copy(runtimeMode = "reference", entities = actual.entities.map { entity -> entity.copy(pid = null) })
-                    assertTrue(jsonEquivalent(brokerJson.encodeToJsonElement(reference.step()), brokerJson.encodeToJsonElement(normalized)), "Snapshot differs at tick $it")
+                    assertTrue(jsonEquivalent(observerJson.encodeToJsonElement(reference.step()), observerJson.encodeToJsonElement(normalized)), "Snapshot differs at tick $it")
                 }
             }
         }
@@ -52,11 +52,54 @@ class ProcessFleetTest {
                     val left = first.step()
                     val right = second.step().let { snapshot -> snapshot.copy(entities = snapshot.entities.map { it.copy(pid = null) }) }
                     val normalizedLeft = left.copy(entities = left.entities.map { it.copy(pid = null) })
-                    assertTrue(jsonEquivalent(brokerJson.encodeToJsonElement(normalizedLeft), brokerJson.encodeToJsonElement(right)), "Executor count changed tick $tick")
+                    assertTrue(jsonEquivalent(observerJson.encodeToJsonElement(normalizedLeft), observerJson.encodeToJsonElement(right)), "Executor count changed tick $tick")
                 }
             }
         }
         assertStopped(processes)
+    }
+
+    @Test fun binaryBrokerPreservesLargeIntegersAndEffectOrderAcross513Contexts() {
+        val source = """
+            behavior Meter for Human {
+                param start: Int64;
+                state count: Int64 = start;
+                every 1s as increment {
+                    count = count + 1;
+                    motion.request(view.home, 1mps);
+                }
+            }
+        """.trimIndent()
+        val template = Template(mapOf("resident" to ObjectSpec("Human", "Meter",
+            params = buildJsonObject { put("start", 0) },
+            view = buildJsonObject { put("cold", false); put("reachable_breakables", JsonArray(emptyList())) })))
+        val expanded = expandScenario(
+            Scenario(catalog = "binary", ticks = 2, populations = listOf(Population("meter", 513, "meter"))),
+            Catalog(sources = listOf("meter.cly"), templates = mapOf("meter" to template)), compileSource(source))
+        val p = expanded.copy(sources = listOf(SourceFile("meter.cly", source)),
+            manifest = expanded.manifest.copy(instances = expanded.manifest.instances.mapIndexed { index, instance ->
+                instance.copy(params = buildJsonObject { put("start", 9_007_199_254_740_993L + index) })
+            }))
+        val expected = ReferenceRun(p, "binary-chunks").use { reference -> List(2) { reference.step() } }
+        for (workers in listOf(1, 2)) {
+            val f = fleet(p, workers)
+            val processes = handles(f)
+            assertEquals(workers + 1, processes.size)
+            ReferenceRun(p, "binary-chunks", f).use { native ->
+                repeat(2) { tick ->
+                    val actual = native.step().let { snapshot -> snapshot.copy(runtimeMode = "reference",
+                        entities = snapshot.entities.map { it.copy(pid = null) }) }
+                    assertTrue(jsonEquivalent(observerJson.encodeToJsonElement(expected[tick]), observerJson.encodeToJsonElement(actual)),
+                        "Binary broker changed the barrier with $workers workers at tick $tick")
+                    assertEquals(p.manifest.instances.map { it.id }, actual.effects.map { it.source })
+                    actual.entities.forEachIndexed { index, entity ->
+                        assertEquals(9_007_199_254_740_993L + index + tick + 1,
+                            entity.vmState.getValue("count").jsonPrimitive.long)
+                    }
+                }
+            }
+            assertStopped(processes)
+        }
     }
 
     @Test fun deadVmAbortsBarrierAndCleansUpTheWholeRun() = failedProcess(false)
@@ -126,7 +169,7 @@ class ProcessFleetTest {
             ReferenceRun(p, "transport").use { reference ->
                 repeat(240) { tick ->
                     val actual = native.step().let { s -> s.copy(runtimeMode = "reference", entities = s.entities.map { it.copy(pid = null) }) }
-                    assertTrue(jsonEquivalent(brokerJson.encodeToJsonElement(reference.step()), brokerJson.encodeToJsonElement(actual)),
+                    assertTrue(jsonEquivalent(observerJson.encodeToJsonElement(reference.step()), observerJson.encodeToJsonElement(actual)),
                         "Transport snapshot differs at tick $tick")
                     actual.events.forEach { event ->
                         if (event.entityId.startsWith("marines-")) {
@@ -154,7 +197,7 @@ class ProcessFleetTest {
             ReferenceRun(p, "routine").use { reference ->
                 repeat(180) { tick ->
                     val actual = native.step().let { s -> s.copy(runtimeMode = "reference", entities = s.entities.map { it.copy(pid = null) }) }
-                    assertTrue(jsonEquivalent(brokerJson.encodeToJsonElement(reference.step()), brokerJson.encodeToJsonElement(actual)),
+                    assertTrue(jsonEquivalent(observerJson.encodeToJsonElement(reference.step()), observerJson.encodeToJsonElement(actual)),
                         "Resident snapshot differs at tick $tick")
                 }
             }
