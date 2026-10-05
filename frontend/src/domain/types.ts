@@ -111,9 +111,10 @@ export interface PhasePoint {
   x: number;
   y: number;
   z: number;
+  reactorExplosion?: boolean;
 }
 
-export type AttractorMode = 'stationary' | 'periodic' | 'chaotic' | 'collapse';
+export type AttractorMode = 'stationary' | 'periodic' | 'chaotic' | 'collapse' | 'transient';
 
 export interface EntityLog {
   id: number;

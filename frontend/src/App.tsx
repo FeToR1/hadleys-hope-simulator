@@ -11,6 +11,7 @@ import { BrokerConnection } from './components/BrokerConnection';
 import { TrendPanel } from './components/TrendPanel';
 import type { TrendSample } from './domain/trend';
 import { RunControls, type RunCommand } from './components/RunControls';
+import { DisasterPanel } from './components/DisasterPanel';
 import { serializeAttractorCsv } from './domain/attractor';
 
 export function App(): JSX.Element {
@@ -161,7 +162,11 @@ export function App(): JSX.Element {
       <header className="topbar"><div><span className="eyebrow">WORLD KERNEL / COLONY</span><h1>Settlement monitor</h1><div className="run-meta">seed: <strong>{runMeta.seed || '—'}</strong> · tick: <strong>{tickId < 0 ? '—' : tickId}</strong></div></div><div className="topbar-right"><RunControls health={brokerHealth} currentTick={tickId} onControl={(command) => void runControl(command)} /><BrokerConnection connected={streamConnected} warning={[sourceWarning, historyWarning].filter(Boolean).join(' ') || undefined} /><div className="run-entity-count">{runMeta.runtimeMode?.toUpperCase() ?? 'ОЖИДАНИЕ'} · {entities.length} объектов</div></div></header>
       <div className="content">
         <section className="workspace">
-          <nav className="tabs"><button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>2D карта</button><button className={tab === 'topology' ? 'active' : ''} onClick={() => setTab('topology')}>Топология сетей</button><button className={tab === 'trend' ? 'active' : ''} onClick={() => setTab('trend')}>Графики</button></nav>
+          <div className="workspace-toolbar">
+            <nav className="tabs"><button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>2D карта</button><button className={tab === 'topology' ? 'active' : ''} onClick={() => setTab('topology')}>Топология сетей</button><button className={tab === 'trend' ? 'active' : ''} onClick={() => setTab('trend')}>Графики</button></nav>
+            <DisasterPanel health={brokerHealth} onLaunch={async (disaster, runId) =>
+              (await liveSourceRef.current?.control({ disaster, runId })) !== undefined} />
+          </div>
           {tab === 'map' && <SettlementMap key={runMeta.runId} entities={entities} selectedId={selectedId} onSelect={selectEntity} onClearSelection={() => setSelectedId(undefined)} onRegisterFocus={(focus) => { mapFocusRef.current = focus; }} />}
           {tab === 'topology' && <NetworkTopology key={runMeta.runId} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { graphFocusRef.current = focus; }} />}
           {tab === 'trend' && <div className="visualization-shell"><TrendPanel trend={trend} /></div>}

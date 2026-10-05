@@ -49,6 +49,7 @@ export class StateManager {
   private readonly incomeByOwner = new Map<string, number>();
   private readonly trend: TrendSample[] = [];
   private readonly attractorHistory: PhasePoint[] = [];
+  private budget = 0;
   private attractorMode: AttractorMode = 'stationary';
   private scenario: TickBatch['scenario'];
   private tickId = -1;
@@ -68,6 +69,7 @@ export class StateManager {
     this.incomeByOwner.clear();
     this.trend.length = 0;
     this.attractorHistory.length = 0;
+    this.budget = 0;
     this.attractorMode = 'stationary';
     this.scenario = undefined;
     this.tickId = -1;
@@ -143,6 +145,7 @@ export class StateManager {
     this.events.push(...(batch.events ?? []));
     if (this.events.length > MAX_EVENTS) this.events.splice(0, this.events.length - MAX_EVENTS);
     for (const posting of batch.postings ?? []) {
+      this.budget += posting.kind === 'creatine_sale' ? posting.amount : -posting.amount;
       this.postings.push(posting);
       const totals = posting.kind === 'creatine_sale' ? this.incomeByOwner : this.spendByOwner;
       totals.set(posting.owner, (totals.get(posting.owner) ?? 0) + posting.amount);
@@ -152,12 +155,10 @@ export class StateManager {
     pushTrend(this.trend, sampleTrend(batch, this.spendByOwner));
     this.tickId = batch.tickId;
     this.timestamp = batch.timestamp;
-    const point = createPhasePoint(this.tickId, [...this.entities.values()], this.postings);
+    const point = createPhasePoint(this.tickId, [...this.entities.values()], this.budget, batch.events);
     this.attractorHistory.push(point);
     if (this.attractorHistory.length > MAX_ATTRACTOR_HISTORY) this.attractorHistory.shift();
-    if (this.attractorHistory.length === 1 || this.tickId % 10 === 0) {
-      this.attractorMode = classifyAttractor(this.attractorHistory, this.scenario);
-    }
+    this.attractorMode = classifyAttractor(this.attractorHistory, this.scenario);
     const snapshot = this.snapshot();
     for (const record of this.listeners) {
       const payload = { snapshot, deltas };

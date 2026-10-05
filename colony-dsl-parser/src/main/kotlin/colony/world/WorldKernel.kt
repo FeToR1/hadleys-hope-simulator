@@ -219,6 +219,86 @@ class WorldKernel(
     var totalCrocodilesDeflected = 0L
     var totalCrocodilesDowned = 0L
 
+    private val pendingDisasters = ArrayDeque<Disaster>()
+    private val manualAttackUntil = HashMap<String, Double>()
+    private val intrudersThisStep = HashSet<String>()
+    private fun availableMonsters() = people.groundThreats.filter {
+        !isBroken(it.id) && (manualAttackUntil[it.id] ?: 0.0) <= elapsedSeconds
+    }.sortedBy { it.id }
+
+    fun disasterOptions(): JsonObject = buildJsonObject {
+        put("reactorAvailable", !isBroken("grid/reactor") && pendingDisasters.none { it is Disaster.ReactorExplosion })
+        put("crocodilesAvailable", minOf(32, crocodilePool.allCrocodiles().count { !it.active } -
+            pendingDisasters.filterIsInstance<Disaster.Crocodiles>().sumOf { it.count }).coerceAtLeast(0))
+        put("monstersAvailable", minOf(100, availableMonsters().size -
+            pendingDisasters.filterIsInstance<Disaster.Monsters>().sumOf { it.count }).coerceAtLeast(0))
+        put("pending", pendingDisasters.size)
+    }
+
+    fun queueDisaster(disaster: Disaster) {
+        require(pendingDisasters.size < 16) { "Очередь напастей заполнена; выполните шаг симуляции" }
+        val options = disasterOptions()
+        when (disaster) {
+            is Disaster.ReactorExplosion -> require(options.getValue("reactorAvailable").jsonPrimitive.boolean) { "Реактор уже разрушен или взрыв уже запланирован" }
+            is Disaster.Crocodiles -> require(disaster.count <= options.getValue("crocodilesAvailable").jsonPrimitive.int) { "Недостаточно свободных мест для крокодилов" }
+            is Disaster.Monsters -> require(disaster.count <= options.getValue("monstersAvailable").jsonPrimitive.int) { "Недостаточно живых монстров в сценарии" }
+        }
+        pendingDisasters.addLast(disaster)
+    }
+
+    private fun attackActive(id: String) = (manualAttackUntil[id] ?: 0.0) > elapsedSeconds ||
+        ecosystemController.attackActive(id, elapsedSeconds)
+
+    private fun applyDisasters(tick: Long, events: MutableList<KernelEvent>) {
+        intrudersThisStep.clear()
+        while (pendingDisasters.isNotEmpty()) {
+            when (val disaster = pendingDisasters.removeFirst()) {
+                is Disaster.ReactorExplosion -> {
+                    val reactor = "grid/reactor"
+                    val center = positionOf(reactor)
+                    events += KernelEvent("ReactorExploded", reactor, "operator", buildJsonObject {
+                        put("radius", disaster.radius); put("damage", disaster.damage)
+                    })
+                    val targets = (listOf(reactor) + spatialIndex.queryRadius(center, disaster.radius)).distinct().sorted()
+                    for (target in targets) {
+                        val before = healthOf(target)
+                        if (before <= 0.0) continue
+                        val amount = if (target == reactor) before else disaster.damage
+                        if (amount <= 0.0) continue
+                        health[target] = (before - amount).coerceAtLeast(0.0)
+                        events += KernelEvent("DamageApplied", target, "operator", buildJsonObject {
+                            put("target", target); put("amount", amount); put("reason", "ReactorExplosion")
+                        }, listOfNotNull(ownerOf(target)))
+                        if (isBroken(target)) {
+                            networksDirty = true
+                            events += breakOf(tick, target, "ReactorExplosion", "operator")
+                        }
+                    }
+                }
+                is Disaster.Crocodiles -> repeat(disaster.count) { spawnCrocodile(tick, events, manual = true) }
+                is Disaster.Monsters -> {
+                    val houses = people.houses.sortedBy { it.id }
+                    val monsters = availableMonsters().take(disaster.count)
+                    monsters.forEachIndexed { index, monster ->
+                        val house = houses.getOrNull(index * houses.size / maxOf(1, monsters.size))
+                        val candidate = house?.let { Point(it.x + 5.0, it.y + 5.0) } ?: topology.meeting
+                        val point = Point(candidate.x.coerceIn(settlementArea.minX + 0.01, settlementArea.maxX - 0.01),
+                            candidate.y.coerceIn(settlementArea.minY + 0.01, settlementArea.maxY - 0.01))
+                        position[monster.id] = point
+                        spatialIndex.update(monster.id, point)
+                        routedUntil.remove(monster.id)
+                        blockedBy.remove(monster.id)
+                        manualAttackUntil[monster.id] = elapsedSeconds + disaster.duration
+                        intrudersThisStep += monster.id
+                        events += KernelEvent("MonsterAdmitted", monster.id, "operator", buildJsonObject {
+                            put("position", pointJson(point)); put("duration", disaster.duration)
+                        })
+                    }
+                }
+            }
+        }
+    }
+
     val ledger: List<Posting> get() = postings.toList()
     /** What the grid and the water network look like right now, for the dashboard and the journal. */
     private var fixtureSnapshots: List<FixtureState> = emptyList()
@@ -394,7 +474,7 @@ class WorldKernel(
             }
             "patrol_waypoint" -> pointJson(patrolPoint(id))
             "routed" -> JsonPrimitive(isRouted(id))
-            "attack_active" -> JsonPrimitive(ecosystemController.attackActive(id, elapsedSeconds))
+            "attack_active" -> JsonPrimitive(attackActive(id))
             "home" -> homeViews[instance.parent ?: id] ?: pointJson(positionOf(instance.parent ?: id))
             "workplace" -> workplaceViews[workplaceOf(id)] ?: pointJson(workplaceOf(id))
             "medical_required" -> JsonPrimitive(config.creatine.enabled && healthOf(id) < config.creatine.lowHealthThreshold)
@@ -901,6 +981,7 @@ class WorldKernel(
         replenishRepairMaterials()
         val poweredBefore = poweredNow
         val waterBefore = waterNow
+        applyDisasters(tick, events)
 
         // A sortie ends when its target is dead or the whole squad is back at its base; the next one picks anew.
         // A squad that has gathered at its target drives it off, whatever the leader's shot does.
@@ -1077,45 +1158,53 @@ class WorldKernel(
     }
 
     private fun stepThreatsAndDefense(tick: Long, events: MutableList<KernelEvent>) {
-        if (!config.defense.enabled) return
+        if (!config.defense.enabled && crocodilePool.activeCrocodiles().isEmpty()) return
         // Spawn flying crocodiles from the forest borders with doubled frequency (17.5s)
         val spawnInterval = 17.5
-        if (elapsedSeconds > 0 && (elapsedSeconds % spawnInterval) < dt) {
-            val croc = crocodilePool.obtain()
-            if (croc != null) {
-                val minX = topology.fixtures.minOf { it.at.x }
-                val maxX = topology.fixtures.maxOf { it.at.x }
-                val minY = topology.fixtures.minOf { it.at.y }
-                val maxY = topology.fixtures.maxOf { it.at.y }
-
-                val rnd = java.util.Random(manifest.seed + tick * 37L + totalCrocodilesSpawned * 1013L)
-                val spawnSide = rnd.nextInt(3) // 0: West, 1: North, 2: South
-                val startPt = when (spawnSide) {
-                    0 -> Point(minX - 160.0 - rnd.nextDouble() * 40.0, minY + rnd.nextDouble() * (maxY - minY))
-                    1 -> Point(minX - 80.0 + rnd.nextDouble() * (maxX - minX) * 0.6, minY - 160.0 - rnd.nextDouble() * 40.0)
-                    else -> Point(minX - 80.0 + rnd.nextDouble() * (maxX - minX) * 0.6, maxY + 160.0 + rnd.nextDouble() * 40.0)
-                }
-
-                val seaTurnX = maxX + 140.0 + rnd.nextDouble() * 160.0
-                val seaTurnY = minY + rnd.nextDouble() * (maxY - minY)
-                val turnPt = Point(seaTurnX, seaTurnY)
-
-                val exitSide = rnd.nextInt(3) // 0: West, 1: North, 2: South
-                val exitPt = when (exitSide) {
-                    0 -> Point(minX - 160.0 - rnd.nextDouble() * 40.0, minY + rnd.nextDouble() * (maxY - minY))
-                    1 -> Point(minX - 80.0 + rnd.nextDouble() * (maxX - minX) * 0.6, minY - 160.0 - rnd.nextDouble() * 40.0)
-                    else -> Point(minX - 80.0 + rnd.nextDouble() * (maxX - minX) * 0.6, maxY + 160.0 + rnd.nextDouble() * 40.0)
-                }
-
-                val seed = manifest.seed + tick * 47L + totalCrocodilesSpawned * 997L
-                croc.spawn(startPt, turnPt, exitPt, speed = 22.0, health = 120.0, seed = seed)
-                totalCrocodilesSpawned++
-                events += KernelEvent("CrocodileSpawned", croc.id, null, buildJsonObject {
-                    put("start", pointJson(startPt)); put("turn", pointJson(turnPt)); put("exit", pointJson(exitPt))
-                })
-            }
+        if (config.defense.enabled && elapsedSeconds > 0 && (elapsedSeconds % spawnInterval) < dt) {
+            spawnCrocodile(tick, events)
         }
 
+        updateThreatsAndDefense(tick, events)
+    }
+
+    private fun spawnCrocodile(tick: Long, events: MutableList<KernelEvent>, manual: Boolean = false) {
+        val croc = crocodilePool.obtain()
+        if (croc != null) {
+            val minX = topology.fixtures.minOf { it.at.x }
+            val maxX = topology.fixtures.maxOf { it.at.x }
+            val minY = topology.fixtures.minOf { it.at.y }
+            val maxY = topology.fixtures.maxOf { it.at.y }
+
+            val rnd = java.util.Random(manifest.seed + tick * 37L + totalCrocodilesSpawned * 1013L)
+            val spawnSide = rnd.nextInt(3) // 0: West, 1: North, 2: South
+            val startPt = when (spawnSide) {
+                0 -> Point(minX - 160.0 - rnd.nextDouble() * 40.0, minY + rnd.nextDouble() * (maxY - minY))
+                1 -> Point(minX - 80.0 + rnd.nextDouble() * (maxX - minX) * 0.6, minY - 160.0 - rnd.nextDouble() * 40.0)
+                else -> Point(minX - 80.0 + rnd.nextDouble() * (maxX - minX) * 0.6, maxY + 160.0 + rnd.nextDouble() * 40.0)
+            }
+
+            val seaTurnX = maxX + 140.0 + rnd.nextDouble() * 160.0
+            val seaTurnY = minY + rnd.nextDouble() * (maxY - minY)
+            val turnPt = Point(seaTurnX, seaTurnY)
+
+            val exitSide = rnd.nextInt(3) // 0: West, 1: North, 2: South
+            val exitPt = when (exitSide) {
+                0 -> Point(minX - 160.0 - rnd.nextDouble() * 40.0, minY + rnd.nextDouble() * (maxY - minY))
+                1 -> Point(minX - 80.0 + rnd.nextDouble() * (maxX - minX) * 0.6, minY - 160.0 - rnd.nextDouble() * 40.0)
+                else -> Point(minX - 80.0 + rnd.nextDouble() * (maxX - minX) * 0.6, maxY + 160.0 + rnd.nextDouble() * 40.0)
+            }
+
+            val seed = manifest.seed + tick * 47L + totalCrocodilesSpawned * 997L
+            croc.spawn(startPt, turnPt, exitPt, speed = 22.0, health = 120.0, seed = seed)
+            totalCrocodilesSpawned++
+            events += KernelEvent("CrocodileSpawned", croc.id, null, buildJsonObject {
+                put("start", pointJson(startPt)); put("turn", pointJson(turnPt)); put("exit", pointJson(exitPt)); put("manual", manual)
+            })
+        }
+    }
+
+    private fun updateThreatsAndDefense(tick: Long, events: MutableList<KernelEvent>) {
         // Update Air Defense cooldowns
         for (unit in airDefenseUnits.values) {
             unit.health = healthOf(unit.id)
@@ -1380,9 +1469,10 @@ class WorldKernel(
     private fun applyDamage(tick: Long, intents: List<VmIntent>, refs: List<String>, accepted: Set<String>, events: MutableList<KernelEvent>) {
         intents.forEachIndexed { index, intent ->
             if (intent.operation != Op.DAMAGE_REQUEST || intent.source !in accepted) return@forEachIndexed
+            if (intent.source in intrudersThisStep) return@forEachIndexed
             if (intent.source in unavailableHumans) return@forEachIndexed
             if (config.ecosystem.predator.enabled && people.byId[intent.source]?.kind in GROUND_THREAT_KINDS &&
-                !ecosystemController.attackActive(intent.source, elapsedSeconds)) {
+                !attackActive(intent.source)) {
                 events += KernelEvent("ActionRejected", intent.source, intent.source,
                     buildJsonObject { put("action", "damage"); put("reason", "predator_resting") }, listOf(intent.source), refs[index])
                 return@forEachIndexed
@@ -1702,6 +1792,8 @@ class WorldKernel(
         }
         for (intent in intents) {
             if (intent.operation != Op.MOTION_REQUEST || intent.source !in accepted || isBroken(intent.source)) continue
+            // Discard movement computed before the operator relocated this monster.
+            if (intent.source in intrudersThisStep) continue
             if (intent.source in unavailableHumans) continue
             if (intent.source in ridersAtStart) continue
             val target = intent.arguments[0].jsonObject

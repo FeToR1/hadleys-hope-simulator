@@ -1,5 +1,6 @@
 package colony.runtime
 
+import colony.world.Disaster
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -94,6 +95,14 @@ class RunController(
         changed()
     }
 
+    fun queueDisaster(disaster: Disaster, expectedRunId: String) = lock.withLock {
+        require(expectedRunId == run.runId) { "Симуляция была перезапущена; повторите команду" }
+        require(status in setOf(Status.WAITING, Status.RUNNING, Status.PAUSED)) { "Прогон завершён; начните заново" }
+        val world = requireNotNull(run.kernel) { "В этом сценарии нет физического мира" }
+        world.queueDisaster(disaster)
+        changed()
+    }
+
     /** Called by the pacing loop: performs one step when the run is running. */
     fun tick(): Boolean = lock.withLock {
         if (status != Status.RUNNING) return@withLock false
@@ -127,6 +136,7 @@ class RunController(
             put("behaviorWorkers", run.behaviorWorkers); put("nativeProcesses", run.nativeProcesses)
             put("lastStepMs", run.lastTimings.let { it.observeMs + it.behaviorMs + it.worldMs + it.snapshotMs })
             put("observationMode", if (compactLive) "compact" else "full")
+            run.kernel?.let { put("disasters", it.disasterOptions()) }
             failure?.let { put("error", it) }
         }
     }

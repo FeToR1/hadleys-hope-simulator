@@ -252,12 +252,15 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
         val lastDamage = HashMap<String, String>()
         val repairs = HashMap<String, String>()
         val breaks = HashSet<String>()
+        var reactorExplosion: String? = null
         return facts.map { fact ->
             val event = worldEvent(fact.type, fact.entityId, fact.actorId,
-                fact.causeRef ?: lastDamage[fact.entityId]?.takeIf { fact.type in setOf("ObjectBroken", "EntityDied") }
+                fact.causeRef ?: reactorExplosion?.takeIf { fact.type == "DamageApplied" && fact.fields["reason"]?.jsonPrimitive?.content == "ReactorExplosion" }
+                    ?: lastDamage[fact.entityId]?.takeIf { fact.type in setOf("ObjectBroken", "EntityDied") }
                     ?: chainedCause(fact, repairs, breaks), fact.fields, fact.recipients)
             if (fact.type == "DamageApplied") lastDamage[fact.entityId] = event.id
             when (fact.type) {
+                "ReactorExploded" -> reactorExplosion = event.id
                 "ObjectBroken" -> { lastBreakEvent[fact.entityId] = event; breaks += fact.entityId }
                 "PowerLost" -> lastPowerLossEvent[fact.entityId] = event.id
                 "RepairCompleted" -> { lastBreakEvent.remove(fact.entityId); repairs[fact.entityId] = event.id }

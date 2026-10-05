@@ -100,6 +100,24 @@ describe('live stream lifecycle', () => {
     live.disconnect();
   });
 
+  it('sends disaster parameters and the run ID, preserves server limits, and reports rejected commands', async () => {
+    const { live, options } = setup();
+    const supported = { ...health, disasters: { reactorAvailable: true, crocodilesAvailable: 32, monstersAvailable: 2, pending: 1 } };
+    const fetch = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => supported })
+      .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ error: 'Недостаточно живых монстров' }) });
+    vi.stubGlobal('fetch', fetch);
+    expect(await live.control({ disaster: { kind: 'monsters', count: 2, duration: 90 }, runId: 'r1' })).toEqual(parseHealth(supported));
+    const [url, request] = fetch.mock.calls[0];
+    expect(new URL(String(url), 'http://localhost').searchParams.get('count')).toBe('2');
+    expect(new URL(String(url), 'http://localhost').searchParams.get('runId')).toBe('r1');
+    expect(request.method).toBe('POST');
+    expect(options.onHealthChange).toHaveBeenLastCalledWith(parseHealth(supported));
+    expect(await live.control({ disaster: { kind: 'monsters', count: 3, duration: 90 }, runId: 'r1' })).toBeUndefined();
+    expect(options.onError).toHaveBeenCalledWith('Команда не выполнена: Недостаточно живых монстров');
+    expect(parseHealth({ ...supported, disasters: { ...supported.disasters, monstersAvailable: -1 } })).toBeUndefined();
+    expect(parseHealth({ ...supported, disasters: { ...supported.disasters, pending: '1' } })).toBeUndefined();
+  });
+
   it('ingests replayed ticks without losing or double counting their ledger entries', () => {
     const { live, options, stream } = setup();
     const manager = new StateManager();
