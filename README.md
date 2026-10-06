@@ -7,11 +7,15 @@
 
 Документация:
 
-- **[Архитектура экосистемы и Руководство (5000 домов)](docs/ECOSYSTEM_ARCHITECTURE.md)** — полное описание подсистем, схема взаимодействия, руководство для разработчиков и AI-моделей.
-- [ТЗ для Кляксы](docs/klyaksa-requirements.md) — требования, границы и риски.
-- [Технический справочник](docs/technical-reference.md) — язык, исполнение, API и проверки.
-- [CVM v2](docs/cvm-v2.md) — двоичный формат и текущий протокол нативной ВМ.
-- [Оптимизации и замеры 5000 домов](docs/optimization-5000.md) — потоки, узкие места и варианты нативного исполнения.
+- [docs/architecture.md](docs/architecture.md) — архитектура: подсистемы, диаграммы (конвейер, компоненты, conformance), структура кодовой базы, руководство по расширению.
+- [docs/requirements.md](docs/requirements.md) — ТЗ «Клякса»: цели, требования, границы, риски, критерии приёмки, что не реализовано.
+- [docs/onboarding.md](docs/onboarding.md) — маршрут изучения проекта для нового разработчика (один проход).
+- Спецификации: [язык Colony и сценарии](docs/spec/colony-language.md) · [исполнение, тик, физика, PRNG](docs/spec/runtime-tick.md) · [формат .cvm и протокол ВМ](docs/spec/cvm-format.md) · [HTTP/SSE API](docs/spec/http-api.md).
+- [docs/glossary.md](docs/glossary.md) — термины (Клякса, тик, контекст поведения, ровер, креатин и др.).
+- [docs/adr/](docs/adr/README.md) — архитектурные решения и их обоснования («почему так устроено»).
+- [CHANGELOG.md](CHANGELOG.md) — что и когда менялось; [docs/history/optimization-5000.md](docs/history/optimization-5000.md) — исторический отчёт об оптимизациях с замерами.
+- [AGENTS.md](AGENTS.md) — точка входа для LLM-агентов: карта репозитория, команды, «что читать / что обновлять».
+- Правила ведения документации: [docs/contribution/documentation-policy.md](docs/contribution/documentation-policy.md).
 
 ## Запуск
 
@@ -37,7 +41,7 @@
 `-Speed 10` задаёт целевые 10 тиков/с, `-BackendPort`/`-FrontendPort` меняют порты, `-SkipBuild` использует готовую сборку.
 На этой машине замер объединённого `development` с компактным кодированием даёт около 6,22 тика/с без HTTP и браузера:
 заданная скорость не гарантирует фактическую. Быстрый расчёт без промежуточных снимков достигает 10,47 тика/с
-в коротком замере без записи журнала; условия и ограничения приведены в [отчёте](docs/optimization-5000.md#проверка-и-слияние-с-development).
+в коротком замере без записи журнала; условия и ограничения приведены в [отчёте](docs/history/optimization-5000.md#проверка-и-слияние-с-development).
 Это эталонный режим `reference`; текущий `serve-native` всё ещё создаёт процесс на сущность.
 Карта объединяет дома и жителей в группы издалека, при приближении рисует только видимую область.
 
@@ -70,15 +74,17 @@ UI запрашивает `/stream?format=compact`; обычный `/stream` и 
 .\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat run-fast examples/physics/full-5000.json
 ```
 
-Прежний нативный сценарий на 300 домах через Docker:
+Сценарий через Docker:
 
 ```sh
 docker compose up --build
 ```
 
 Интерфейс: <http://localhost:5173>, backend: <http://localhost:8080>. Остановка: `docker compose down`.
-По умолчанию запускается `examples/physics/full.json` с 300 домами; другой сценарий выбирается через `HH_SCENARIO`.
-Для компактного запуска задайте `HH_SCENARIO=examples/physics/cascade.json`.
+Сервис `backend` по умолчанию запускает `serve-native examples/physics/full-5000.json` (5000 домов);
+другой сценарий выбирается через `HH_SCENARIO`, например компактный: `HH_SCENARIO=examples/physics/cascade.json`.
+Профиль `simulation` (`docker compose --profile simulation up`) делает разовый прогон `run-native`
+с записью JSONL в `./results` (по умолчанию `examples/physics/full.json`).
 
 Локально нужны JDK 17, CMake, компилятор C++20 и Node.js/npm, совместимые с [frontend/package.json](frontend/package.json). Команды для PowerShell из корня проекта:
 
@@ -112,4 +118,6 @@ npm run dev
 | [examples/drafts](colony-dsl-parser/examples/drafts) | Черновики для неподдерживаемых видов; не рабочие примеры |
 
 Проверки: Gradle `test`, CTest для `native/build`, `npm test` и `npm run build` в `frontend`,
-`python conformance/run_vectors.py`. Подробности и источники контрактов — в [справочнике](docs/technical-reference.md).
+`python conformance/run_vectors.py`. Полный список команд сборки, запуска и проверок — в [AGENTS.md](AGENTS.md);
+предметный контракт языка — [docs/generated/contract.json](docs/generated/contract.json), его правила —
+в [docs/spec/colony-language.md](docs/spec/colony-language.md).
