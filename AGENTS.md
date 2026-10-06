@@ -76,7 +76,7 @@ $CLI contract docs/generated/contract.json          # перегенерация
 | WorldKernel: физика, тепло, море, угрозы, креатин, TaskQueue, индекс | [docs/spec/runtime-tick.md](docs/spec/runtime-tick.md), [docs/architecture.md](docs/architecture.md), [ADR 0003](docs/adr/0003-spatial-index-i-kesh-svyazey.md), [0007](docs/adr/0007-fazovoe-chtenie-i-memoization.md) |
 | Производительность / потоки / кэши | [docs/adr/0004…0007](docs/adr/), [docs/history/optimization-5000.md](docs/history/optimization-5000.md) |
 | HTTP/SSE сервер или фронтенд | [docs/spec/http-api.md](docs/spec/http-api.md), [docs/adr/0005](docs/adr/0005-kompaktnyy-format-nablyudeniya.md) |
-| Сценарии (`examples/`) | [docs/spec/colony-language.md](docs/spec/colony-language.md) (формат каталога/сценария), [README](README.md#примеры-и-проверки) |
+| Сценарии (`examples/`) | [docs/spec/colony-language.md](docs/spec/colony-language.md) (формат каталога/сценария), [README](README.md#примеры-сценариев) |
 | Docker / скрипты запуска | [README](README.md#запуск), `docker-compose.yml`, `scripts/*.ps1` |
 | Архитектурное решение (новое или отмена старого) | [docs/adr/README.md](docs/adr/README.md) — сначала ADR, потом код |
 
