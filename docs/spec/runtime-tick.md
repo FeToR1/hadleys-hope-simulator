@@ -1,6 +1,6 @@
 # Исполнение: тик, мир и случайность
 
-> **Статус:** спека · **Аудитория:** разработчики ядра мира, ВМ и runtime, LLM-агенты · **Обновлять при:** изменении конвейера тика, физики, транспорта, денег или PRNG · **Источник истины:** этот файл описывает правила исполнения; точные поля — [WorldKernel.kt](../../colony-dsl-parser/src/main/kotlin/colony/world/WorldKernel.kt) и [ReferenceVm.kt](../../colony-dsl-parser/src/main/kotlin/colony/runtime/ReferenceVm.kt), проверяемые гарантии — conformance-векторы [conformance/](../../conformance)
+> **Статус:** спека · **Обновлять при:** изменении конвейера тика, физики, транспорта, денег или PRNG
 
 Спецификация исполнения. Язык программ — [colony-language.md](colony-language.md), двоичный артефакт
 и протокол нативной ВМ — [cvm-format.md](cvm-format.md), HTTP/SSE-наблюдение — [http-api.md](http-api.md).
