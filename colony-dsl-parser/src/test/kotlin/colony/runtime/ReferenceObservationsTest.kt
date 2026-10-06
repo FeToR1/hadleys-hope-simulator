@@ -4,7 +4,7 @@ import colony.bytecode.compileSource
 import kotlinx.serialization.json.*
 import kotlin.test.*
 
-/** What the reference run computes for the programs (docs/technical-reference.md#contract). */
+/** What the reference run computes for the programs (docs/spec/http-api.md#contract). */
 class ReferenceObservationsTest {
     private val program = compileSource("""
         behavior HouseWatch for House {

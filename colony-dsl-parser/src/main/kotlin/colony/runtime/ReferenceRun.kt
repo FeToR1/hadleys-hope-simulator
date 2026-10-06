@@ -28,7 +28,7 @@ import kotlin.math.min
 )
 
 /**
- * A fact the world established (docs/technical-reference.md#contract, section 3). Recipients are the entities whose
+ * A fact the world established (docs/spec/http-api.md#contract). Recipients are the entities whose
  * programs can receive it and fields are the payload they receive; no recipients means the journal only.
  * The tick is the snapshot in which the event first appears.
  */
@@ -91,7 +91,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     private val childrenOf = objects.values.filter { it.parent != null }.groupBy { it.parent!! }
     init {
         // A contract field the world cannot compute would otherwise kill the run mid-tick; the spec wants a
-        // binding error before the first step (docs/technical-reference.md#world).
+        // binding error before the first step (docs/spec/runtime-tick.md#world).
         try {
             for (kind in objects.values.map { it.kind }.distinct()) {
                 check(kind in kindContracts) { "Kind $kind has no observation contract; the scenario cannot be bound" }
@@ -149,7 +149,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
 
     /**
      * The observation of one entity at the start of a step: scenario inputs, plus what the run computes from its own
-     * state (docs/technical-reference.md#contract). Lists are sorted by (distance, id) and drop destroyed objects.
+     * state (docs/spec/http-api.md#contract). Lists are sorted by (distance, id) and drop destroyed objects.
      */
     private fun observe(id: String, instance: Instance): JsonObject {
         kernel?.let { return JsonObject(it.lazyView(instance, observed.getValue(id))) }
@@ -269,7 +269,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
     } }.orEmpty()
 
     /**
-     * The cause of a world-internal transition (docs/technical-reference.md#contract): a frozen pipe
+     * The cause of a world-internal transition (docs/spec/http-api.md#contract): a frozen pipe
      * or a cold death traces to the power loss of the house it belongs to; a power or water loss traces to the
      * break that severed the network; a repair and the restoration it brings trace to the break they answer.
      */
@@ -320,7 +320,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
             if (on == powerBefore.getValue(id)) continue
             val parent = instance.parent
             if (parent != null && powerOn(parent) != powerBefore.getValue(parent)) continue // covered by the house event
-            // docs/technical-reference.md#contract: the house and its appliances, not the residents.
+            // docs/spec/http-api.md#contract: the house and its appliances, not the residents.
             val recipients = if (instance.kind == "House") {
                 listOf(id) + childrenOf[id].orEmpty().filter { it.kind in APPLIANCES }.map { it.id }
             } else listOf(id)
@@ -374,7 +374,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                 }
             }
             val dt = prepared.program.stepSeconds.toDouble()
-            // Spec (docs/technical-reference.md#world): a request from an entity that could not act in S_k is rejected.
+            // Spec (docs/spec/runtime-tick.md#world): a request from an entity that could not act in S_k is rejected.
             val ableToAct = objects.keys.filterTo(HashSet()) { healthOf(it) > 0 }
             val events = mutableListOf<WorldEvent>()
             intents.forEachIndexed { index, intent ->

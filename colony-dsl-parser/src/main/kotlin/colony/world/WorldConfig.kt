@@ -3,7 +3,7 @@ package colony.world
 import kotlinx.serialization.Serializable
 
 /**
- * Parameters of the physical models (docs/technical-reference.md#world). Every value is in SI units: watts,
+ * Parameters of the physical models (docs/spec/runtime-tick.md#world). Every value is in SI units: watts,
  * seconds, metres, joules, degrees Celsius, cubic metres, hit points, and money in minimal units.
  * The defaults describe the settlement of the lab; a scenario overrides what it needs.
  */

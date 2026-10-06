@@ -4,7 +4,7 @@ import colony.ast.SourceSpan
 
 /**
  * Version of the kind, observation and kernel-event contract below. Every change of a schema is a new
- * version (docs/technical-reference.md#contract), and compiled artifacts record the version
+ * version (docs/spec/http-api.md#contract), and compiled artifacts record the version
  * they were built against so that a kernel or VM can refuse a mismatch.
  */
 const val CONTRACT_VERSION = 6
@@ -73,7 +73,7 @@ class SemanticEnvironment(
 }
 
 /**
- * Kinds and observations of the MVP as specified in docs/technical-reference.md#contract.
+ * Kinds and observations of the MVP as specified in docs/spec/http-api.md#contract.
  * Simulation/runtime can replace or extend it without touching the parser. Kinds that the specification
  * lists but that need decisions about their commands (crews, reactor, UPS, pump, comms) are not here yet.
  */
@@ -178,7 +178,7 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
 ).associateBy(KindContract::kind)
 
 /**
- * Events the world kernel sends to programs (docs/technical-reference.md#contract, section 3), with the payload
+ * Events the world kernel sends to programs (docs/spec/http-api.md#contract), with the payload
  * a program receives. A program subscribes by declaring an event of the same name; the compiler then requires
  * exactly this schema, so that a program cannot be linked against a kernel that means something else.
  * Events for journals only (EntityDied, MonthClosed) are not delivered to programs and are not listed.

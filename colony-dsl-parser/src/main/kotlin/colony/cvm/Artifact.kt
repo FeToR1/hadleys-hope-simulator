@@ -2,7 +2,7 @@ package colony.cvm
 
 import java.security.MessageDigest
 
-/** Sections of the .cvm container (docs/cvm-v2.md, section 3). */
+/** Sections of the .cvm container (docs/spec/cvm-format.md, section 3). */
 object Section {
     const val STRINGS = 1; const val SCHEMAS = 2; const val EVENTS = 3; const val BEHAVIORS = 4; const val HASH = 255
 }

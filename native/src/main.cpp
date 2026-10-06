@@ -1,5 +1,5 @@
 // hh-vm: one OS process runs one entity. It loads a .cvm artifact, waits for frames from the host and answers
-// with the intents and events its program produced (docs/cvm-v2.md).
+// with the intents and events its program produced (docs/spec/cvm-format.md).
 #include "cvm.hpp"
 #include "opcodes.hpp"
 #include "protocol.hpp"

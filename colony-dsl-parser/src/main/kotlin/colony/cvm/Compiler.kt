@@ -3,7 +3,7 @@ package colony.cvm
 import colony.ir.*
 import colony.semantics.*
 
-/** Maps a language type onto the value types the VM knows (docs/cvm-v2.md, section 2). */
+/** Maps a language type onto the value types the VM knows (docs/spec/cvm-format.md, section 2). */
 fun vtypeOf(type: Type): VType = when (type) {
     Type.Bool -> VType.Bool
     Type.Int64, Type.Money -> VType.I64

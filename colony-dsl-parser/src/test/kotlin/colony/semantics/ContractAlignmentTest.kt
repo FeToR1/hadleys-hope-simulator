@@ -4,7 +4,7 @@ import colony.parser.ColonyParserFacade
 import kotlin.test.*
 
 /**
- * The contract must say what docs/technical-reference.md#contract says. If the specification changes,
+ * The contract must say what docs/spec/http-api.md#contract says. If the specification changes,
  * change it here in the same commit, and bump CONTRACT_VERSION.
  */
 class ContractAlignmentTest {

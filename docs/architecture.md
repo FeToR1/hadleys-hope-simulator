@@ -120,6 +120,8 @@ flowchart TD
 
 ### 2.3. Кросс-проверка исполнителей (conformance)
 
+<a id="vectors"></a>
+
 ```mermaid
 flowchart TD
     V["conformance/*.json<br/>векторы: программа, кадры, ожидаемые<br/>намерения/события/состояние"] --> K["Kotlin<br/>ConformanceVectorsTest<br/>(эталонная ReferenceVm)"]

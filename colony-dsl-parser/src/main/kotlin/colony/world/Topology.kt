@@ -22,7 +22,7 @@ enum class FixtureKind(val repairKey: String) {
 
 /**
  * An object of the settlement that has no VM: a pole, a pipe, a source, an air defense turret, depository. It has a position, health and, for
- * the grid, the node it feeds from (docs/technical-reference.md#runtime, section 1).
+ * the grid, the node it feeds from (docs/spec/runtime-tick.md#runtime).
  */
 @Serializable data class Fixture(
     val id: String, val kind: FixtureKind, val at: Point, val feedsFrom: String? = null, val serves: String? = null,

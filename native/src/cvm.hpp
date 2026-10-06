@@ -1,5 +1,5 @@
 // Colony stack VM: values, program image and the pieces the interpreter needs.
-// The format is docs/cvm-v2.md; the Kotlin compiler in colony-dsl-parser writes what this loads.
+// The format is docs/spec/cvm-format.md; the Kotlin compiler in colony-dsl-parser writes what this loads.
 #pragma once
 
 #include <array>
@@ -237,7 +237,7 @@ double randomDraw(int64_t seed, std::string_view entity, std::string_view behavi
 // Execution
 // ---------------------------------------------------------------------------
 
-/** Limits of one step (docs/cvm-v2.md, section 7). */
+/** Limits of one step (docs/spec/cvm-format.md, section 7). */
 struct Limits {
     uint64_t instructions = 100000;
     uint32_t stack = 4096;

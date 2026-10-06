@@ -1,4 +1,4 @@
-// Framing and value encoding between the host and one VM process (docs/cvm-v2.md, section 8).
+// Framing and value encoding between the host and one VM process (docs/spec/cvm-format.md, section 8).
 #pragma once
 
 #include "cvm.hpp"

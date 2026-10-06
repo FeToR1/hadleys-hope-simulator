@@ -5,6 +5,8 @@
 Спецификация исполнения. Язык программ — [colony-language.md](colony-language.md), двоичный артефакт
 и протокол нативной ВМ — [cvm-format.md](cvm-format.md), HTTP/SSE-наблюдение — [http-api.md](http-api.md).
 
+<a id="runtime"></a>
+
 ## Режимы исполнения
 
 Текущие `run`/`serve` исполняют множество контекстов в одном JVM-процессе;
@@ -40,6 +42,8 @@
 Семантика исполнения: [ReferenceVm.kt](../../colony-dsl-parser/src/main/kotlin/colony/runtime/ReferenceVm.kt).
 Двоичный артефакт и протокол: [CVM v2](cvm-format.md).
 
+<a id="world"></a>
+
 ## Мир, транспорт и деньги
 
 Параметры и единицы: [WorldConfig.kt](../../colony-dsl-parser/src/main/kotlin/colony/world/WorldConfig.kt).
@@ -62,6 +66,8 @@
 Деньги — целые минимальные единицы. Начисления используют фактическое потребление, перенос остатка округления и плательщика.
 Событие `MonthClosed` и накопленные расходы пока требуют проверки разделения периодов.
 Окно проводок ядра/UI ограничено; для полного журнала используйте JSONL, а не только текущий экран.
+
+<a id="prng"></a>
 
 ## Случайность (PRNG)
 

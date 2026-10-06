@@ -1,4 +1,4 @@
-// SHA-256 and the random stream of docs/technical-reference.md, byte for byte what conformance/prng.json records.
+// SHA-256 and the random stream of docs/spec/runtime-tick.md, byte for byte what conformance/prng.json records.
 #include "cvm.hpp"
 
 #include <cstring>

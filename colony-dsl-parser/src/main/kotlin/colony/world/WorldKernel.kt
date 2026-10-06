@@ -42,7 +42,7 @@ data class TransportRequest(
 )
 
 /**
- * The single owner of the physical settlement (docs/technical-reference.md#world). Programs decide what they want;
+ * The single owner of the physical settlement (docs/spec/runtime-tick.md#world). Programs decide what they want;
  * this decides what happens. Every step runs the documented phases in order: check, damage and repair, networks
  * and resources, integration, movement and presence, events.
  */
@@ -848,7 +848,7 @@ class WorldKernel(
         applyMovement(intents, accepted, events)
         recomputeOccupants()
         // No second network pass here: a pipe frozen in phase 4 reaches the water network with the next
-        // step, as the phase order fixes (docs/technical-reference.md#world).
+        // step, as the phase order fixes (docs/spec/runtime-tick.md#world).
         reportChanges(poweredBefore, waterBefore, events)
         bill(tick, events)
         lastPostings = tickPostings.toList()
@@ -1253,7 +1253,7 @@ class WorldKernel(
             return KernelEvent("EntityDied", target, actor, buildJsonObject { put("entity", target) })
         }
         openJob(target, tick)
-        // docs/technical-reference.md#world: the owner and every crew hear about a break.
+        // docs/spec/runtime-tick.md#world: the owner and every crew hear about a break.
         val recipients = (listOfNotNull(ownerOf(target)) + people.rovers.map { it.id }).distinct()
         return KernelEvent("ObjectBroken", target, actor,
             buildJsonObject { put("object", target); put("reason", reason) }, recipients)
@@ -1337,7 +1337,7 @@ class WorldKernel(
     private fun sourcePower(id: String): Double = when (topology.byId[id]?.kind) {
         FixtureKind.REACTOR -> config.power.reactorPower
         FixtureKind.SOLAR -> config.power.solarPeak
-        // The battery is a working source only while it holds charge (docs/technical-reference.md#world):
+        // The battery is a working source only while it holds charge (docs/spec/runtime-tick.md#world):
         // once it is empty it stops bridging the dead sources, and that transition is a PowerLost.
         FixtureKind.UPS -> upsOutput()
         else -> 0.0
@@ -1365,7 +1365,7 @@ class WorldKernel(
         for (ids in powerClasses) for (id in ids) load += requested[id] ?: 0.0
         val discharging = batteryPower > 0.0 && load > externalPower
         // Charging has class-0 priority, but can only consume external generation. A battery needed
-        // by the actual loads discharges instead (docs/technical-reference.md#world).
+        // by the actual loads discharges instead (docs/spec/runtime-tick.md#world).
         val ups = UPS
         if (!discharging && !isBroken(ups) && isPowered(BUS)) {
             val headroom = (config.power.upsCapacity - upsCharge).coerceAtLeast(0.0)
@@ -1587,7 +1587,7 @@ class WorldKernel(
             val had = id in poweredBefore
             val has = id in poweredNow
             if (had != has) {
-                // docs/technical-reference.md#world: the house and its appliances hear about it.
+                // docs/spec/runtime-tick.md#world: the house and its appliances hear about it.
                 val recipients = listOf(id) + people.appliances.filter { it.parent == id }.map { it.id }
                 events += KernelEvent(if (has) "PowerRestored" else "PowerLost", id, null, JsonObject(emptyMap()), recipients)
             }

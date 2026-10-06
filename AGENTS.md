@@ -52,7 +52,11 @@ python conformance/run_vectors.py                                     # неза
 
 # CLI (после installDist)
 $CLI check SOURCE                       # компиляция одного файла
+$CLI compile SOURCE OUTPUT              # JSON-представление байт-кода в файл
+$CLI emit SOURCE OUT.cvm                # бинарный артефакт .cvm
+$CLI disasm ARTIFACT.cvm                # дизассемблирование артефакта
 $CLI prepare SCENARIO OUT_DIR           # program.cvm + manifest.json
+$CLI broker PROGRAM_DIR                 # нативный брокер ВМ (используется run-native/serve-native)
 $CLI run|run-native|run-fast SCENARIO [OUT.jsonl]   # прогоны (JVM / процессы hh-vm / fast)
 $CLI serve|serve-native SCENARIO [PORT] # HTTP/SSE сервер (по умолчанию :8080)
 $CLI benchmark|benchmark-live|benchmark-fast SCENARIO [TICKS]

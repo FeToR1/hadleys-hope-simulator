@@ -3,7 +3,7 @@ package colony.cvm
 import kotlinx.serialization.json.*
 
 /**
- * Host side of the protocol one VM process speaks (docs/cvm-v2.md, section 8). Values travel by their declared
+ * Host side of the protocol one VM process speaks (docs/spec/cvm-format.md, section 8). Values travel by their declared
  * type; JSON is only how this side names them, which keeps the host and the reference runtime comparable.
  */
 object Protocol {
