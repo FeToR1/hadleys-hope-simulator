@@ -46,8 +46,10 @@ export class StateManager {
   private readonly events: WorldEvent[] = [];
   private readonly postings: Posting[] = [];
   private readonly spendByOwner = new Map<string, number>();
+  private readonly incomeByOwner = new Map<string, number>();
   private readonly trend: TrendSample[] = [];
   private readonly attractorHistory: PhasePoint[] = [];
+  private budget = 0;
   private attractorMode: AttractorMode = 'stationary';
   private scenario: TickBatch['scenario'];
   private tickId = -1;
@@ -64,8 +66,10 @@ export class StateManager {
     this.events.length = 0;
     this.postings.length = 0;
     this.spendByOwner.clear();
+    this.incomeByOwner.clear();
     this.trend.length = 0;
     this.attractorHistory.length = 0;
+    this.budget = 0;
     this.attractorMode = 'stationary';
     this.scenario = undefined;
     this.tickId = -1;
@@ -141,20 +145,20 @@ export class StateManager {
     this.events.push(...(batch.events ?? []));
     if (this.events.length > MAX_EVENTS) this.events.splice(0, this.events.length - MAX_EVENTS);
     for (const posting of batch.postings ?? []) {
+      this.budget += posting.kind === 'creatine_sale' ? posting.amount : -posting.amount;
       this.postings.push(posting);
-      this.spendByOwner.set(posting.owner, (this.spendByOwner.get(posting.owner) ?? 0) + posting.amount);
+      const totals = posting.kind === 'creatine_sale' ? this.incomeByOwner : this.spendByOwner;
+      totals.set(posting.owner, (totals.get(posting.owner) ?? 0) + posting.amount);
     }
     if (this.postings.length > MAX_POSTINGS) this.postings.splice(0, this.postings.length - MAX_POSTINGS);
     // The charts read the settlement from the snapshot the world just committed.
     pushTrend(this.trend, sampleTrend(batch, this.spendByOwner));
     this.tickId = batch.tickId;
     this.timestamp = batch.timestamp;
-    const point = createPhasePoint(this.tickId, [...this.entities.values()], this.postings);
+    const point = createPhasePoint(this.tickId, [...this.entities.values()], this.budget, batch.events);
     this.attractorHistory.push(point);
     if (this.attractorHistory.length > MAX_ATTRACTOR_HISTORY) this.attractorHistory.shift();
-    if (this.attractorHistory.length === 1 || this.tickId % 10 === 0) {
-      this.attractorMode = classifyAttractor(this.attractorHistory, this.scenario);
-    }
+    this.attractorMode = classifyAttractor(this.attractorHistory, this.scenario);
     const snapshot = this.snapshot();
     for (const record of this.listeners) {
       const payload = { snapshot, deltas };
@@ -208,7 +212,7 @@ export class StateManager {
   public snapshot(): StateSnapshot {
     return { runId: this.runId, revision: this.revision, seed: this.seed, runtimeMode: this.runtimeMode,
       tickId: this.tickId, timestamp: this.timestamp, entities: this.entities, logs: this.logs, events: this.events,
-      postings: this.postings, spendByOwner: this.spendByOwner, trend: this.trend,
+      postings: this.postings, spendByOwner: this.spendByOwner, incomeByOwner: this.incomeByOwner, trend: this.trend,
       attractorHistory: this.attractorHistory, attractorMode: this.attractorMode };
   }
 }

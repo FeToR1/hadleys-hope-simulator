@@ -216,6 +216,7 @@ class AirDefenseUnit(
     var cooldownTimer: Double = 0.0
     var shotsFired: Long = 0
     var crocodilesDeflected: Long = 0
+    var ammoRemaining: Double = 0.0
 
     val isOperational: Boolean get() = !broken && health > 0.0
 
@@ -242,8 +243,8 @@ class AirDefenseUnit(
      * Attempts to engage a target crocodile in range.
      * Damages crocodile and deflects its trajectory.
      */
-    fun tryEngage(crocodile: FlyingCrocodile): Boolean {
-        if (!isOperational || cooldownTimer > 0.0 || !crocodile.active) return false
+    fun tryEngage(crocodile: FlyingCrocodile, powered: Boolean = true): Boolean {
+        if (!isOperational || !powered || ammoRemaining < 1.0 || cooldownTimer > 0.0 || !crocodile.active) return false
         val dist = position.distanceTo(crocodile.position)
         if (dist > range) return false
 
@@ -256,6 +257,37 @@ class AirDefenseUnit(
 
         shotsFired++
         crocodilesDeflected++
+        ammoRemaining -= 1.0
+        cooldownTimer = shotCooldown
+        return true
+    }
+}
+
+/** Powered, finite-ammunition wall turret that engages ground threats. */
+class GroundDefenseUnit(
+    val id: String,
+    val position: Point,
+    var range: Double = 120.0,
+    var damagePerShot: Double = 40.0,
+    var shotCooldown: Double = 2.0,
+    var ammoRemaining: Double = 0.0,
+) {
+    var health: Double = 100.0
+    var cooldownTimer: Double = 0.0
+    var shotsFired: Long = 0
+    val isOperational: Boolean get() = health > 0.0
+
+    fun updateCooldown(dt: Double) { cooldownTimer = max(0.0, cooldownTimer - dt) }
+
+    fun repair() {
+        health = 100.0
+        cooldownTimer = 0.0
+    }
+
+    fun tryEngage(target: Point, powered: Boolean): Boolean {
+        if (!isOperational || !powered || ammoRemaining < 1.0 || cooldownTimer > 0.0 || position.distanceTo(target) > range) return false
+        ammoRemaining -= 1.0
+        shotsFired++
         cooldownTimer = shotCooldown
         return true
     }

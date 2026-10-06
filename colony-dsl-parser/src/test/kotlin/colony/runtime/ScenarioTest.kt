@@ -18,6 +18,17 @@ class ScenarioTest {
             large.scenario.populations.filter { it.template != "household" })
     }
 
+    @Test fun klyaksaScenariosHaveNoXenomorphsButLegacyScenarioKeepsThem() {
+        for (name in listOf("ecosystem-small.json", "settlement-5000.json")) {
+            val prepared = prepareScenario(Path.of("../examples/physics/$name"))
+            assertFalse(prepared.manifest.instances.any { it.kind == "Xenomorph" }, name)
+            assertTrue(prepared.manifest.instances.any { it.kind == "Predator" }, name)
+        }
+
+        val legacy = prepareScenario(Path.of("../examples/physics/colony-300.json"))
+        assertTrue(legacy.manifest.instances.any { it.kind == "Xenomorph" })
+    }
+
     @Test fun aMonthAtOneSecondStepsPassesScenarioValidation() {
         val directory = java.nio.file.Files.createTempDirectory("colony-month-")
         val scenario = directory.resolve("month.json")

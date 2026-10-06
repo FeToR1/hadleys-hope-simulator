@@ -17,7 +17,7 @@ class CompactObserverTest {
             entities = entities, effects = listOf(TraceEvent(entity.id, "ignored", emptyList())), deliveredEvents = 0)
         val encoder = CompactObserver()
         val baseline = Json.parseToJsonElement(encoder.encode(snapshot)).jsonObject
-        assertEquals(brokerJson.encodeToJsonElement(entity), baseline.getValue("entities").jsonArray[0])
+        assertEquals(observerJson.encodeToJsonElement(entity), baseline.getValue("entities").jsonArray[0])
         assertFalse("effects" in baseline)
         val unchanged = Json.parseToJsonElement(encoder.encode(snapshot.copy(tickId = 1))).jsonObject
         assertEquals(JsonArray(emptyList()), unchanged["entities"])
@@ -53,9 +53,9 @@ class CompactObserverTest {
                     restored[id] = JsonObject(restored[id].orEmpty() + fields)
                 }
                 wire.getValue("removed").jsonArray.forEach { restored.remove(it.jsonPrimitive.content) }
-                assertEquals(snapshot.entities.associate { it.id to brokerJson.encodeToJsonElement(it).jsonObject }, restored, "tick=$tick")
-                assertEquals(brokerJson.encodeToJsonElement(snapshot.events), wire["events"])
-                assertEquals(brokerJson.encodeToJsonElement(snapshot.postings), wire["postings"])
+                assertEquals(snapshot.entities.associate { it.id to observerJson.encodeToJsonElement(it).jsonObject }, restored, "tick=$tick")
+                assertEquals(observerJson.encodeToJsonElement(snapshot.events), wire["events"])
+                assertEquals(observerJson.encodeToJsonElement(snapshot.postings), wire["postings"])
             }
         }
     }

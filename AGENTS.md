@@ -57,15 +57,16 @@ $CLI emit SOURCE OUT.cvm                # бинарный артефакт .cvm
 $CLI disasm ARTIFACT.cvm                # дизассемблирование артефакта
 $CLI prepare SCENARIO OUT_DIR           # program.cvm + manifest.json
 $CLI broker PROGRAM_DIR                 # нативный брокер ВМ (используется run-native/serve-native)
-$CLI run|run-native|run-fast SCENARIO [OUT.jsonl]   # прогоны (JVM / процессы hh-vm / fast)
+$CLI run|run-native|run-fast SCENARIO [OUT.jsonl]   # прогоны (JVM / общий пул hh-vm / fast)
 $CLI serve|serve-native SCENARIO [PORT] # HTTP/SSE сервер (по умолчанию :8080)
 $CLI benchmark|benchmark-live|benchmark-fast SCENARIO [TICKS]
 $CLI conformance conformance            # перегенерация conformance-векторов (из корня репо)
 $CLI contract docs/generated/contract.json          # перегенерация предметного контракта
 ```
 
-Переменные окружения: `HH_VM` (путь к hh-vm), `HH_REFERENCE_WORKERS` (потоки поведения, обычно 4),
-`HH_COMPACT_OBSERVER=1`, `HH_BIND_HOST`, `HH_ALLOWED_HOSTS`, `HH_SCENARIO` (Docker), `JAVA_OPTS`.
+Переменные окружения: `HH_VM` (путь к hh-vm), `HH_NATIVE_WORKERS` (пул общих C++ исполнителей, 1–32,
+по умолчанию 1), `HH_REFERENCE_WORKERS` (потоки эталонного JVM-исполнителя, обычно 4), `HH_COMPACT_OBSERVER=1`,
+`HH_BIND_HOST`, `HH_ALLOWED_HOSTS`, `HH_SCENARIO` (Docker), `JAVA_OPTS`.
 
 ## Читать перед изменением X
 

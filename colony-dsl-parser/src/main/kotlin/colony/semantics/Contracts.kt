@@ -7,7 +7,7 @@ import colony.ast.SourceSpan
  * version (docs/spec/http-api.md#contract), and compiled artifacts record the version
  * they were built against so that a kernel or VM can refuse a mismatch.
  */
-const val CONTRACT_VERSION = 6
+const val CONTRACT_VERSION = 8
 
 /** Entity-kind contract supplied by runtime/simulation owners (Role #7). */
 data class KindContract(
@@ -119,6 +119,7 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
             // Where this resident lives and works; the settlement decides, not the program.
             "home" to Type.Kind("Position"),
             "workplace" to Type.Kind("Position"),
+            "medical_required" to Type.Bool,
             "meeting_point" to Type.Kind("Position"),
             "routine_slot" to Type.Int64,
             "day_minute" to Type.Int64,
@@ -152,6 +153,7 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
             "position" to Type.Kind("Position"),
             "health" to Type.Physical(PhysicalKind.HEALTH),
             "visible_xenomorphs" to Type.List(Type.Kind("Target")),
+            "visible_predators" to Type.List(Type.Kind("Target")),
             "available_vehicles" to Type.List(Type.Kind("VehicleTarget")),
             "in_vehicle" to Type.Bool,
             "boarding_radius" to Type.Physical(PhysicalKind.DISTANCE),
@@ -169,8 +171,21 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
             "position" to Type.Kind("Position"),
             "visible_infrastructure" to Type.List(Type.Kind("Target")),
             "visible_humans" to Type.List(Type.Kind("Target")),
+            "attack_active" to Type.Bool,
             "patrol_waypoint" to Type.Kind("Position"),
             // Marines drove it off: until it is out and keeps away, the waypoint leads out of the settlement.
+            "routed" to Type.Bool,
+        ),
+        capabilities = setOf(Capability.DAMAGE_REQUEST, Capability.MOTION_REQUEST),
+    ),
+    KindContract(
+        kind = "Predator",
+        viewFields = mapOf(
+            "position" to Type.Kind("Position"),
+            "visible_infrastructure" to Type.List(Type.Kind("Target")),
+            "visible_humans" to Type.List(Type.Kind("Target")),
+            "attack_active" to Type.Bool,
+            "patrol_waypoint" to Type.Kind("Position"),
             "routed" to Type.Bool,
         ),
         capabilities = setOf(Capability.DAMAGE_REQUEST, Capability.MOTION_REQUEST),

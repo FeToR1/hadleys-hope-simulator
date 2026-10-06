@@ -16,6 +16,7 @@ interface SidebarProps {
   causalEmptyText?: string;
   postings: readonly Posting[];
   spendByOwner: ReadonlyMap<string, number>;
+  incomeByOwner: ReadonlyMap<string, number>;
   onFocusCausalStep: (step: CausalChainStep) => void;
   onExportCsv: () => void;
   onExportAttractorCsv: () => void;
@@ -28,13 +29,14 @@ const attractorLabels: Record<AttractorMode, string> = {
   periodic: 'Периодический аттрактор',
   chaotic: 'Хаотический каскад',
   collapse: 'Точка коллапса',
+  transient: 'Переходный процесс',
 };
 
-export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText, postings, spendByOwner, onFocusCausalStep, onExportCsv, onExportAttractorCsv, attractorHistory, attractorMode }: SidebarProps): JSX.Element {
+export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText, postings, spendByOwner, incomeByOwner, onFocusCausalStep, onExportCsv, onExportAttractorCsv, attractorHistory, attractorMode }: SidebarProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<'details' | 'causal'>('details');
   const newestFirst = useMemo(() => [...logs].reverse(), [logs]);
   if (selected === undefined) {
-    return <aside className="sidebar"><AttractorWidget mode={attractorMode} history={attractorHistory} points={attractorHistory.length} onExport={onExportAttractorCsv} /><button type="button" className="export-button" onClick={onExportCsv}>Экспорт отчета в CSV</button><CausalChainTracker steps={causalChain} emptyText={causalEmptyText} onFocus={onFocusCausalStep} /><SpendPanel postings={postings} spendByOwner={spendByOwner} /><p className="muted">Выберите дом или узел на карте.</p><LogList logs={newestFirst} /></aside>;
+    return <aside className="sidebar"><AttractorWidget mode={attractorMode} history={attractorHistory} points={attractorHistory.length} onExport={onExportAttractorCsv} /><button type="button" className="export-button" onClick={onExportCsv}>Экспорт отчета в CSV</button><CausalChainTracker steps={causalChain} emptyText={causalEmptyText} onFocus={onFocusCausalStep} /><SpendPanel postings={postings} spendByOwner={spendByOwner} incomeByOwner={incomeByOwner} /><p className="muted">Выберите дом или узел на карте.</p><LogList logs={newestFirst} /></aside>;
   }
   return (
     <aside className="sidebar">
@@ -43,9 +45,20 @@ export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText,
       <button type="button" className="export-button" onClick={onExportCsv}>Экспорт отчета в CSV</button>
       <AttractorWidget mode={attractorMode} history={attractorHistory} points={attractorHistory.length} onExport={onExportAttractorCsv} />
       <div className="sidebar-heading">
-        <div><span className="eyebrow">{selected.type === 'mine' ? 'Добыча креатина' : selected.type === 'air_defense' ? 'Оборона' : selected.type === 'depository' ? 'Хранилище' : selected.type === 'medical_center' ? 'Медицина' : selected.type}</span><h2>{selected.type === 'mine' ? 'Шахта' : selected.type === 'air_defense' ? 'Система ПВО' : selected.type === 'depository' ? 'Склад креатина' : selected.type === 'medical_center' ? 'Медицинский центр' : selected.id}</h2></div>
+        <div><span className="eyebrow">{selected.type === 'mine' ? 'Добыча креатина' : selected.type === 'air_defense' ? 'Оборона' : selected.type === 'depository' ? 'Хранилище' : selected.type === 'medical_center' ? 'Медицина' : selected.type === 'rover' ? roverRoleName(selected.id) : selected.type}</span><h2>{selected.type === 'mine' ? 'Шахта' : selected.type === 'air_defense' ? 'Система ПВО' : selected.type === 'depository' ? 'Склад креатина' : selected.type === 'medical_center' ? 'Медицинский центр' : selected.type === 'rover' ? roverRoleName(selected.id) : selected.id}</h2></div>
         <span className={`status status-${selected.status}`}>{selected.status}</span>
       </div>
+      {(selected.type === 'air_defense' || selected.type === 'ground_turret') && <section className="defense-details"><h3>Оборона</h3>
+        <Metric label="Боезапас" value={selected.metrics.ammo_remaining ?? selected.metrics.ammo} digits={0} />
+        <Metric label="Выстрелов произведено" value={selected.metrics.shots_fired} digits={0} />
+        {selected.metrics.refusal_reason && <div className="metric"><span>Причина отказа</span><strong>{defenseReasonLabel(selected.metrics.refusal_reason)}</strong></div>}
+        <div className="metric"><span>Питание</span><strong>{selected.metrics.power_connected === false ? 'Нет' : selected.metrics.power_connected === true ? 'Подключено' : '—'}</strong></div>
+      </section>}
+      {selected.type === 'burner' && selected.metrics.shared_fuel_remaining !== undefined && <section><h3>Очистка планктона</h3>
+        <Metric label="Общий запас топлива" value={selected.metrics.shared_fuel_remaining} suffix=" ед." />
+      </section>}
+      {selected.type === 'civilian' && selected.metrics.available === false && <p className="status status-warning">Житель временно недоступен</p>}
+      {(selected.type === 'xenomorph' || selected.type === 'predator') && selected.metrics.mutation && <section><h3>Мутация</h3><p>{mutationLabel(selected.metrics.mutation)}</p></section>}
       {selected.type === 'mine' ? <section className="mine-details"><h3>Рабочая смена (Добыча креатина)</h3>
         <Metric label="Шахтёров на работе" value={selected.metrics.workers} digits={0} />
         <p className="muted">{(selected.metrics.workers ?? 0) > 0 ? 'Шахтёры прибыли и добывают ценный креатин.' : 'Шахта ожидает следующую смену.'}</p>
@@ -62,6 +75,12 @@ export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText,
       </section> : selected.type === 'medical_center' ? <section className="medcenter-details"><h3>Медицинский центр</h3>
         <Metric label="Запас креатина" value={selected.metrics.creatine_stock} digits={0} suffix=" ед." />
         <p className="muted">Использует креатин для исцеления раненых жителей и шахтёров.</p>
+      </section> : selected.type === 'ecology_zone' ? <section><h3>Показатели зоны</h3>
+        <div className="metric"><span>Границы X</span><strong>{selected.metrics.min_x?.toFixed(1) ?? '—'} … {selected.metrics.max_x?.toFixed(1) ?? '—'}</strong></div>
+        <div className="metric"><span>Границы Y</span><strong>{selected.metrics.min_y?.toFixed(1) ?? '—'} … {selected.metrics.max_y?.toFixed(1) ?? '—'}</strong></div>
+        <Metric label="Биомасса леса" value={selected.metrics.forest_biomass} />
+        <Metric label="Навоз" value={selected.metrics.manure} />
+        <Metric label="Биомасса планктона" value={selected.metrics.plankton_biomass} />
       </section> : <>
       <p className="pid">PID процесса: <strong>{selected.pid ?? '—'}</strong></p>
       <section><h3>Метрики</h3><Metric label="Температура" value={selected.metrics.temperature} suffix=" °C" /><Metric label="Потребление" value={selected.metrics.power_consumption} suffix=" W" /><Metric label="Вода" value={selected.metrics.water_level} suffix=" %" /><Metric label="Жильцов" value={selected.metrics.occupants} digits={0} /><Metric label="Стресс" value={selected.metrics.stress} /><Metric label="Здоровье" value={selected.metrics.health} suffix=" hp" />
@@ -70,7 +89,7 @@ export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText,
       {selected.metrics.spend !== undefined && <div className="metric"><span>Начислено</span><strong>{formatMoney(selected.metrics.spend)}</strong></div>}</section>
       <VmState state={selected.vmState} />
       </>}
-      {selected.type === 'rover' && <section><h3>Перевозка</h3><Metric label="Пассажиры" value={selected.metrics.passenger_count} digits={0} /><Metric label="Вместимость" value={selected.metrics.passenger_capacity} digits={0} /></section>}
+      {selected.type === 'rover' && selected.metrics.passenger_capacity !== undefined && <section><h3>Перевозка</h3><Metric label="Пассажиры" value={selected.metrics.passenger_count} digits={0} /><Metric label="Вместимость" value={selected.metrics.passenger_capacity} digits={0} /></section>}
       {selected.type === 'marine' && <section><h3>Отряд</h3><Metric label="Живых бойцов" value={selected.metrics.squad_size} digits={0} /></section>}
       {devices.length > 0 && <section><h3>Приборы</h3>{devices.map((device) => <div className="device" key={device.id}><strong>{device.type}</strong><span>PID {device.pid ?? '—'}</span><span>{device.metrics.power_consumption ?? 0} W</span></div>)}</section>}
       <LogList logs={newestFirst} />
@@ -81,11 +100,28 @@ export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText,
 
 function AttractorWidget({ mode, history, points, onExport }: { mode: AttractorMode; history: readonly PhasePoint[]; points: number; onExport: () => void }): JSX.Element {
   const [showVortex, setShowVortex] = useState(false);
-  return <section className={`attractor-widget attractor-${mode}`}><div className="attractor-heading"><h3>Динамика системы (Аттрактор)</h3><span>{points} точек</span></div><strong>{attractorLabels[mode]}</strong><AttractorRadar history={history} mode={mode} /><button type="button" className="export-button" onClick={() => setShowVortex((visible) => !visible)}>{showVortex ? 'Скрыть 3D вихрь' : 'Открыть 3D вихрь'}</button>{showVortex && <AttractorVortex3D history={history} mode={mode} />}<button type="button" className="export-button" onClick={onExport}>Экспорт аттрактора в CSV</button></section>;
+  return <section className={`attractor-widget attractor-${mode}`}><div className="attractor-heading"><h3>Динамика системы (Аттрактор)</h3><span>{points} точек</span></div><strong>{attractorLabels[mode]}</strong><AttractorRadar history={history} mode={mode} /><button type="button" className="export-button" onClick={() => setShowVortex((visible) => !visible)}>{showVortex ? 'Скрыть 3D портрет' : 'Открыть 3D портрет'}</button>{showVortex && <AttractorVortex3D history={history} mode={mode} />}<button type="button" className="export-button" onClick={onExport}>Экспорт аттрактора в CSV</button></section>;
 }
 
 function Metric({ label, value, suffix = '', digits = 1 }: { label: string; value: number | undefined; suffix?: string; digits?: number }): JSX.Element {
   return <div className="metric"><span>{label}</span><strong>{value === undefined ? '—' : `${value.toFixed(digits)}${suffix}`}</strong></div>;
+}
+
+function roverRoleName(id: string): string {
+  if (id.startsWith('cleanup-')) return 'Уборочный ровер';
+  if (id.startsWith('forester-')) return 'Лесной ровер';
+  if (id.startsWith('crew-')) return 'Ремонтный ровер';
+  if (id.startsWith('cargo-')) return 'Грузовой ровер';
+  if (id.startsWith('transport-')) return 'Пассажирский ровер';
+  return 'Ровер';
+}
+
+function defenseReasonLabel(reason: NonNullable<EntityState['metrics']['refusal_reason']>): string {
+  return ({ broken: 'Повреждена', no_power: 'Нет питания', no_ammo: 'Нет боеприпасов', cooldown: 'Перезарядка' })[reason];
+}
+
+function mutationLabel(mutation: NonNullable<EntityState['metrics']['mutation']>): string {
+  return ({ armored: 'Бронированный', swift: 'Быстрый', venomous: 'Ядовитый', pack: 'Степной', baseline: 'Обычный' })[mutation];
 }
 
 /** Behavior variables held by the entity's own VM; only observed runs provide them. */

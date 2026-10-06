@@ -11,6 +11,7 @@ import { BrokerConnection } from './components/BrokerConnection';
 import { TrendPanel } from './components/TrendPanel';
 import type { TrendSample } from './domain/trend';
 import { RunControls, type RunCommand } from './components/RunControls';
+import { DisasterPanel } from './components/DisasterPanel';
 import { serializeAttractorCsv } from './domain/attractor';
 
 export function App(): JSX.Element {
@@ -19,8 +20,8 @@ export function App(): JSX.Element {
   const [selectedId, setSelectedId] = useState<string>();
   const [logs, setLogs] = useState<readonly EntityLog[]>([]);
   const [worldEvents, setWorldEvents] = useState<readonly WorldEvent[]>([]);
-  const [money, setMoney] = useState<{ postings: readonly Posting[]; spendByOwner: ReadonlyMap<string, number> }>(
-    { postings: [], spendByOwner: new Map() });
+  const [money, setMoney] = useState<{ postings: readonly Posting[]; spendByOwner: ReadonlyMap<string, number>; incomeByOwner: ReadonlyMap<string, number> }>(
+    { postings: [], spendByOwner: new Map(), incomeByOwner: new Map() });
   const [tab, setTab] = useState<'map' | 'topology' | 'trend'>('map');
   const [trend, setTrend] = useState<readonly TrendSample[]>([]);
   const [attractorHistory, setAttractorHistory] = useState<readonly PhasePoint[]>([]);
@@ -46,7 +47,7 @@ export function App(): JSX.Element {
     }, { animationFrame: true });
     const unsubscribeSidebar = manager.subscribe((snapshot) => {
       setLogs([...snapshot.logs]);
-      setMoney({ postings: [...snapshot.postings], spendByOwner: new Map(snapshot.spendByOwner) });
+      setMoney({ postings: [...snapshot.postings], spendByOwner: new Map(snapshot.spendByOwner), incomeByOwner: new Map(snapshot.incomeByOwner ?? []) });
       setTrend([...snapshot.trend]);
       setAttractorHistory([...snapshot.attractorHistory]);
       setAttractorMode(snapshot.attractorMode);
@@ -158,15 +159,19 @@ export function App(): JSX.Element {
 
   return (
     <main className="shell">
-      <header className="topbar"><div><span className="eyebrow">WORLD KERNEL / LV-426</span><h1>Settlement monitor</h1><div className="run-meta">seed: <strong>{runMeta.seed || '—'}</strong> · tick: <strong>{tickId < 0 ? '—' : tickId}</strong></div></div><div className="topbar-right"><RunControls health={brokerHealth} currentTick={tickId} onControl={(command) => void runControl(command)} /><BrokerConnection connected={streamConnected} warning={[sourceWarning, historyWarning].filter(Boolean).join(' ') || undefined} /><div className="run-entity-count">{runMeta.runtimeMode?.toUpperCase() ?? 'ОЖИДАНИЕ'} · {entities.length} объектов</div></div></header>
+      <header className="topbar"><div><span className="eyebrow">WORLD KERNEL / COLONY</span><h1>Settlement monitor</h1><div className="run-meta">seed: <strong>{runMeta.seed || '—'}</strong> · tick: <strong>{tickId < 0 ? '—' : tickId}</strong></div></div><div className="topbar-right"><RunControls health={brokerHealth} currentTick={tickId} onControl={(command) => void runControl(command)} /><BrokerConnection connected={streamConnected} warning={[sourceWarning, historyWarning].filter(Boolean).join(' ') || undefined} /><div className="run-entity-count">{runMeta.runtimeMode?.toUpperCase() ?? 'ОЖИДАНИЕ'} · {entities.length} объектов</div></div></header>
       <div className="content">
         <section className="workspace">
-          <nav className="tabs"><button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>2D карта</button><button className={tab === 'topology' ? 'active' : ''} onClick={() => setTab('topology')}>Топология сетей</button><button className={tab === 'trend' ? 'active' : ''} onClick={() => setTab('trend')}>Графики</button></nav>
+          <div className="workspace-toolbar">
+            <nav className="tabs"><button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>2D карта</button><button className={tab === 'topology' ? 'active' : ''} onClick={() => setTab('topology')}>Топология сетей</button><button className={tab === 'trend' ? 'active' : ''} onClick={() => setTab('trend')}>Графики</button></nav>
+            <DisasterPanel health={brokerHealth} onLaunch={async (disaster, runId) =>
+              (await liveSourceRef.current?.control({ disaster, runId })) !== undefined} />
+          </div>
           {tab === 'map' && <SettlementMap key={runMeta.runId} entities={entities} selectedId={selectedId} onSelect={selectEntity} onClearSelection={() => setSelectedId(undefined)} onRegisterFocus={(focus) => { mapFocusRef.current = focus; }} />}
           {tab === 'topology' && <NetworkTopology key={runMeta.runId} entities={entities} selectedId={selectedId} onSelect={selectEntity} onRegisterFocus={(focus) => { graphFocusRef.current = focus; }} />}
           {tab === 'trend' && <div className="visualization-shell"><TrendPanel trend={trend} /></div>}
         </section>
-        <Sidebar selected={selected} devices={devices} logs={logs} causalChain={causalChain} postings={money.postings} spendByOwner={money.spendByOwner} attractorHistory={attractorHistory} attractorMode={attractorMode} causalEmptyText="Поломок и гибели пока не было. Цепочка причин появится после первой." onFocusCausalStep={focusCausalStep} onExportCsv={exportCsv} onExportAttractorCsv={exportAttractorCsv} />
+        <Sidebar selected={selected} devices={devices} logs={logs} causalChain={causalChain} postings={money.postings} spendByOwner={money.spendByOwner} incomeByOwner={money.incomeByOwner} attractorHistory={attractorHistory} attractorMode={attractorMode} causalEmptyText="Поломок и гибели пока не было. Цепочка причин появится после первой." onFocusCausalStep={focusCausalStep} onExportCsv={exportCsv} onExportAttractorCsv={exportAttractorCsv} />
       </div>
     </main>
   );

@@ -79,13 +79,12 @@ class SeaController(
         var fogCleared = false
 
         if (isFogActive) {
-            val progress = (cycleTime / config.fogDurationSeconds).coerceIn(0.0, 1.0)
             if (!wasFogActive) {
                 fogStarted = true
                 fogEventsCount++
 
                 // Determine diagonal entry trajectory from sea (East) towards forest (West/South-West/North-West)
-                startX = seaCoastX + cloudWidth * 0.25
+                startX = seaCoastX + cloudWidth / 2.0
                 val rangeY = (maxY - minY).coerceAtLeast(600.0)
                 // Alternate entry corridors across cycles
                 val entryFraction = when (fogEventsCount % 3) {
@@ -94,16 +93,19 @@ class SeaController(
                     else -> 0.65
                 }
                 startY = minY + rangeY * entryFraction
-                targetX = minX - cloudWidth * 0.4
+                targetX = seaCoastX - config.fogMaxPenetration + cloudWidth / 2.0
                 val diagonalOffset = if (fogEventsCount % 2 == 0) -800.0 else 800.0
                 targetY = (startY + diagonalOffset).coerceIn(minY, maxY)
             }
 
             // Move cloud diagonally across settlement
+            val maxTravel = (startX - targetX).coerceAtLeast(0.0)
+            val progress = if (config.fogDurationSeconds <= 0.0 || maxTravel <= 0.0) 1.0 else
+                (cycleTime * config.fogAdvanceSpeed / maxTravel).coerceIn(0.0, 1.0)
             val curX = startX + (targetX - startX) * progress
             val curY = startY + (targetY - startY) * progress
             cloudCenter = Point(curX, curY)
-            currentFogDepth = (seaCoastX - curX).coerceAtLeast(0.0)
+            currentFogDepth = (seaCoastX - (curX - cloudWidth / 2.0)).coerceIn(0.0, config.fogMaxPenetration)
         } else {
             if (wasFogActive) {
                 fogCleared = true

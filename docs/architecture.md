@@ -7,10 +7,15 @@
 [adr/](adr/) (почему устроено так), [glossary.md](glossary.md) (термины).
 
 **Суть в одном абзаце.** Программы на DSL Colony компилируются в стековый байт-код `.cvm` и исполняются
-двумя ВМ — эталонной JVM (`ReferenceVm`) и нативной C++ (`hh-vm`), которые сверяются conformance-векторами.
-Ядро мира `WorldKernel` детерминированно разрешает намерения и считает физику посёлка на 5000 домов
-(~20 028 контекстов поведения); `ObserverGateway` публикует состояние по HTTP/SSE (:8080),
-React-дашборд с Pixi.js/Three.js рисует карту (:5173).
+двумя ВМ — эталонной JVM (`ReferenceVm`) и нативной C++ (`hh-vm`, общий пул процессов с пакетным
+протоколом), которые сверяются conformance-векторами. Ядро мира `WorldKernel` детерминированно разрешает
+намерения и считает физику посёлка на 5000 домов (~20 028 контекстов поведения); `ObserverGateway`
+публикует состояние по HTTP/SSE (:8080), React-дашборд с Pixi.js/Three.js рисует карту (:5173).
+
+Зональную экологию (лес, навоз, планктон, состояние людей) реализует `EcosystemController`, физические
+последствия применяет `WorldKernel`; механики отключены по умолчанию и включаются сценарием.
+Проверенное покрытие и исправления — в [отчёте аудита](history/review-last-three-commits.md);
+численные примеры ниже — исходные значения обновления, а не замер актуального сценария.
 
 ---
 
@@ -20,7 +25,7 @@ React-дашборд с Pixi.js/Three.js рисует карту (:5173).
 
 | Блок | Что делает | Ключевые правила и цифры |
 |---|---|---|
-| **Масштабирование** | Сетка расширена с 300 до 5000 домов: дома, обогреватели, чайники, жители, бригады, роверы — более 20 000 параллельных контекстов | 2D Spatial Hash Grid (`SpatialIndex`) даёт проверки близости/видимости/коллизий за $O(1)$ вместо $O(N^2)$ |
+| **Масштабирование** | Сетка расширена с 300 до 5000 домов: дома, обогреватели, чайники, жители, бригады, роверы — более 20 000 параллельных контекстов | 2D Spatial Hash Grid (`SpatialIndex`) сокращает проверки близости/видимости/коллизий до посещаемых ячеек и найденных кандидатов — стоимость зависит от радиуса и плотности, а не от $O(N^2)$ полного перебора |
 | **Топология и биомы** | Атмосфера земная, комфортная (+19 °C), свободное дыхание по всей территории; лес окружает с З, С и Ю; море — с В | Из леса появляются воздушные угрозы; море ограничивает с четвёртой стороны |
 | **Море (`SeaController`)** | Эрозионный урон домам прибрежной полосы; плотное смещающееся облако тумана (~100×100 домов: 1200×1400 м) зарождается у восточной границы и дрейфует по диагонали к лесу | Внутри эллипса тумана рабочие без респиратора получают урон от удушья, ПВО коррозируется и отключается; вне облака — ясная видимость |
 | **Угрозы (`FlyingCrocodile`)** | Вылетают из случайных точек леса, летят над посёлком к морю по траектории с шумом Перлина (`TrajectoryNoise`); от точки разворота (`turnPoint`) возвращаются во второй фазе (`FlightPhase.RETURNING`) к уникальной точке выхода (`exitPoint`) с независимым шумом; по достижении леса или уничтожении — деспавн в пул `CrocodilePool` | Интервал появления 17.5 с (удвоенная частота); пул на 128 слотов |
@@ -101,7 +106,7 @@ flowchart TD
     end
 
     subgraph SimulationCore ["Ядро мира (WorldKernel)"]
-        Spatial["SpatialIndex\n(2D Spatial Hash Grid, O(1))"]
+        Spatial["SpatialIndex\n(2D Spatial Hash Grid)"]
         Tasks["TaskQueue\n(Очередь ремонта строений и ПВО)"]
         Creatine["CreatineManager\n(Склад, Продажа, Исцеление)"]
         CVM["Нативная C++ VM (hh-vm.exe) /\nJVM Fleet"]
@@ -151,7 +156,10 @@ flowchart TD
 
 | Путь к файлу | Назначение и ключевые компоненты |
 |---|---|
-| [`colony-dsl-parser/src/main/kotlin/colony/world/SpatialIndex.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/SpatialIndex.kt) | 2D Spatial Hash Grid. Индексация координат, поиск соседей в радиусе `queryRadius` за $O(1)$. |
+| [`colony-dsl-parser/src/main/kotlin/colony/world/SpatialIndex.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/SpatialIndex.kt) | 2D Spatial Hash Grid. Индексация координат, поиск соседей в посещаемых ячейках радиуса `queryRadius`. |
+| [`colony-dsl-parser/src/main/kotlin/colony/world/EcosystemConfig.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/EcosystemConfig.kt) | Настройки зональной экосистемы: лес, навоз, планктон, состояние людей; конечные запасы. |
+| [`colony-dsl-parser/src/main/kotlin/colony/world/EcosystemController.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/EcosystemController.kt) | Зональная экология: служебные цели, факты и повреждения для ядра. |
+| [`colony-dsl-parser/src/main/kotlin/colony/world/Disaster.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/Disaster.kt) | Ручные напасти: взрыв реактора, запуск крокодилов и вторжение монстров (`POST /control/disaster`). |
 | [`colony-dsl-parser/src/main/kotlin/colony/world/SeaController.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/SeaController.kt) | Контроллер моря: эрозия прибрежных строений, цикл морского тумана, зона поражения. |
 | [`colony-dsl-parser/src/main/kotlin/colony/world/DefenseAndThreats.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/DefenseAndThreats.kt) | Классы `TrajectoryNoise` (1D Perlin), `FlyingCrocodile`, пул `CrocodilePool`, орудия `AirDefenseUnit`. |
 | [`colony-dsl-parser/src/main/kotlin/colony/world/CreatineManager.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/CreatineManager.kt) | Логика экономики креатина: учёт добычи, коммерческая продажа в гроссбух, исцеление жителей. |

@@ -3,6 +3,18 @@ import { ObserverDecoder } from './observerDecoder';
 
 export type RunStatus = 'waiting' | 'running' | 'paused' | 'completed' | 'failed';
 
+export interface DisasterOptions {
+  reactorAvailable: boolean;
+  crocodilesAvailable: number;
+  monstersAvailable: number;
+  pending: number;
+}
+
+export type DisasterAction =
+  | { kind: 'reactor'; radius: number; damage: number }
+  | { kind: 'crocodiles'; count: number }
+  | { kind: 'monsters'; count: number; duration: number };
+
 /** State of the observed run as reported by the gateway; undefined means the gateway is unreachable. */
 export interface BrokerHealth {
   status: RunStatus;
@@ -12,9 +24,10 @@ export interface BrokerHealth {
   ticks: number;
   stepsPerSecond: number;
   error?: string;
+  disasters?: DisasterOptions;
 }
 
-export type ControlAction = 'pause' | 'resume' | 'step' | 'reset' | { speed: number };
+export type ControlAction = 'pause' | 'resume' | 'step' | 'reset' | { speed: number } | { disaster: DisasterAction; runId: string };
 
 interface LiveSourceOptions {
   healthUrl: string;
@@ -62,7 +75,9 @@ export class LiveBrokerSource {
   /** Pause, resume, single step, restart or speed change; the gateway answers with the new run state. */
   public async control(action: ControlAction): Promise<BrokerHealth | undefined> {
     const revision = this.healthRevision;
-    const path = typeof action === 'string' ? action : `speed?value=${encodeURIComponent(String(action.speed))}`;
+    const path = typeof action === 'string' ? action : 'disaster' in action
+      ? `disaster?${new URLSearchParams(Object.entries({ ...action.disaster, runId: action.runId }).map(([key, value]) => [key, String(value)]))}`
+      : `speed?value=${encodeURIComponent(String(action.speed))}`;
     try {
       const response = await fetch(`${this.options.controlUrl}/${path}`, { method: 'POST', cache: 'no-store' });
       const body: unknown = await response.json();
@@ -144,14 +159,25 @@ export function parseHealth(value: unknown): BrokerHealth | undefined {
   if (!statuses.includes(item.status) || typeof item.runId !== 'string' || !Number.isSafeInteger(item.tick) ||
     !Number.isSafeInteger(item.ticks) || typeof item.stepsPerSecond !== 'number' || !Number.isFinite(item.stepsPerSecond) ||
     !(item.error === undefined || typeof item.error === 'string')) return undefined;
+  let disasters: DisasterOptions | undefined;
+  if (item.disasters !== undefined) {
+    const options = item.disasters;
+    if (!record(options) || typeof options.reactorAvailable !== 'boolean' ||
+      !['crocodilesAvailable', 'monstersAvailable', 'pending'].every((key) =>
+        Number.isSafeInteger(options[key]) && Number(options[key]) >= 0)) return undefined;
+    disasters = options as unknown as DisasterOptions;
+  }
   return { status: item.status as RunStatus, runId: item.runId, tick: Number(item.tick), ticks: Number(item.ticks),
-    stepsPerSecond: item.stepsPerSecond, error: item.error };
+    stepsPerSecond: item.stepsPerSecond, error: item.error, ...(disasters === undefined ? {} : { disasters }) };
 }
 
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
-const validMetric = (v: unknown): boolean => (typeof v === 'number' && Number.isFinite(v)) || typeof v === 'boolean' || v === null || v === undefined;
+const validMetric = (key: string, value: unknown): boolean =>
+  (typeof value === 'number' && Number.isFinite(value)) || typeof value === 'boolean' || value === undefined ||
+  (key === 'refusal_reason' && ['broken', 'no_power', 'no_ammo', 'cooldown'].includes(String(value))) ||
+  (key === 'mutation' && ['armored', 'swift', 'venomous', 'pack', 'baseline'].includes(String(value)));
 
 /** Validate and normalize one entity at the observer boundary. */
 export function parseObserverEntity(entity: unknown): TickBatch['entities'][number] {
@@ -159,7 +185,7 @@ export function parseObserverEntity(entity: unknown): TickBatch['entities'][numb
     !(entity.pid === null || (Number.isSafeInteger(entity.pid) && Number(entity.pid) > 0)) ||
     typeof entity.type !== 'string' || entity.type === '' ||
     !['nominal', 'warning', 'critical', 'dead'].includes(String(entity.status)) ||
-    !record(entity.metrics) || !Object.values(entity.metrics).every(validMetric) ||
+    !record(entity.metrics) || !Object.entries(entity.metrics).every(([key, value]) => validMetric(key, value)) ||
     !Array.isArray(entity.connectedTo) || !entity.connectedTo.every((id) => typeof id === 'string') ||
     !record(entity.coordinates) || !finite(entity.coordinates.x) || !finite(entity.coordinates.y) ||
     !(entity.parentId === undefined || entity.parentId === null || typeof entity.parentId === 'string') ||
@@ -174,7 +200,7 @@ export function parseObserverEntity(entity: unknown): TickBatch['entities'][numb
 /** Validate per-tick data separately so compact ticks need only validate changed entities. */
 export function parseObserverEnvelope(value: unknown): Omit<TickBatch, 'entities'> {
   if (!record(value) || value.version !== 1 || typeof value.runId !== 'string' || !value.runId ||
-    typeof value.seed !== 'string' || !['reference', 'process'].includes(String(value.runtimeMode)) ||
+    typeof value.seed !== 'string' || !['reference', 'process', 'shared-process'].includes(String(value.runtimeMode)) ||
     value.full !== true || !Number.isSafeInteger(value.tickId) || Number(value.tickId) < 0 ||
     !finite(value.timestamp) || !Array.isArray(value.entities)) throw new Error('Invalid observer envelope');
   return { ...value, effects: parseEffects(value.effects), events: parseEvents(value.events),

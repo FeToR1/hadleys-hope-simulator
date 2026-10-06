@@ -5,8 +5,12 @@ const TERMINAL = new Set(['ObjectBroken', 'EntityDied']);
 function step(event: WorldEvent): CausalChainStep {
   const focus = { focus: 'map' as const, focusEntityId: event.entityId };
   switch (event.type) {
+    case 'ReactorExploded':
+      return { id: event.id, kind: 'action', title: 'Взрыв реактора',
+        detail: `радиус ${String(event.fields.radius)} м · тик ${event.tick}`, ...focus };
     case 'DamageApplied':
-      return { id: event.id, kind: 'action', title: `${event.actorId ?? '?'} атаковал ${event.entityId}`,
+      return { id: event.id, kind: 'action', title: event.fields.reason === 'ReactorExplosion'
+        ? `Взрыв повредил ${event.entityId}` : `${event.actorId ?? '?'} атаковал ${event.entityId}`,
         detail: `−${String(event.fields.amount)} hp (${String(event.fields.reason)}) · тик ${event.tick}`, ...focus };
     case 'ObjectBroken':
       return { id: event.id, kind: 'failure', title: `Сломан ${event.entityId}`, detail: `причина: ${String(event.fields.reason)} · тик ${event.tick}`, ...focus };

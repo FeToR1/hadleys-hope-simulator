@@ -108,7 +108,10 @@
       "workRadius": 6.0,
       "dispatchDelaySeconds": 120.0,
       "materials": 24,
-      "roverSpeed": 9.0
+      "roverSpeed": 9.0,
+      "initialDepotMaterials": 0,
+      "depotRestockPerSecond": 0.0,
+      "materialCost": 40000
     },
     "tariffs": {
       "electricityPerKwh": 900,
@@ -139,7 +142,9 @@
       "fogAdvanceSpeed": 8.0,
       "fogSuffocationDamageRate": 4.0,
       "cloudWidth": 1200.0,
-      "cloudHeight": 1400.0
+      "cloudHeight": 1400.0,
+      "initialRespirators": 0,
+      "respiratorRestockPerSecond": 0.0
     },
     "creatine": {
       "enabled": false,
@@ -147,7 +152,92 @@
       "sellFraction": 0.45,
       "healCost": 2.0,
       "lowHealthThreshold": 50.0,
-      "yieldPerWorkerHour": 4.0
+      "yieldPerWorkerHour": 4.0,
+      "initialDepotStock": 50.0,
+      "initialMedicalStock": 50.0
+    },
+    "defense": {
+      "enabled": false,
+      "initialAmmoPerUnit": 0,
+      "powerPerUnit": 0.0,
+      "ammoCostPerRound": 150000,
+      "ammoRestockPerSecond": 0.0
+    },
+    "ecosystem": {
+      "enabled": false,
+      "zoneSize": 140.0,
+      "forest": {
+        "enabled": false,
+        "initialBiomassPerZone": 100.0,
+        "regrowthPerSecond": 0.02,
+        "clearingPerSecond": 2.0
+      },
+      "predator": {
+        "enabled": false,
+        "mutations": [
+          "armored",
+          "swift",
+          "venomous"
+        ],
+        "attackPeriodSeconds": 600.0,
+        "attackDurationSeconds": 180.0
+      },
+      "cleanup": {
+        "enabled": false,
+        "loadCapacity": 600.0,
+        "cleanPerSecond": 2.0,
+        "unloadAt": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "unloadRadius": 12.0,
+        "costPerUnit": 2,
+        "fuelPricePerUnit": 100,
+        "initialFuel": 100000.0,
+        "fuelPerUnit": 0.04,
+        "fuelPerMetre": 0.1,
+        "initialDepotFuel": 0.0,
+        "depotFuelCapacity": 100000.0,
+        "fuelRestockPerSecond": 0.0
+      },
+      "plankton": {
+        "enabled": false,
+        "coastalWidth": 120.0,
+        "wavePeriodSeconds": 3600.0,
+        "initialBiomassPerCoastalZone": 500.0,
+        "regrowthPerSecond": 0.05,
+        "damagePerSecond": 0.04,
+        "burningPerSecond": 5.0,
+        "burnFuelPerBiomass": 0.2,
+        "burnPowerPerSecond": 4000.0,
+        "initialBurnFuel": 10000.0,
+        "fuelCostPerUnit": 3,
+        "fuelCapacity": 10000.0,
+        "fuelRestockPerSecond": 0.0,
+        "burnerCount": 1,
+        "burnerSpacing": 140.0
+      },
+      "humanFactors": {
+        "enabled": false,
+        "availabilityCycleSeconds": 1800.0,
+        "unavailableSeconds": 120.0,
+        "boredomSeconds": 180.0,
+        "vandalPeriodSeconds": 2400.0,
+        "vandalDamage": 5.0,
+        "vandalChancePercent": 8,
+        "vandalRadius": 12.0,
+        "alcoholPeriodSeconds": 3600.0,
+        "alcoholDurationSeconds": 180.0
+      },
+      "crocodileManurePerSecond": 0.15
+    },
+    "geometry": {
+      "coastX": null,
+      "mine": null,
+      "depository": null,
+      "medicalCenter": null,
+      "gates": [],
+      "gateWidth": 12.0
     }
   }
 }

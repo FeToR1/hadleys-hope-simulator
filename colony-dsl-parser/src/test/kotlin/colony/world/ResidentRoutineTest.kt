@@ -73,7 +73,7 @@ class ResidentRoutineTest {
             return vm.step(VmFrame(0, buildJsonObject {
                 put("routine_slot", slot); put("day_minute", minute)
                 put("home", point(0)); put("workplace", point(100)); put("meeting_point", point(50))
-                put("position", point(position)); put("health", health)
+                put("position", point(position)); put("health", health); put("medical_required", false)
                 put("cold", false); put("reachable_breakables", JsonArray(emptyList()))
                 put("in_vehicle", false); put("available_vehicles", JsonArray(emptyList())); put("boarding_radius", 6.0)
             }))

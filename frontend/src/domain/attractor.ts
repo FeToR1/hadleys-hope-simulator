@@ -1,29 +1,62 @@
-import type { AttractorMode, EntityState, PhasePoint, Posting } from './types';
+import type { AttractorMode, EntityState, PhasePoint, WorldEvent } from './types';
 
 export const MAX_ATTRACTOR_HISTORY = 10_000;
 
-export function createPhasePoint(tickId: number, entities: readonly EntityState[], postings: readonly Posting[]): PhasePoint {
+export function createPhasePoint(tickId: number, entities: readonly EntityState[], budget: number, events: readonly WorldEvent[] = []): PhasePoint {
   const houses = entities.filter((entity) => entity.type === 'house' && entity.metrics.temperature !== undefined);
   const temperatureTotal = houses.reduce((sum, entity) => sum + (entity.metrics.temperature ?? 0), 0);
   const powerWatts = entities.reduce((sum, entity) => sum + (entity.metrics.power_consumption ?? 0), 0);
-  const budget = -postings.reduce((sum, posting) => sum + posting.amount, 0);
   return {
     tickId,
     x: houses.length === 0 ? 0 : temperatureTotal / houses.length,
     y: powerWatts / 1000,
     z: budget,
+    ...(events.some((event) => event.type === 'ReactorExploded') ? { reactorExplosion: true } : {}),
   };
 }
 
+export interface PhaseBounds {
+  x: readonly [number, number];
+  y: readonly [number, number];
+  z: readonly [number, number];
+}
+
+/** Shared physical axes for the whole displayed trail, with room for constant or empty series. */
+export function phaseBounds(history: readonly PhasePoint[]): PhaseBounds {
+  let minX = Infinity; let maxX = -Infinity;
+  let maxY = 0; let minZ = 0; let maxZ = 0;
+  for (const point of history) {
+    minX = Math.min(minX, point.x); maxX = Math.max(maxX, point.x);
+    maxY = Math.max(maxY, point.y);
+    minZ = Math.min(minZ, point.z); maxZ = Math.max(maxZ, point.z);
+  }
+  const padded = (min: number, max: number, minSpan: number): readonly [number, number] => {
+    const center = (min + max) / 2;
+    const half = Math.max(minSpan, max - min) * 0.6;
+    return [center - half, center + half];
+  };
+  return {
+    x: history.length === 0 ? [-1, 1] : padded(minX, maxX, 1),
+    y: [0, Math.max(100, maxY) * 1.08],
+    z: padded(minZ, maxZ, 1),
+  };
+}
+
+/** Scale actual temperature, power and balance; tick IDs never affect spatial coordinates. */
+export function projectPhasePoint(point: PhasePoint, bounds: PhaseBounds): { x: number; y: number; z: number } {
+  const scale = (value: number, range: readonly [number, number]): number => (value - range[0]) / (range[1] - range[0]);
+  return { x: scale(point.x, bounds.x), y: scale(point.y, bounds.y), z: scale(point.z, bounds.z) };
+}
+
 export function classifyAttractor(history: readonly PhasePoint[], scenario?: string): AttractorMode {
-  if (history.length === 0) return 'stationary';
+  if (history.length < 2) return 'stationary';
   const latest = history.at(-1)!;
   const window = history.slice(-50);
   if (latest.x < 0 && hasExponentialLosses(window)) return 'collapse';
   if (window.length >= 10 && isStationary(window)) return 'stationary';
   if (window.length >= 12 && isPeriodic(window)) return 'periodic';
   if ((scenario === 'storm' || scenario === 'xenomorph') && hasChaoticJumps(window)) return 'chaotic';
-  return hasChaoticJumps(window) ? 'chaotic' : 'periodic';
+  return hasChaoticJumps(window) ? 'chaotic' : 'transient';
 }
 
 function isStationary(points: readonly PhasePoint[]): boolean {

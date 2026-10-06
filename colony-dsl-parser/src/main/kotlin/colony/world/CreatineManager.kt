@@ -18,8 +18,8 @@ class CreatineManager(
     val config: CreatineEconomyConfig = CreatineEconomyConfig()
 ) {
     var mineStock: Double = 0.0
-    var storedStock: Double = 50.0
-    var medicalCenterStock: Double = 50.0
+    var storedStock: Double = config.initialDepotStock
+    var medicalCenterStock: Double = config.initialMedicalStock
 
     var stock: Double
         get() = storedStock + medicalCenterStock
@@ -38,13 +38,14 @@ class CreatineManager(
         private set
     var pendingSalesRevenue: Long = 0L
         private set
+    private var fractionalRevenue: Double = 0.0
     var lastActiveMinersCount: Int = 0
 
     /**
      * Raw extraction at the mine pit.
      */
     fun produceAtMine(amount: Double): Double {
-        if (amount <= 0.0) return 0.0
+        if (!amount.isFinite() || amount <= 0.0) return 0.0
         mineStock += amount
         totalMined += amount
         return amount
@@ -55,17 +56,16 @@ class CreatineManager(
      * Splits into commercial export sales and stored stockpile.
      */
     fun transferToDepository(amount: Double): CreatineDepositResult {
-        val actual = minOf(amount, mineStock.coerceAtLeast(amount))
-        if (mineStock >= actual) {
-            mineStock -= actual
-        }
+        val actual = if (amount.isFinite()) amount.coerceAtLeast(0.0) else 0.0
         val forSale = actual * config.sellFraction
         val forStock = actual - forSale
 
         storedStock += forStock
         totalSold += forSale
 
-        val revenue = (forSale * config.pricePerUnit).toLong()
+        val exactRevenue = forSale * config.pricePerUnit + fractionalRevenue
+        val revenue = exactRevenue.toLong()
+        fractionalRevenue = exactRevenue - revenue
         totalRevenue += revenue
         pendingSalesRevenue += revenue
 
@@ -80,21 +80,14 @@ class CreatineManager(
     /**
      * Supply transport from Depository to Medical Center (Медпункт).
      */
-    fun transferToMedicalCenter(amount: Double): Double {
-        val available = minOf(amount, storedStock)
-        if (available <= 0.0) return 0.0
-        storedStock -= available
-        medicalCenterStock += available
-        return available
-    }
-
     /**
      * Direct deposit (for testing / fallback).
      */
     fun deposit(amount: Double): CreatineDepositResult {
-        if (amount <= 0.0) return CreatineDepositResult(0.0, 0.0, 0.0, 0L)
-        produceAtMine(amount)
-        return transferToDepository(amount)
+        if (!amount.isFinite() || amount <= 0.0) return CreatineDepositResult(0.0, 0.0, 0.0, 0L)
+        val mined = produceAtMine(amount)
+        mineStock = (mineStock - mined).coerceAtLeast(0.0)
+        return transferToDepository(mined)
     }
 
     /**
@@ -105,9 +98,6 @@ class CreatineManager(
         if (currentHealth >= 100.0) return false
         val available = if (medicalCenterStock >= config.healCost) {
             medicalCenterStock -= config.healCost
-            true
-        } else if (storedStock >= config.healCost) {
-            storedStock -= config.healCost
             true
         } else {
             false

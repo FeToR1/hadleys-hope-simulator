@@ -1,0 +1,221 @@
+{
+  "version": 1,
+  "catalog": "catalog.json",
+  "seed": 426,
+  "step": "1s",
+  "ticks": 300,
+  "populations": [
+    {
+      "template": "crew",
+      "count": 2,
+      "prefix": "crew"
+    },
+    {
+      "template": "cleanup",
+      "count": 2,
+      "prefix": "cleanup"
+    },
+    {
+      "template": "forester",
+      "count": 1,
+      "prefix": "forester"
+    },
+    {
+      "template": "transport",
+      "count": 1,
+      "prefix": "transport"
+    },
+    {
+      "template": "predator",
+      "count": 2,
+      "prefix": "predator"
+    },
+    {
+      "template": "household",
+      "count": 80,
+      "prefix": "home"
+    }
+  ],
+  "changes": [],
+  "world": {
+    "version": 1,
+    "climate": {
+      "meanTemperature": 19.0,
+      "amplitude": 4.0,
+      "dayLengthSeconds": 86400.0,
+      "sunriseSeconds": 21600.0,
+      "sunsetSeconds": 64800.0,
+      "weatherFactor": 0.8
+    },
+    "power": {
+      "reactorPower": 35000000.0,
+      "solarPeak": 10000000.0,
+      "upsCapacity": 30000000000.0,
+      "upsMaxPower": 5000000.0,
+      "upsEfficiency": 0.95,
+      "housesPerPole": 20,
+      "poleHealth": 100.0,
+      "priorities": {
+        "Pump": 0,
+        "Heater": 1,
+        "Kettle": 2
+      }
+    },
+    "water": {
+      "pumpPower": 600000.0,
+      "freezeThresholdIndoor": 5400.0,
+      "houseDemand": 6e-06
+    },
+    "house": {
+      "conductance": 200.0,
+      "capacity": 10000000.0,
+      "heaterEfficiency": 1.0,
+      "initialTemperature": 20.0,
+      "coldThreshold": 10.0,
+      "kettleVolume": 1.7,
+      "kettleHeatLoss": 3.0
+    },
+    "human": {
+      "startMinute": 480,
+      "harmThreshold": 5.0,
+      "harmPerKelvinHour": 0.5,
+      "vandalRadius": 12.0
+    },
+    "marine": {
+      "responseDelaySeconds": 300.0,
+      "assaultRadius": 4.0,
+      "minSquadSize": 4,
+      "maxSquadSize": 5,
+      "routSeconds": 600.0
+    },
+    "transport": {
+      "boardRadius": 6.0,
+      "passengerCapacity": 5,
+      "walkRadius": 120.0,
+      "boardingWaitSeconds": 90.0
+    },
+    "repair": {
+      "duration": {
+        "pole": 60.0,
+        "pipe": 80.0,
+        "device": 25.0,
+        "fence": 40.0
+      },
+      "parts": {
+        "pole": 120000,
+        "pipe": 80000,
+        "device": 40000,
+        "fence": 30000
+      },
+      "hourlyRate": 150000,
+      "workRadius": 6.0,
+      "dispatchDelaySeconds": 5.0,
+      "materials": 24,
+      "roverSpeed": 18.0
+    },
+    "tariffs": {
+      "electricityPerKwh": 900,
+      "waterPerCubicMetre": 4500,
+      "billingIntervalSeconds": 3600,
+      "monthSeconds": 2592000
+    },
+    "sight": {
+      "sightRadius": 2000.0,
+      "listLimit": 16,
+      "attackRadius": 3.0,
+      "xenomorphRadius": 150.0
+    },
+    "fence": {
+      "enabled": true,
+      "margin": 40.0,
+      "segmentLength": 60.0,
+      "health": 400.0,
+      "roamingDistance": 120.0
+    },
+    "sea": {
+      "enabled": true,
+      "coastalZoneWidth": 120.0,
+      "erosionDamageRate": 0.15,
+      "fogPeriodSeconds": 90.0,
+      "fogDurationSeconds": 35.0,
+      "fogMaxPenetration": 500.0,
+      "fogAdvanceSpeed": 10.0,
+      "fogSuffocationDamageRate": 4.0,
+      "initialRespirators": 500,
+      "respiratorRestockPerSecond": 0.0
+    },
+    "creatine": {
+      "enabled": true,
+      "pricePerUnit": 1200,
+      "sellFraction": 0.45,
+      "healCost": 2.0,
+      "lowHealthThreshold": 50.0,
+      "yieldPerWorkerHour": 4.0
+    },
+    "defense": {
+      "enabled": true,
+      "initialAmmoPerUnit": 40,
+      "powerPerUnit": 1800.0
+    },
+    "ecosystem": {
+      "enabled": true,
+      "zoneSize": 70.0,
+      "crocodileManurePerSecond": 0.5,
+      "forest": {
+        "enabled": true,
+        "initialBiomassPerZone": 20.0,
+        "regrowthPerSecond": 0.5,
+        "clearingPerSecond": 5.0
+      },
+      "predator": {
+        "enabled": true,
+        "mutations": [
+          "armored",
+          "swift",
+          "venomous",
+          "pack"
+        ]
+      },
+      "cleanup": {
+        "enabled": true,
+        "loadCapacity": 20.0,
+        "cleanPerSecond": 3.0,
+        "unloadAt": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "unloadRadius": 12.0,
+        "costPerUnit": 3,
+        "fuelPricePerUnit": 100,
+        "initialFuel": 1000.0,
+        "fuelPerUnit": 0.3,
+        "fuelPerMetre": 0.3
+      },
+      "plankton": {
+        "enabled": true,
+        "coastalWidth": 160.0,
+        "wavePeriodSeconds": 60.0,
+        "initialBiomassPerCoastalZone": 40.0,
+        "regrowthPerSecond": 0.2,
+        "damagePerSecond": 0.2,
+        "burningPerSecond": 3.0,
+        "burnFuelPerBiomass": 0.5,
+        "burnPowerPerSecond": 5000.0,
+        "initialBurnFuel": 200.0,
+        "fuelCostPerUnit": 100
+      },
+      "humanFactors": {
+        "enabled": true,
+        "availabilityCycleSeconds": 120.0,
+        "unavailableSeconds": 20.0,
+        "boredomSeconds": 30.0,
+        "vandalPeriodSeconds": 45.0,
+        "vandalDamage": 5.0,
+        "vandalChancePercent": 35,
+        "vandalRadius": 12.0,
+        "alcoholPeriodSeconds": 90.0,
+        "alcoholDurationSeconds": 12.0
+      }
+    }
+  }
+}

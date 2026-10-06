@@ -11,6 +11,11 @@ class SpatialIndex(val cellSize: Double = 50.0) {
     private val cellMap = HashMap<Long, MutableList<String>>()
     private val entityPositions = HashMap<String, Point>()
     private val entityCells = HashMap<String, Long>()
+    private val segments = HashMap<String, Pair<Point, Point>>()
+    private val segmentCells = HashMap<Long, MutableSet<String>>()
+    private val cellsBySegment = HashMap<String, Set<Long>>()
+
+    init { require(cellSize.isFinite() && cellSize > 0.0) { "Spatial cell size must be finite and positive" } }
 
     private fun cellKey(x: Double, y: Double): Long {
         val cx = floor(x / cellSize).toInt().toLong()
@@ -20,13 +25,14 @@ class SpatialIndex(val cellSize: Double = 50.0) {
 
     @Synchronized
     fun update(id: String, point: Point) {
+        require(point.x.isFinite() && point.y.isFinite()) { "Spatial positions must be finite" }
         val oldKey = entityCells[id]
         val newKey = cellKey(point.x, point.y)
         entityPositions[id] = point
 
         if (oldKey != newKey) {
             if (oldKey != null) {
-                cellMap[oldKey]?.remove(id)
+                cellMap[oldKey]?.let { ids -> ids.remove(id); if (ids.isEmpty()) cellMap.remove(oldKey) }
             }
             entityCells[id] = newKey
             cellMap.getOrPut(newKey) { ArrayList() }.add(id)
@@ -37,9 +43,32 @@ class SpatialIndex(val cellSize: Double = 50.0) {
     fun remove(id: String) {
         val oldKey = entityCells.remove(id)
         if (oldKey != null) {
-            cellMap[oldKey]?.remove(id)
+            cellMap[oldKey]?.let { ids -> ids.remove(id); if (ids.isEmpty()) cellMap.remove(oldKey) }
         }
         entityPositions.remove(id)
+        segments.remove(id)
+        cellsBySegment.remove(id)?.forEach { key ->
+            segmentCells[key]?.let { ids -> ids.remove(id); if (ids.isEmpty()) segmentCells.remove(key) }
+        }
+    }
+
+    @Synchronized
+    fun updateSegment(id: String, from: Point, to: Point) {
+        require(from.x.isFinite() && from.y.isFinite() && to.x.isFinite() && to.y.isFinite()) { "Spatial segment points must be finite" }
+        cellsBySegment.remove(id)?.forEach { key ->
+            segmentCells[key]?.let { ids -> ids.remove(id); if (ids.isEmpty()) segmentCells.remove(key) }
+        }
+        segments[id] = from to to
+        val steps = maxOf(1, ceil(from.distanceTo(to) / (cellSize / 2.0)).toInt())
+        val keys = LinkedHashSet<Long>()
+        for (i in 0..steps) {
+            val t = i.toDouble() / steps
+            keys += cellKey(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t)
+        }
+        cellsBySegment[id] = keys
+        keys.forEach { segmentCells.getOrPut(it) { LinkedHashSet() }.add(id) }
+        // Keep the midpoint indexed for ordinary proximity lookups too.
+        update(id, Point((from.x + to.x) / 2.0, (from.y + to.y) / 2.0))
     }
 
     @Synchronized
@@ -47,6 +76,9 @@ class SpatialIndex(val cellSize: Double = 50.0) {
         cellMap.clear()
         entityPositions.clear()
         entityCells.clear()
+        segments.clear()
+        segmentCells.clear()
+        cellsBySegment.clear()
     }
 
     @Synchronized
@@ -54,29 +86,42 @@ class SpatialIndex(val cellSize: Double = 50.0) {
 
     @Synchronized
     fun queryRadius(center: Point, radius: Double): List<String> {
-        if (radius <= 0.0) return emptyList()
+        require(radius.isFinite() && radius >= 0.0) { "Query radius must be finite and nonnegative" }
         val r2 = radius * radius
         val minCellX = floor((center.x - radius) / cellSize).toInt()
         val maxCellX = floor((center.x + radius) / cellSize).toInt()
         val minCellY = floor((center.y - radius) / cellSize).toInt()
         val maxCellY = floor((center.y + radius) / cellSize).toInt()
 
-        val results = ArrayList<String>()
+        val candidates = LinkedHashSet<String>()
         for (cx in minCellX..maxCellX) {
             for (cy in minCellY..maxCellY) {
                 val key = (cx.toLong() shl 32) or (cy.toLong() and 0xFFFFFFFFL)
-                val cellEntities = cellMap[key] ?: continue
-                for (id in cellEntities) {
-                    val p = entityPositions[id] ?: continue
-                    val dx = p.x - center.x
-                    val dy = p.y - center.y
-                    if (dx * dx + dy * dy <= r2) {
-                        results.add(id)
-                    }
-                }
+                cellMap[key]?.let(candidates::addAll)
+                segmentCells[key]?.let(candidates::addAll)
             }
         }
+        val results = ArrayList<String>()
+        for (id in candidates) {
+            val p = entityPositions[id] ?: continue
+            val dx = p.x - center.x
+            val dy = p.y - center.y
+            val segment = segments[id]
+            val distanceSq = if (segment == null) dx * dx + dy * dy else pointSegmentDistanceSquared(center, segment.first, segment.second)
+            if (distanceSq <= r2) results.add(id)
+        }
+        results.sort()
         return results
+    }
+
+    private fun pointSegmentDistanceSquared(p: Point, a: Point, b: Point): Double {
+        val dx = b.x - a.x
+        val dy = b.y - a.y
+        val lengthSq = dx * dx + dy * dy
+        val t = if (lengthSq == 0.0) 0.0 else (((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSq).coerceIn(0.0, 1.0)
+        val px = a.x + t * dx - p.x
+        val py = a.y + t * dy - p.y
+        return px * px + py * py
     }
 
     @Synchronized
@@ -88,10 +133,13 @@ class SpatialIndex(val cellSize: Double = 50.0) {
         for (id in candidates) {
             if (!filter(id)) continue
             val p = entityPositions[id] ?: continue
-            val dx = p.x - center.x
-            val dy = p.y - center.y
-            val d2 = dx * dx + dy * dy
-            if (d2 < minDistanceSq) {
+            val segment = segments[id]
+            val d2 = if (segment == null) {
+                val dx = p.x - center.x
+                val dy = p.y - center.y
+                dx * dx + dy * dy
+            } else pointSegmentDistanceSquared(center, segment.first, segment.second)
+            if (d2 < minDistanceSq || (d2 == minDistanceSq && (nearestId == null || id < nearestId!!))) {
                 minDistanceSq = d2
                 nearestId = id
             }

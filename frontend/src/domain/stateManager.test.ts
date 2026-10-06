@@ -43,6 +43,44 @@ describe('StateManager', () => {
     expect(manager.snapshot().entities.size).toBe(2);
     expect(manager.snapshot().tickId).toBe(0);
   });
+
+  it('keeps creatine sales as income instead of charging them as spend', () => {
+    const manager = new StateManager();
+    manager.ingest({ ...initial(), postings: [
+      { tick: 0, owner: 'home-1', kind: 'electricity', amount: 100 },
+      { tick: 0, owner: 'colony', kind: 'creatine_sale', amount: 250 },
+    ] });
+    expect(manager.snapshot().spendByOwner.get('home-1')).toBe(100);
+    expect(manager.snapshot().spendByOwner.has('colony')).toBe(false);
+    expect(manager.snapshot().incomeByOwner?.get('colony')).toBe(250);
+    expect(manager.snapshot().attractorHistory.at(-1)?.z).toBe(150);
+  });
+
+  it('keeps the phase balance after ledger eviction and resets it for a new run', () => {
+    const manager = new StateManager();
+    manager.ingest({ ...initial(), postings: Array.from({ length: 600 }, () => ({ tick: 0, owner: 'colony', kind: 'repair', amount: 10 })) });
+    expect(manager.snapshot().postings).toHaveLength(500);
+    expect(manager.snapshot().attractorHistory.at(-1)?.z).toBe(-6000);
+    manager.ingest({ ...initial(), tickId: 1, postings: [{ tick: 1, owner: 'colony', kind: 'creatine_sale', amount: 100 }] });
+    expect(manager.snapshot().attractorHistory.at(-1)?.z).toBe(-5900);
+    manager.ingest({ ...initial(), runId: 'r2' });
+    expect(manager.snapshot().attractorHistory.at(-1)?.z).toBe(0);
+  });
+
+  it('marks the exact explosion tick and immediately classifies the physical transition', () => {
+    const manager = new StateManager();
+    const powered = initial().entities.map((entity) => ({ ...entity, metrics: { temperature: 20, power_consumption: 3128000 } }));
+    for (let tickId = 0; tickId < 10; tickId++) manager.ingest({ ...initial(), tickId, entities: powered });
+    expect(manager.snapshot().attractorMode).toBe('stationary');
+    manager.ingest({ ...initial(), tickId: 11, events: [{ id: 'explosion', type: 'ReactorExploded', entityId: 'grid/reactor', tick: 11, fields: {}, recipients: [] }] });
+    const point = manager.snapshot().attractorHistory.at(-1)!;
+    expect(point.reactorExplosion).toBe(true);
+    expect(point.y).toBe(0);
+    expect(manager.snapshot().attractorMode).toBe('transient');
+    manager.ingest({ ...initial(), tickId: 12 });
+    expect(manager.snapshot().attractorHistory.at(-1)?.reactorExplosion).toBeUndefined();
+    expect(manager.snapshot().attractorHistory.at(-2)?.reactorExplosion).toBe(true);
+  });
 });
 
 describe('observed run log', () => {

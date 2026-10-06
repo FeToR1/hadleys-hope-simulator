@@ -122,6 +122,21 @@ behavior Resident for Human {
         } else if view.in_vehicle {
             if minute >= shift_start && minute < shift_end { activity = GoingToWork; }
             else { activity = ReturningHome; }
+        } else if view.medical_required {
+            if view.position == view.workplace {
+                activity = Injured;
+            } else if let vehicle = nearest(view.available_vehicles) {
+                if vehicle.distance <= view.boarding_radius {
+                    send VehicleTransportRequest { destination: view.workplace } to vehicle.id;
+                    activity = Injured;
+                } else {
+                    activity = Injured;
+                    motion.request(vehicle.position, 1.4mps);
+                }
+            } else {
+                activity = Injured;
+                motion.request(view.workplace, 1.4mps);
+            }
         } else if view.health < 40hp {
             activity = Injured;
             if view.position != view.home { motion.request(view.home, 1.4mps); }
@@ -231,6 +246,28 @@ behavior PassengerRover for Rover {
     }
 }
 
+// Dedicated services follow the kernel's currently assigned physical work point.
+behavior CleanupRover for Rover {
+    every 1s as cleanup {
+        motion.request(view.depot, view.speed_eff);
+    }
+}
+
+behavior Forester for Rover {
+    every 1s as forestry {
+        motion.request(view.depot, view.speed_eff);
+    }
+}
+
+// Resource transport is a separate role. The kernel reserves these units for the mine/depository/medical route.
+behavior CargoRover for Rover {
+    every 1s as logistics {
+        if view.passenger_count == 0 && view.boarding_pending == 0 {
+            motion.request(view.depot, view.speed_eff);
+        }
+    }
+}
+
 behavior MarineSquad for Marine {
     enum Activity { Guard, Rearming, GoingToVehicle, WaitingForSquad, Transporting, Engaging, ReturningHome, Dead }
     enum DamageCause { MarineAssault }
@@ -259,6 +296,29 @@ behavior MarineSquad for Marine {
             }
         } else if !view.dispatch_ready || time < ready_at {
             if activity != Rearming { activity = Guard; }
+        } else if let target = nearest(view.visible_predators) {
+            if view.squad_ready {
+                activity = Engaging;
+                if view.squad_leader && chance(success_probability, "marine_assault") {
+                    damage.request(target.id, 100hp, MarineAssault);
+                }
+                attempted = true;
+            } else if view.in_vehicle {
+                activity = Transporting;
+            } else if activity == Transporting || activity == Engaging {
+                activity = Engaging;
+                motion.request(target.position, 1.5mps);
+            } else if let vehicle = nearest(view.available_vehicles) {
+                if vehicle.distance > view.boarding_radius {
+                    activity = GoingToVehicle;
+                    motion.request(vehicle.position, 1.5mps);
+                } else {
+                    activity = GoingToVehicle;
+                    send VehicleTransportRequest { destination: target.position } to vehicle.id;
+                }
+            } else {
+                activity = WaitingForSquad;
+            }
         } else if let target = nearest(view.visible_xenomorphs) {
             if view.squad_ready {
                 activity = Engaging;
@@ -311,6 +371,9 @@ behavior Xenomorph for Xenomorph {
             } else {
                 motion.request(view.patrol_waypoint, 6mps);
             }
+        } else if !view.attack_active {
+            mode = Patrol;
+            motion.request(view.patrol_waypoint, 3mps);
         } else {
             // What is within reach comes first: the fence segment it ran into or a pole next to it. Then people
             // in the open, then the grid, then the next point of its round. A closed fence stops it until broken.
@@ -345,6 +408,56 @@ behavior Xenomorph for Xenomorph {
                 } else {
                     motion.request(view.patrol_waypoint, 3mps);
                 }
+            }
+        }
+    }
+}
+
+// Klyaksa's indigenous predator reuses the ground-hunter tactics while retaining a distinct entity kind and cause.
+behavior GroundPredator for Predator {
+    enum Mode { Patrol, Chase, Hunt, Attack, Bite, Flee }
+    enum DamageCause { PredatorAttack }
+    state mode: Mode = Patrol;
+    state sated_until: Duration = 0s;
+
+    every 1s as decide {
+        mode = Patrol;
+        if view.routed {
+            mode = Flee;
+            if let near = nearest(view.visible_infrastructure) {
+                if near.kind == "Fence" && near.distance <= 3m {
+                    if hazard(0.5per_s, "strike") { damage.request(near.id, 40hp, PredatorAttack); }
+                } else { motion.request(view.patrol_waypoint, 6mps); }
+            } else { motion.request(view.patrol_waypoint, 6mps); }
+        } else if !view.attack_active {
+            motion.request(view.patrol_waypoint, 3mps);
+        } else {
+            let hungry = time >= sated_until;
+            if let near = nearest(view.visible_infrastructure) {
+                if near.distance <= 3m {
+                    mode = Attack;
+                    if hazard(0.5per_s, "strike") { damage.request(near.id, 40hp, PredatorAttack); }
+                }
+            }
+            if mode == Patrol && hungry {
+                if let prey = nearest(view.visible_humans) {
+                    if prey.distance > 2m {
+                        mode = Hunt;
+                        motion.request(prey.position, 6mps);
+                    } else {
+                        mode = Bite;
+                        if hazard(0.5per_s, "bite") {
+                            damage.request(prey.id, 35hp, PredatorAttack);
+                            sated_until = time + 5min;
+                        }
+                    }
+                }
+            }
+            if mode == Patrol {
+                if let target = nearest(view.visible_infrastructure) {
+                    mode = Chase;
+                    motion.request(target.position, 6mps);
+                } else { motion.request(view.patrol_waypoint, 3mps); }
             }
         }
     }

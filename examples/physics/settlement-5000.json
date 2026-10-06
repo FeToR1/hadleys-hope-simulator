@@ -6,6 +6,21 @@
   "ticks": 86400,
   "populations": [
     {
+      "template": "forester",
+      "count": 12,
+      "prefix": "forester"
+    },
+    {
+      "template": "predator",
+      "count": 12,
+      "prefix": "predator"
+    },
+    {
+      "template": "cleanup",
+      "count": 50,
+      "prefix": "cleanup"
+    },
+    {
       "template": "crew",
       "count": 50,
       "prefix": "crew"
@@ -116,7 +131,7 @@
       "xenomorphRadius": 150.0
     },
     "fence": {
-      "enabled": false,
+      "enabled": true,
       "margin": 40.0,
       "segmentLength": 60.0,
       "health": 400.0,
@@ -130,7 +145,9 @@
       "fogDurationSeconds": 75.0,
       "fogMaxPenetration": 350.0,
       "fogAdvanceSpeed": 8.0,
-      "fogSuffocationDamageRate": 4.0
+      "fogSuffocationDamageRate": 4.0,
+      "initialRespirators": 25000,
+      "respiratorRestockPerSecond": 0
     },
     "creatine": {
       "enabled": true,
@@ -139,6 +156,72 @@
       "healCost": 2.0,
       "lowHealthThreshold": 50.0,
       "yieldPerWorkerHour": 4.0
+    },
+    "defense": {
+      "enabled": true,
+      "initialAmmoPerUnit": 240,
+      "powerPerUnit": 1800.0,
+      "ammoRestockPerSecond": 0.0002
+    },
+    "ecosystem": {
+      "enabled": true,
+      "zoneSize": 140.0,
+      "crocodileManurePerSecond": 0.15,
+      "forest": {
+        "enabled": true,
+        "initialBiomassPerZone": 100.0,
+        "regrowthPerSecond": 0.5,
+        "clearingPerSecond": 2.0
+      },
+      "predator": {
+        "enabled": true,
+        "mutations": [
+          "armored",
+          "swift",
+          "venomous",
+          "pack"
+        ]
+      },
+      "cleanup": {
+        "enabled": true,
+        "loadCapacity": 600.0,
+        "cleanPerSecond": 2.0,
+        "unloadAt": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "unloadRadius": 12.0,
+        "costPerUnit": 2,
+        "initialFuel": 100000.0,
+        "fuelPerUnit": 0.04,
+        "fuelPerMetre": 0.1,
+        "fuelPricePerUnit": 100
+      },
+      "plankton": {
+        "enabled": true,
+        "coastalWidth": 120.0,
+        "wavePeriodSeconds": 3600.0,
+        "initialBiomassPerCoastalZone": 500.0,
+        "regrowthPerSecond": 0.05,
+        "damagePerSecond": 0.04,
+        "burningPerSecond": 5.0,
+        "burnFuelPerBiomass": 0.2,
+        "burnPowerPerSecond": 4000.0,
+        "initialBurnFuel": 10000.0,
+        "fuelCostPerUnit": 3
+      },
+      "humanFactors": {
+        "enabled": true,
+        "availabilityCycleSeconds": 1800.0,
+        "unavailableSeconds": 120.0,
+        "boredomSeconds": 180.0,
+        "vandalPeriodSeconds": 2400.0,
+        "vandalDamage": 5.0,
+        "vandalChancePercent": 8,
+        "alcoholPeriodSeconds": 3600.0,
+        "alcoholDurationSeconds": 180.0,
+        "vandalRadius": 12.0
+      }
     }
   }
 }
