@@ -34,6 +34,30 @@
 
 ## Сессия наблюдателя
 
+```mermaid
+sequenceDiagram
+    participant UI as Клиент (браузер)
+    participant GW as ObserverGateway
+    UI->>GW: GET /stream (?format=compact)
+    GW-->>UI: retry: 1000
+    Note over GW: Прогон стартует с первым наблюдателем
+    GW-->>UI: полная база (id: eventId)
+    loop каждый тик
+        GW-->>UI: кадр: изменения полей + removed (компактный)
+        GW-->>UI: event: health
+    end
+    alt история вытеснена
+        GW-->>UI: event: gap
+        GW-->>UI: новая полная база
+    else нет обновлений дольше 15 с
+        GW-->>UI: keep-alive-комментарий
+    end
+    UI->>GW: переподключение с Last-Event-ID
+    GW-->>UI: replay истории (до 256 снимков / 16 Mi)
+    UI->>GW: POST /control/pause, resume, step, reset, speed
+    GW-->>UI: актуальный /health
+```
+
 - `timestamp` — модельное время; новая `runId` сбрасывает UI; повторные тики игнорируются.
 - Переподключение — по `Last-Event-ID`; при вытесненной истории приходит `gap`.
 - При подключении — `retry: 1000`; каждая пачка кадров завершается служебным событием `health` (те же данные, что `GET /health`); при отсутствии обновлений дольше 15 с — keep-alive-комментарий.

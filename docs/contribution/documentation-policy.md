@@ -61,6 +61,11 @@
 | Конвейер DSL → дашборд (flowchart LR) | [architecture.md](../architecture.md), раздел 2.1 |
 | Компоненты мира и интерфейса (flowchart TD) | [architecture.md](../architecture.md), раздел 2.2 |
 | Кросс-проверка исполнителей conformance (flowchart TD) | [architecture.md](../architecture.md), раздел 2.3 |
+| Пространственная схема экосистемы (flowchart LR) | [architecture.md](../architecture.md), раздел 1 |
+| Фазы одного тика (sequenceDiagram) | [spec/runtime-tick.md](../spec/runtime-tick.md) |
+| Сессия наблюдателя SSE (sequenceDiagram) | [spec/http-api.md](../spec/http-api.md) |
+| Протокол хоста INIT/FRAME/RESULT (sequenceDiagram) | [spec/cvm-format.md](../spec/cvm-format.md) |
+| Целевой каскад угроза → расходы (flowchart LR) | [requirements.md](../requirements.md) |
 | Маршрут онбординга (flowchart TD) | [onboarding.md](../onboarding.md) |
 
 ## Процесс изменения документации
