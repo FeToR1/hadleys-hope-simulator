@@ -10,7 +10,7 @@
     },
     {
       "name": "keyword.control.colony",
-      "match": "\\b(?:behavior|for|event|enum|param|state|on|every|as|let|if|else|send|to)\\b"
+      "match": "\\b(?:settings|source|template|object|using|population|behavior|for|event|enum|param|state|on|every|as|let|if|else|send|to)\\b"
     },
     {
       "name": "constant.language.colony",

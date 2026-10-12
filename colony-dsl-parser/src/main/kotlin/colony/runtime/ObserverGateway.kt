@@ -191,7 +191,7 @@ private fun configuredAllowedHosts(): Set<String> =
         ?: emptySet()
 
 /** Entry point of the serve command: runs until the process is stopped. */
-fun serveReference(prepared: PreparedRun, port: Int, fleetFactory: (PreparedRun, String) -> VmFleet = { p, _ -> ReferenceFleet(p) }) {
+fun serveSimulation(prepared: PreparedRun, port: Int, fleetFactory: (PreparedRun, String) -> VmFleet = { p, _ -> NativeFleet(p) }) {
     require(port in 1..65535)
     val controller = RunController(prepared, fleetFactory = fleetFactory,
         compactLive = System.getenv("HH_COMPACT_OBSERVER") == "1")

@@ -1,6 +1,6 @@
 package colony.runtime
 
-import colony.bytecode.compileSource
+import colony.compiler.compileSource
 import kotlinx.serialization.json.*
 import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
@@ -123,7 +123,7 @@ class RunControllerTest {
         val failure = run.awaitUpdate(beforeFailure.frames.last().eventId, beforeFailure.revision, 0)!!
         assertTrue(failure.frames.isEmpty())
         assertEquals("failed", failure.health.getValue("status").jsonPrimitive.content)
-        assertContains(run.field("error").jsonPrimitive.content, "Division by zero")
+        assertContains(run.field("error").jsonPrimitive.content.lowercase(), "division by zero")
         assertFalse(run.tick())
         run.reset()
         assertEquals("paused", run.status())

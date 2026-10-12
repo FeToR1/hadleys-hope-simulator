@@ -1,8 +1,9 @@
 package colony.world
 
-import colony.bytecode.Op
-import colony.runtime.ReferenceFleet
-import colony.runtime.ReferenceRun
+import colony.compiler.Op
+import colony.runtime.withoutPids
+import colony.runtime.NativeFleet
+import colony.runtime.SimulationRun
 import colony.runtime.VmIntent
 import colony.runtime.prepareScenario
 import kotlinx.serialization.json.*
@@ -99,10 +100,10 @@ class WorldPerformanceRegressionTest {
 
     @Test fun omittedSnapshotsPreserveAllTickFactsAndTheNextFullSnapshot() {
         val prepared = prepared()
-        ReferenceRun(prepared, "same", ReferenceFleet(prepared, 1)).use { complete ->
-            ReferenceRun(prepared, "same", ReferenceFleet(prepared, 4)).use { selective ->
+        SimulationRun(prepared, "same", NativeFleet(prepared, 1)).use { complete ->
+            SimulationRun(prepared, "same", NativeFleet(prepared, 4)).use { selective ->
                 val retained = selective.step()
-                assertEquals(complete.step(), retained)
+                assertEquals(complete.step().withoutPids(), retained.withoutPids())
                 val retainedText = retained.toString()
                 repeat(1798) {
                     val full = complete.step()
@@ -114,7 +115,7 @@ class WorldPerformanceRegressionTest {
                     assertEquals(complete.kernel!!.ledger, selective.kernel!!.ledger)
                     assertEquals(complete.kernel!!.monthlyReport(), selective.kernel!!.monthlyReport())
                 }
-                assertEquals(complete.step(), selective.step())
+                assertEquals(complete.step().withoutPids(), selective.step().withoutPids())
                 assertEquals(retainedText, retained.toString())
             }
         }
@@ -122,12 +123,12 @@ class WorldPerformanceRegressionTest {
 
     @Test fun retainedSnapshotsStayImmutableAcrossWorkerCounts() {
         val prepared = prepared()
-        ReferenceRun(prepared, "same", ReferenceFleet(prepared, 1)).use { serial ->
-            ReferenceRun(prepared, "same", ReferenceFleet(prepared, 4)).use { parallel ->
+        SimulationRun(prepared, "same", NativeFleet(prepared, 1)).use { serial ->
+            SimulationRun(prepared, "same", NativeFleet(prepared, 4)).use { parallel ->
                 val first = serial.step()
-                assertEquals(first, parallel.step())
+                assertEquals(first.withoutPids(), parallel.step().withoutPids())
                 val saved = first.toString()
-                repeat(180) { assertEquals(serial.step(), parallel.step()) }
+                repeat(180) { assertEquals(serial.step().withoutPids(), parallel.step().withoutPids()) }
                 assertEquals(saved, first.toString())
             }
         }

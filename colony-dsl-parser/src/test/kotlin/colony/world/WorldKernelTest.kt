@@ -1,6 +1,6 @@
 package colony.world
 
-import colony.runtime.ReferenceRun
+import colony.runtime.SimulationRun
 import colony.runtime.prepareScenario
 import colony.semantics.SemanticEnvironment
 import colony.semantics.Type
@@ -22,13 +22,13 @@ class WorldKernelTest {
         val house = SemanticEnvironment().kindContracts.getValue("House")
         val broken = SemanticEnvironment().kindContracts +
             ("House" to house.copy(viewFields = house.viewFields + ("telepathy" to Type.Bool)))
-        val failure = assertFailsWith<IllegalStateException> { ReferenceRun(prepared, "test", kindContracts = broken) }
+        val failure = assertFailsWith<IllegalStateException> { SimulationRun(prepared, "test", kindContracts = broken) }
         assertTrue(failure.message!!.contains("telepathy"), failure.message)
     }
 
     @Test fun theDefaultContractIsFullyComputableByTheWorld() {
         // The guard for contract/kernel drift: constructing the run validates every declared observation.
-        cascade().let { prepared -> ReferenceRun(prepared, "test").use { } }
+        cascade().let { prepared -> SimulationRun(prepared, "test").use { } }
     }
 
     @Test fun indexedFixtureLinksMatchTheOriginalTopologyTraversal() {
@@ -58,7 +58,7 @@ class WorldKernelTest {
             // Use a real entity at each position so the kernel's position lookup sees the test point.
             val shifted = manifest.copy(instances = manifest.instances + observer)
             val world = WorldKernel(shifted, config, buildTopology(shifted, config), 1.0)
-            world.step(0, listOf(colony.runtime.VmIntent(broken, colony.bytecode.Op.DAMAGE_REQUEST,
+            world.step(0, listOf(colony.runtime.VmIntent(broken, colony.compiler.Op.DAMAGE_REQUEST,
                 listOf(JsonPrimitive(broken), JsonPrimitive(1000.0), JsonPrimitive("test")))), listOf("damage"), setOf(broken))
             val expected = appliances.filter { !world.isBroken(it.id) && point.distanceTo(world.positionOf(it.id)) <= config.human.vandalRadius }
                 .sortedWith(compareBy({ point.distanceTo(world.positionOf(it.id)) }, { it.id }))
@@ -72,7 +72,7 @@ class WorldKernelTest {
     @Test fun aHouseFollowsTheClosedFormOfItsThermalModel() {
         val prepared = cascade()
         val world = prepared.scenario.world!!
-        val run = ReferenceRun(prepared, "test")
+        val run = SimulationRun(prepared, "test")
         val kernel = assertNotNull(run.kernel)
         val house = "home-1/house"
         val start = kernel.temperatureOf(house)!!
@@ -90,7 +90,7 @@ class WorldKernelTest {
 
     @Test fun theCascadeRunsFromABrokenPoleToAFrozenPipeAndARepair() {
         val prepared = cascade()
-        val run = ReferenceRun(prepared, "test")
+        val run = SimulationRun(prepared, "test")
         val kernel = assertNotNull(run.kernel)
         val history = ArrayList<Pair<Long, colony.runtime.WorldEvent>>()
         val spend = ArrayList<Posting>()
@@ -150,7 +150,7 @@ class WorldKernelTest {
                     reactorPower = 9_000.0, solarPeak = 0.0, upsCapacity = 0.0, upsInitialCharge = 0.0, upsMaxPower = 0.0)),
             ))
         }
-        val run = ReferenceRun(prepared, "test")
+        val run = SimulationRun(prepared, "test")
         val kernel = assertNotNull(run.kernel)
         run.use { active -> repeat(30) { active.step() } }
         val heaters = prepared.manifest.instances.filter { it.kind == "Heater" }.map { kernel.grantedOf(it.id) }
@@ -176,7 +176,7 @@ class WorldKernelTest {
                     reactorPower = 0.0, solarPeak = 0.0, upsCapacity = 1.8e6, upsInitialCharge = 1.8e6)),
             ))
         }
-        val run = ReferenceRun(prepared, "test")
+        val run = SimulationRun(prepared, "test")
         val kernel = assertNotNull(run.kernel)
         run.use {
             // The pump is the kernel's own class-0 consumer: while the battery bridges the dead sources,
@@ -201,7 +201,7 @@ class WorldKernelTest {
                     reactorPower = 100_000.0, solarPeak = 0.0, upsCapacity = 1.8e9, upsInitialCharge = 0.0)),
             ))
         }
-        val run = ReferenceRun(prepared, "test")
+        val run = SimulationRun(prepared, "test")
         val kernel = assertNotNull(run.kernel)
         run.use {
             val snapshot = it.step()
@@ -228,7 +228,7 @@ class WorldKernelTest {
 
     @Test fun billingCarriesTheRoundingRemainderSoTheTotalStays() {
         val prepared = cascade()
-        val run = ReferenceRun(prepared, "test")
+        val run = SimulationRun(prepared, "test")
         val kernel = assertNotNull(run.kernel)
         val postings = ArrayList<Posting>()
         run.use { repeat(1200) { _ -> postings += it.step().postings } }

@@ -1,6 +1,6 @@
 package colony.runtime
 
-import colony.bytecode.compileSource
+import colony.compiler.compileSource
 import kotlinx.serialization.json.*
 import kotlin.test.*
 
@@ -65,10 +65,10 @@ class WorldEventsTest {
         put("cold", false); put("reachable_breakables", buildJsonArray { })
     })
 
-    private fun run(objects: Map<String, ObjectSpec>, ticks: Int = 8, changes: List<ObservationChange> = emptyList()): ReferenceRun {
+    private fun run(objects: Map<String, ObjectSpec>, ticks: Int = 8, changes: List<ObservationChange> = emptyList()): SimulationRun {
         val scenario = Scenario(catalog = "inline", ticks = ticks, populations = listOf(Population("t", 1, "g")), changes = changes)
         val catalog = Catalog(sources = listOf("inline"), templates = mapOf("t" to Template(objects)))
-        return ReferenceRun(expandScenario(scenario, catalog, program), "test")
+        return SimulationRun(expandScenario(scenario, catalog, program), "test")
     }
 
     private fun TickSnapshot.state(id: String, name: String) = entities.single { it.id == id }.vmState.getValue(name).jsonPrimitive

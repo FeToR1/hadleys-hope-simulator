@@ -2,7 +2,7 @@ package colony.runtime
 
 import colony.cvm.ArtifactReader
 import colony.cvm.NativeBatchVmConnection
-import colony.bytecode.Op
+import colony.compiler.Op
 import kotlinx.serialization.json.*
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -97,7 +97,7 @@ fun runNativeBroker(configPath: Path) {
             // Manifest order, independent of the scheduling and completion order of the OS processes.
             val unordered = steps.flatMap { it.get() }.toMap()
             require(unordered.keys == frames.keys) { "Incomplete shared-process barrier" }
-            // This order is semantically significant: ReferenceRun reduces intents in map iteration order.
+            // This order is semantically significant: SimulationRun reduces intents in map iteration order.
             val results = config.manifest.instances.associate { it.id to unordered.getValue(it.id) }
             val resultBatches = results.entries.toList().chunked(NATIVE_BROKER_BATCH_SIZE)
             resultBatches.forEachIndexed { index, batch ->

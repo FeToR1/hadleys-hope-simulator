@@ -1,4 +1,4 @@
-package colony.bytecode
+package colony.compiler
 
 import colony.ir.IRBuilder
 import colony.parser.ColonyParserFacade
@@ -8,10 +8,10 @@ import colony.semantics.SemanticException
 import colony.semantics.SemanticOptions
 
 /** All sources form one package, so event IDs and cross-file references share a namespace. */
-fun compileSource(source: String, step: String = "1s"): BytecodeProgram {
+fun compileSource(source: String, step: String = "1s"): CompiledProgram {
     val ast = ColonyParserFacade().parse(source)
     val model = SemanticAnalyzer(SemanticOptions(deltaTime = step)).analyze(ast).requireValid()
-    return BytecodeCompiler().compile(IRBuilder(model).build(ast))
+    return compilePackage(IRBuilder(model).build(ast))
 }
 
 /** A named piece of source text of one compilation package. */
@@ -25,7 +25,7 @@ class ColonyCompilationException(val problems: List<String>) : RuntimeException(
  * The files are concatenated (one newline between them), so the result is identical to [compileSource];
  * only the error locations are mapped back from the combined text to the file they came from.
  */
-fun compileSources(files: List<SourceFile>, step: String = "1s"): BytecodeProgram {
+fun compileSources(files: List<SourceFile>, step: String = "1s"): CompiledProgram {
     require(files.isNotEmpty()) { "At least one source file is required" }
     val map = SourceLineMap(files)
     try {

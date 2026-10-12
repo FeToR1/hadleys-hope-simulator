@@ -25,6 +25,6 @@ tasks.generateGrammarSource {
 tasks.compileKotlin { dependsOn(tasks.generateGrammarSource) }
 tasks.compileTestKotlin { dependsOn(tasks.generateTestGrammarSource) }
 tasks.withType<JavaCompile>().configureEach { options.encoding = "UTF-8" }
-tasks.test { useJUnitPlatform() }
+tasks.test { useJUnitPlatform(); systemProperty("junit.jupiter.extensions.autodetection.enabled", "true") }
 
 application { mainClass.set("colony.cli.MainKt") }

@@ -38,7 +38,7 @@ class CompactObserverTest {
         val prepared = prepareScenario(Path.of("../examples/physics/cascade.json"))
         val encoder = CompactObserver()
         val restored = linkedMapOf<String, JsonObject>()
-        ReferenceRun(prepared, "same").use { run ->
+        SimulationRun(prepared, "same").use { run ->
             repeat(1200) { tick ->
                 if (tick == 600) encoder.reset()
                 val snapshot = run.step()

@@ -1,11 +1,11 @@
 package colony.runtime
 
-import colony.bytecode.compileSource
+import colony.compiler.compileSource
 import kotlinx.serialization.json.*
 import kotlin.test.*
 
 /** What the reference run computes for the programs (docs/spec/http-api.md#contract). */
-class ReferenceObservationsTest {
+class SimulationObservationsTest {
     private val program = compileSource("""
         behavior HouseWatch for House {
             state first_kind: String = "";
@@ -60,7 +60,7 @@ class ReferenceObservationsTest {
     private fun TickSnapshot.state(id: String, name: String) = entities.single { it.id == id }.vmState.getValue(name)
 
     @Test fun theRunComputesHealthPowerDevicesAndSortedEnrichedTargets() {
-        val run = ReferenceRun(prepare(), "test")
+        val run = SimulationRun(prepare(), "test")
         val first = run.step()
         assertEquals("Heater", first.state("g-1/house", "first_kind").jsonPrimitive.content)
         assertEquals(false, first.state("g-1/house", "first_broken").jsonPrimitive.boolean)
@@ -83,7 +83,7 @@ class ReferenceObservationsTest {
             put("visible_infrastructure", buildJsonArray { add(ref("house")) })
             put("visible_humans", buildJsonArray { add(ref("heater")) })
         })
-        val run = ReferenceRun(prepare(objects + ("predator" to biter), ticks = 6), "test")
+        val run = SimulationRun(prepare(objects + ("predator" to biter), ticks = 6), "test")
         val broken = (0 until 5).map { run.step().state("g-1/house", "first_broken").jsonPrimitive.boolean }
         // 30 hp per step: the heater is destroyed in step 3 and its house sees that from step 4 on.
         assertEquals(listOf(false, false, false, false, true), broken)

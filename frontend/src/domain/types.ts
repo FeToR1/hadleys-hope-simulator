@@ -93,7 +93,7 @@ export interface WorldEvent {
 export interface TickBatch {
   version?: 1;
   runId?: string;
-  runtimeMode?: 'reference' | 'process' | 'shared-process';
+  runtimeMode?: 'process' | 'shared-process';
   seed?: string;
   scenario?: 'storm' | 'weekend' | 'predator' | 'marines';
   full?: boolean;
@@ -133,7 +133,7 @@ export interface StateSnapshot {
   runId: string;
   revision: number;
   seed: string;
-  runtimeMode: 'reference' | 'process' | 'shared-process' | null;
+  runtimeMode: 'process' | 'shared-process' | null;
   tickId: number;
   timestamp: number;
   entities: ReadonlyMap<string, EntityState>;

@@ -13,7 +13,7 @@ import kotlin.io.path.bufferedWriter
 fun runFastScenario(path: Path, output: Path? = null) {
     val prepared = prepareScenario(path)
     require(prepared.scenario.ticks > 0) { "Fast run requires at least one tick" }
-    val run = ReferenceRun(prepared, UUID.randomUUID().toString())
+    val run = SimulationRun(prepared, UUID.randomUUID().toString())
     val json = Json { encodeDefaults = true }
     var events = 0L
     var postings = 0L

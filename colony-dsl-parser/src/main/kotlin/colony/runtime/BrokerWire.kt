@@ -1,6 +1,6 @@
 package colony.runtime
 
-import colony.bytecode.Op
+import colony.compiler.Op
 import kotlinx.serialization.json.*
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -12,7 +12,7 @@ import java.nio.charset.CodingErrorAction
 /** Bounded binary protocol for the private JVM kernel/broker pipe. */
 internal object BrokerWire {
     private const val MAGIC = 0x48484257 // HHBW
-    private const val VERSION = 1
+    private const val VERSION = 2
     private const val CONFIG = 1
     private const val REQUEST = 2
     private const val REPLY = 3

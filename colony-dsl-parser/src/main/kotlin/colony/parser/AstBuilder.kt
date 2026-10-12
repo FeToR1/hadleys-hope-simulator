@@ -8,6 +8,35 @@ import org.antlr.v4.runtime.tree.TerminalNode
 /** Builds the project's domain AST; ANTLR parse contexts do not escape this layer. */
 class AstBuilder : ColonyBaseVisitor<AstNode>() {
 
+    override fun visitSettingsProgram(ctx: ColonyParser.SettingsProgramContext): SettingsDocument {
+        val members = ctx.settingsMember()
+        return SettingsDocument(
+            members.filter { it.SOURCE() != null }.map { unquote(it.STRING().text) },
+            members.mapNotNull { it.letStatement()?.let { node -> visit(node) as LetStmt } },
+            members.filter { it.TEMPLATE() != null }.map { template ->
+                SettingsTemplate(template.identifier(0).text, template.settingsObject().map { obj ->
+                    SettingsObject(obj.identifier(0).text, obj.identifier(1).text,
+                        obj.objectSetting().filter { it.PARAM() != null }.map {
+                            if (it.settingsList() != null) SettingsList(it.identifier().text,
+                                it.settingsList().expression().map { element -> visit(element) as Expr }, span(it))
+                            else SettingsValue(it.identifier().text, visit(it.expression()) as Expr, span(it)) },
+                        obj.objectSetting().mapNotNull { it.settingsNode()?.let { node -> visit(node) as SettingsNode } }, span(obj))
+                }, span(template))
+            },
+            members.filter { it.POPULATION() != null }.map {
+                SettingsPopulation(it.identifier(0).text, it.identifier(1).text,
+                    it.settingsNode().map { node -> visit(node) as SettingsNode }, span(it))
+            },
+            members.filter { it.POPULATION() == null }.flatMap { it.settingsNode() }.map { visit(it) as SettingsNode }, span(ctx))
+    }
+
+    override fun visitSettingsNode(ctx: ColonyParser.SettingsNodeContext): SettingsNode = when {
+        ctx.expression() != null -> SettingsValue(ctx.identifier().text, visit(ctx.expression()) as Expr, span(ctx))
+        ctx.settingsList() != null -> SettingsList(ctx.identifier().text,
+            ctx.settingsList().expression().map { visit(it) as Expr }, span(ctx))
+        else -> SettingsBlock(ctx.identifier().text, ctx.settingsNode().map { visit(it) as SettingsNode }, span(ctx))
+    }
+
     override fun visitProgram(ctx: ColonyParser.ProgramContext): Program {
         return Program(
             declarations = ctx.topLevelDecl().map { visit(it) as TopLevelDecl },
@@ -318,14 +347,14 @@ class AstBuilder : ColonyBaseVisitor<AstNode>() {
 
     private fun numberLiteral(ctx: ColonyParser.NumberLiteralContext): NumberLiteral {
         val text = ctx.text
-        val match = Regex("^((?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?)([A-Za-z_µ][A-Za-z0-9_µ]*)?$").matchEntire(text)
+        val match = Regex("^((?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?)([A-Za-z_Вµ][A-Za-z0-9_Вµ]*)?$").matchEntire(text)
             ?: error("ANTLR NUMBER/NUMBER_UNIT invariant violated: $text")
         return NumberLiteral(match.groupValues[1], match.groupValues[2].ifEmpty { null }, span(ctx))
     }
 
     private fun unitLiteral(ctx: ParserRuleContext): UnitLiteral {
         val text = ctx.text
-        val match = Regex("^([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)([A-Za-z_µ][A-Za-z0-9_µ]*)$").matchEntire(text)
+        val match = Regex("^([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)([A-Za-z_Вµ][A-Za-z0-9_Вµ]*)$").matchEntire(text)
             ?: error("Duration literal must contain a unit: $text")
         return UnitLiteral(match.groupValues[1], match.groupValues[2], span(ctx))
     }

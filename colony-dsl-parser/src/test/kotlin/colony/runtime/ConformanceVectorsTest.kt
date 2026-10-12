@@ -1,6 +1,6 @@
 package colony.runtime
 
-import colony.bytecode.bytecodeJson
+import colony.compiler.colonyJson
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.*
 import java.io.File
@@ -11,7 +11,7 @@ import kotlin.test.*
 
 class ConformanceVectorsTest {
     private val committed = File("../conformance")
-    private fun load(name: String) = bytecodeJson.decodeFromString<ConformanceFile>(committed.resolve("$name.json").readText())
+    private fun load(name: String) = colonyJson.decodeFromString<ConformanceFile>(committed.resolve("$name.json").readText())
 
     @Test fun theCommittedVectorsAreCurrent() {
         val temp = Files.createTempDirectory("conformance")
@@ -22,11 +22,11 @@ class ConformanceVectorsTest {
         }
     }
 
-    @Test fun theReferenceVmReplaysEveryCommittedVector() {
+    @Test fun theNativeVmReplaysEveryCommittedVector() {
         for (name in conformanceFileNames().filter { it != "prng.json" }.map { it.removeSuffix(".json") }) {
             assertEquals(emptyList(), verifyConformance(load(name)), name)
         }
-        assertEquals(emptyList(), verifyPrng(bytecodeJson.decodeFromString<PrngFile>(committed.resolve("prng.json").readText())))
+        assertEquals(emptyList(), verifyPrng(colonyJson.decodeFromString<PrngFile>(committed.resolve("prng.json").readText())))
     }
 
     @Test fun aWrongExpectationIsReportedNotIgnored() {
@@ -53,7 +53,7 @@ class ConformanceVectorsTest {
     }
 
     @Test fun theRandomVectorsCoverSeedsKeysAndCounters() {
-        val vectors = bytecodeJson.decodeFromString<PrngFile>(committed.resolve("prng.json").readText()).vectors
+        val vectors = colonyJson.decodeFromString<PrngFile>(committed.resolve("prng.json").readText()).vectors
         assertTrue(vectors.any { it.seed < 0 } && vectors.any { it.entityId.any { c -> c.code > 127 } } && vectors.any { it.site.isEmpty() } && vectors.any { it.counter > 1_000_000_000L })
         assertTrue(vectors.all { it.unit.toDouble() in 0.0..1.0 })
     }

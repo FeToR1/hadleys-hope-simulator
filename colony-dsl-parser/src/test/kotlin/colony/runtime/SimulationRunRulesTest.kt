@@ -1,11 +1,11 @@
 package colony.runtime
 
-import colony.bytecode.compileSource
+import colony.compiler.compileSource
 import kotlinx.serialization.json.*
 import kotlin.test.*
 
 /** Rules of docs/simulation that the reference run must honour: one-step intents, dead executors, damage before power. */
-class ReferenceRunRulesTest {
+class SimulationRunRulesTest {
     private fun point(x: Int, y: Int) = buildJsonObject { put("x", x); put("y", y) }
     private val heaterView = buildJsonObject { put("home_occupants", 1); put("broken", false); put("power_connected", true) }
 
@@ -20,7 +20,7 @@ class ReferenceRunRulesTest {
     private fun EntitySnapshot.number(name: String) = metrics.getValue(name).jsonPrimitive.double
 
     @Test fun powerRequestsLiveForOneStepOnly() {
-        val run = ReferenceRun(prepare(
+        val run = SimulationRun(prepare(
             "behavior Pulse for Heater { every 2s as request { power.request(1kW); } }",
             mapOf("heater" to ObjectSpec("Heater", "Pulse", view = heaterView)), ticks = 4), "test")
         val power = (0 until 4).map { run.step().entity("g-1/heater").number("power_consumption") }
@@ -43,7 +43,7 @@ class ReferenceRunRulesTest {
             put("position", point(0, 0)); put("patrol_waypoint", point(0, 0))
             put("visible_infrastructure", buildJsonArray { add(target) })
         }
-        val run = ReferenceRun(prepare(source, mapOf(
+        val run = SimulationRun(prepare(source, mapOf(
             "predator" to ObjectSpec("Predator", "Killer", view = predatorView),
             "heater" to ObjectSpec("Heater", "Load", view = heaterView)), ticks = 3), "test")
 

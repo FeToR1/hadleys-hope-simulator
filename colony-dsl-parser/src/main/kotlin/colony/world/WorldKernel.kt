@@ -1,6 +1,6 @@
 package colony.world
 
-import colony.bytecode.Op
+import colony.compiler.Op
 import colony.runtime.Instance
 import colony.runtime.RunManifest
 import colony.runtime.VmIntent
@@ -36,7 +36,7 @@ data class KernelEvent(
     val done: Double, val duration: Double, val availableAtTick: Long = 0L,
 )
 
-/** A transport request extracted from the language-level SEND event by the reference runtime. */
+/** A transport request extracted from the language-level SEND event by the simulation host. */
 data class TransportRequest(
     val ref: String, val passengerId: String, val vehicleId: String, val destination: Point,
 )

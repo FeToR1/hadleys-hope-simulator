@@ -1,6 +1,6 @@
 package colony.world
 
-import colony.bytecode.Op
+import colony.compiler.Op
 import colony.runtime.Instance
 import colony.runtime.RunManifest
 import colony.runtime.VmIntent

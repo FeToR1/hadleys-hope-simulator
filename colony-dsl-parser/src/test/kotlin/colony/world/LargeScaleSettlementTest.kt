@@ -1,7 +1,7 @@
 package colony.world
 
 import colony.runtime.Instance
-import colony.runtime.ReferenceRun
+import colony.runtime.SimulationRun
 import colony.runtime.prepareScenario
 import kotlinx.serialization.json.*
 import java.nio.file.Path
@@ -46,7 +46,7 @@ class LargeScaleSettlementTest {
         val houses = prepared.manifest.instances.filter { it.kind == "House" }
         assertEquals(5000, houses.size, "Manifest must contain exactly 5000 houses")
 
-        val run = ReferenceRun(prepared, "scale-5000-test")
+        val run = SimulationRun(prepared, "scale-5000-test")
         val kernel = assertNotNull(run.kernel)
 
         val airDefenseUnits = kernel.topology.fixtures.filter { it.kind == FixtureKind.AIR_DEFENSE }

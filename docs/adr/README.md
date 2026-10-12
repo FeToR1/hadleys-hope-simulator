@@ -32,15 +32,16 @@ ADR **не нужен** для: исправлений багов без сме�
 
 | Номер | Название | Статус |
 |---|---|---|
-| [0001](0001-conformance-troyaya-proverka.md) | Кросс-проверка исполнителей по conformance-векторам | принято |
+| [0001](0001-conformance-troyaya-proverka.md) | Кросс-проверка исполнителей по conformance-векторам | заменено ADR 0010 |
 | [0002](0002-processnaya-model-nativnoy-vm.md) | Процессная модель нативной ВМ и путь к общему исполнителю | принято |
 | [0003](0003-spatial-index-i-kesh-svyazey.md) | Пространственный хеш-индекс и кэш связей инфраструктуры | принято |
-| [0004](0004-pul-chetyreh-potokov-povedeniya.md) | Пул из четырёх потоков поведения | принято |
+| [0004](0004-pul-chetyreh-potokov-povedeniya.md) | Пул из четырёх потоков поведения | заменено ADR 0010 |
 | [0005](0005-kompaktnyy-format-nablyudeniya.md) | Компактный формат наблюдения (SSE v2) | принято |
 | [0006](0006-fast-rezhim-bez-promezhutochnyh-snimkov.md) | Fast-режим без промежуточных снимков | принято |
 | [0007](0007-fazovoe-chtenie-i-memoization.md) | Фазовое чтение мира и memoization обработчиков | принято |
 | [0008](0008-generiruemyy-predmetnyy-kontrakt.md) | Генерируемый предметный контракт contract.json | принято |
-| [0009](0009-klyaksa-only.md) | Единая предметная модель Кляксы | предложено |
+| [0009](0009-klyaksa-only.md) | Единая предметная модель Кляксы | принято |
+| [0010](0010-single-cvm2-and-settings.md) | Единственный исполнитель CVM2 и настройки на языке Colony | принято |
 
 ADR 0001–0008 ретроспективно зафиксированы из [history/optimization-5000.md](../history/optimization-5000.md)
 и git-истории; в них указано, какие детали восстановлены по косвенным данным.

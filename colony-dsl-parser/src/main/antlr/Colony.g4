@@ -7,6 +7,38 @@ program
     : topLevelDecl* EOF
     ;
 
+// Same expressions, literals and units; a separate entry point for .settings.
+settingsProgram
+    : SETTINGS identifier? LBRACE settingsMember* RBRACE EOF
+    ;
+
+settingsMember
+    : SOURCE STRING SEMI
+    | letStatement
+    | TEMPLATE identifier LBRACE settingsObject* RBRACE
+    | POPULATION identifier AS identifier LBRACE settingsNode* RBRACE
+    | settingsNode
+    ;
+
+settingsObject
+    : OBJECT identifier USING identifier LBRACE objectSetting* RBRACE
+    ;
+
+objectSetting
+    : PARAM identifier ASSIGN (expression | settingsList) SEMI
+    | settingsNode
+    ;
+
+settingsNode
+    : identifier ASSIGN expression SEMI
+    | identifier ASSIGN settingsList SEMI
+    | identifier LBRACE settingsNode* RBRACE
+    ;
+
+settingsList
+    : LBRACK (expression (COMMA expression)* COMMA?)? RBRACK
+    ;
+
 topLevelDecl
     : eventDecl
     | behaviorDecl
@@ -219,10 +251,17 @@ typeName
     ;
 
 identifier
-    : IDENTIFIER
+    : IDENTIFIER | SETTINGS | SOURCE | TEMPLATE | POPULATION | OBJECT | USING
     ;
 
 // ---------- Lexer ----------
+
+SETTINGS       : 'settings';
+SOURCE         : 'source';
+TEMPLATE       : 'template';
+POPULATION     : 'population';
+OBJECT         : 'object';
+USING          : 'using';
 
 BEHAVIOR       : 'behavior';
 FOR            : 'for';

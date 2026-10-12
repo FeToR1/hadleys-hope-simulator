@@ -1,4 +1,4 @@
-package colony.bytecode
+package colony.compiler
 
 import colony.runtime.*
 import colony.semantics.CONTRACT_VERSION
@@ -11,15 +11,15 @@ import kotlin.test.*
 class ArtifactContractTest {
     private val program = compileSource(File("examples/heater.colony").readText())
 
-    @Test fun anArtifactRecordsItsContractVersionAndSurvivesTheJsonRoundTrip() {
-        assertEquals(CONTRACT_VERSION, program.contract)
-        val text = bytecodeJson.encodeToString(program)
-        assertContains(text, "\"contract\": $CONTRACT_VERSION")
-        assertEquals(program, bytecodeJson.decodeFromString<BytecodeProgram>(text))
+    @Test fun anArtifactRecordsItsContractVersionAndSurvivesTheBinaryRoundTrip() {
+        val artifact = colony.cvm.ArtifactWriter.write(program.nativeProgram)
+        val back = colony.cvm.ArtifactReader.read(artifact)
+        assertEquals(CONTRACT_VERSION, back.contract)
+        assertContentEquals(artifact, colony.cvm.ArtifactWriter.write(back))
     }
 
     @Test fun eachBehaviorListsExactlyTheObservationsItReads() {
-        assertEquals(listOf("occupants", "temperature"), program.behaviors.single { it.name == "HouseControl" }.observes)
+        assertEquals(listOf("temperature", "occupants"), program.behaviors.single { it.name == "HouseControl" }.observes)
         assertEquals(listOf("home_occupants", "broken", "power_connected"), program.behaviors.single { it.name == "HeaterControl" }.observes)
         assertEquals(emptyList(), compileSource("behavior Idle for House { }").behaviors.single().observes)
     }

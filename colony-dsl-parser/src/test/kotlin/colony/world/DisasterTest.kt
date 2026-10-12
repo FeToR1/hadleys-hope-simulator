@@ -1,6 +1,6 @@
 package colony.world
 
-import colony.bytecode.Op
+import colony.compiler.Op
 import colony.runtime.VmIntent
 import colony.runtime.prepareScenario
 import kotlinx.serialization.json.*

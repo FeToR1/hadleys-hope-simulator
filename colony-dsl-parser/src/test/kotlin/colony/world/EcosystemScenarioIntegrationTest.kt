@@ -1,6 +1,6 @@
 package colony.world
 
-import colony.runtime.ReferenceRun
+import colony.runtime.SimulationRun
 import colony.runtime.prepareScenario
 import kotlinx.serialization.json.jsonPrimitive
 import java.nio.file.Path
@@ -17,7 +17,7 @@ class EcosystemScenarioIntegrationTest {
         val observedEvents = ArrayList<colony.runtime.WorldEvent>()
         var mutation: String? = null
         var snapshotType: String? = null
-        ReferenceRun(prepared, "ecosystem-cleanup-integration").use { run ->
+        SimulationRun(prepared, "ecosystem-cleanup-integration").use { run ->
             repeat(prepared.scenario.ticks) {
                 val frame = run.step()
                 if (it == 0) {
@@ -63,7 +63,7 @@ class EcosystemScenarioIntegrationTest {
         }))
 
         val events = ArrayList<colony.runtime.WorldEvent>()
-        ReferenceRun(positioned, "predator-attack-cause").use { run ->
+        SimulationRun(positioned, "predator-attack-cause").use { run ->
             repeat(positioned.scenario.ticks) { events += run.step().events }
         }
         assertTrue(events.any { it.type == "DamageApplied" && it.fields["reason"]?.jsonPrimitive?.content == "PredatorAttack" })

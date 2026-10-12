@@ -1,12 +1,12 @@
 package colony.world
 
-import colony.bytecode.Op
+import colony.compiler.Op
 import colony.runtime.Instance
-import colony.runtime.ReferenceRun
+import colony.runtime.SimulationRun
 import colony.runtime.RunManifest
 import colony.runtime.VmIntent
 import colony.runtime.prepareScenario
-import colony.bytecode.bytecodeJson
+import colony.compiler.colonyJson
 import colony.runtime.jsonEquivalent
 import kotlinx.serialization.json.*
 import java.nio.file.Path
@@ -38,7 +38,7 @@ class TransportAndRepairTest {
 
     @Test fun aRepairJobIsNotVisibleUntilItsDispatchDelayHasElapsed() {
         val prepared = prepareScenario(Path.of("../examples/physics/cascade.json"))
-        val run = ReferenceRun(prepared, "repair-delay-test")
+        val run = SimulationRun(prepared, "repair-delay-test")
         val kernel = assertNotNull(run.kernel)
         var brokenTick: Long? = null
         var firstVisibleTick: Long? = null
@@ -181,13 +181,13 @@ class TransportAndRepairTest {
     @Test fun fullConfigurationSpellsOutEveryWorldParameterAndRunsAllKinds() {
         val path = Path.of("../examples/physics/full.json")
         val p = prepareScenario(path)
-        val raw = bytecodeJson.parseToJsonElement(java.nio.file.Files.readString(path)).jsonObject.getValue("world")
+        val raw = colonyJson.parseToJsonElement(java.nio.file.Files.readString(path)).jsonObject.getValue("world")
         val complete = Json { encodeDefaults = true }.encodeToJsonElement(p.scenario.world!!)
         assertTrue(jsonEquivalent(complete, raw), "all default-valued fields must be explicit")
         assertEquals(setOf("House", "Heater", "Kettle", "Human", "Rover", "Marine", "Predator"), p.manifest.instances.map { it.kind }.toSet())
         assertEquals(1228, p.manifest.instances.size)
         assertEquals(2, p.manifest.instances.count { it.behavior == "PassengerRover" })
-        ReferenceRun(p, "full-smoke").use { run ->
+        SimulationRun(p, "full-smoke").use { run ->
             val snapshot = run.step()
             assertEquals(6, snapshot.entities.count { it.type == "rover" })
             assertEquals(10, snapshot.entities.count { it.type == "marine" })

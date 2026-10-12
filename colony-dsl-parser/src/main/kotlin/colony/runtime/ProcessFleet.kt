@@ -1,7 +1,6 @@
 package colony.runtime
 
 import colony.cvm.ArtifactWriter
-import colony.cvm.compileToCvm
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.net.URLClassLoader
@@ -42,9 +41,8 @@ class ProcessFleet(prepared: PreparedRun, executable: Path, runId: String,
         try {
             require(executable.isRegularFile()) { "Native VM not found: $executable; build native/ first" }
             require(timeoutMillis > 0 && startupTimeoutMillis > 0 && workers in 1..32)
-            require(prepared.sources.isNotEmpty()) { "Native execution requires the package sources" }
             val artifact = directory.resolve("program.cvm")
-            artifact.writeBytes(ArtifactWriter.write(compileToCvm(prepared.sources, prepared.scenario.step)))
+            artifact.writeBytes(ArtifactWriter.write(prepared.program.nativeProgram))
             val config = BrokerConfig(artifact.toString(), executable.toAbsolutePath().toString(), runId,
                 ProcessHandle.current().pid(), prepared.manifest, timeoutMillis, workers, startupTimeoutMillis)
             val file = directory.resolve("broker.bin")
@@ -70,6 +68,8 @@ class ProcessFleet(prepared: PreparedRun, executable: Path, runId: String,
             children = pids.values.toSet().map { ProcessHandle.of(it.toLong()).orElseThrow { IllegalStateException("VM $it exited during startup") } }
         } catch (failure: Exception) { close(); throw failure }
     }
+
+    init { NativeResources.track(this) }
 
     override fun step(frames: Map<String, VmFrame>): Map<String, VmResult> {
         check(!closed.get()) { "Native run is closed" }
@@ -123,6 +123,7 @@ class ProcessFleet(prepared: PreparedRun, executable: Path, runId: String,
 
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
+        NativeResources.release(this)
         val owned = (children + broker.descendants().use { it.toList() }).distinctBy { it.pid() }
         owned.forEach { if (it.isAlive) it.destroyForcibly() }
         if (broker.isAlive) broker.destroyForcibly()

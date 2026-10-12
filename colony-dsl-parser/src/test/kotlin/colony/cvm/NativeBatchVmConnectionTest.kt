@@ -1,6 +1,6 @@
 package colony.cvm
 
-import colony.bytecode.SourceFile
+import colony.compiler.SourceFile
 import colony.runtime.VmFrame
 import kotlinx.serialization.json.*
 import java.nio.file.Files

@@ -93,13 +93,13 @@ export class StateManager {
 
   public ingest(batch: TickBatch): void {
     let topologyChanged = false;
-    const incomingRun = batch.runId ?? 'reference';
+    const incomingRun = batch.runId ?? 'unknown';
     if (incomingRun !== this.runId) {
       this.reset();
       this.runId = incomingRun;
     } else if (batch.tickId <= this.tickId) return;
     this.seed = batch.seed ?? '';
-    this.runtimeMode = batch.runtimeMode ?? 'reference';
+    this.runtimeMode = batch.runtimeMode ?? 'process';
     this.scenario = batch.scenario ?? this.scenario;
     if (batch.full) {
       const present = new Set(batch.entities.map((entity) => entity.id));

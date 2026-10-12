@@ -7,7 +7,7 @@ import colony.ast.SourceSpan
  * version (docs/spec/http-api.md#contract), and compiled artifacts record the version
  * they were built against so that a kernel or VM can refuse a mismatch.
  */
-const val CONTRACT_VERSION = 9
+const val CONTRACT_VERSION = 10
 
 /** Entity-kind contract supplied by runtime/simulation owners (Role #7). */
 data class KindContract(

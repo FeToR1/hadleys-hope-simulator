@@ -1,13 +1,12 @@
 package colony.semantics
 
-import colony.bytecode.SourceFile
-import colony.bytecode.compileSources
-import colony.cvm.compileToCvm
+import colony.compiler.SourceFile
+import colony.compiler.compileSources
 import java.io.File
 import kotlin.test.*
 
 /**
- * Every example that is not a draft has to compile through both back ends. A program that only shows intended
+ * Every example that is not a draft has to compile to CVM2. A program that only shows intended
  * syntax belongs in examples/drafts, which this test leaves alone.
  */
 class ExamplesCompileTest {
@@ -26,14 +25,13 @@ class ExamplesCompileTest {
         assertContains(found, "settlement.colony")
     }
 
-    @Test fun everyExampleCompilesToBothArtifacts() {
+    @Test fun everyExampleCompilesToCvm2() {
         for (file in examples()) {
             val source = listOf(SourceFile(file.name, file.readText()))
-            val v1 = compileSources(source)
-            val v2 = compileToCvm(source)
-            assertTrue(v1.behaviors.isNotEmpty(), "${file.name} has no behavior")
-            assertEquals(v1.behaviors.map { it.name }, v2.behaviors.map { it.name }, file.name)
-            assertEquals(v1.events.map { it.id to it.name }, v2.events.map { it.id to it.name }, file.name)
+            val compiled = compileSources(source)
+            assertTrue(compiled.behaviors.isNotEmpty(), "${file.name} has no behavior")
+            val bytes = colony.cvm.ArtifactWriter.write(compiled.nativeProgram)
+            assertContentEquals(bytes, colony.cvm.ArtifactWriter.write(colony.cvm.ArtifactReader.read(bytes)), file.name)
         }
     }
 

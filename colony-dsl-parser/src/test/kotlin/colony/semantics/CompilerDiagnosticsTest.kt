@@ -1,6 +1,6 @@
 package colony.semantics
 
-import colony.bytecode.*
+import colony.compiler.*
 import colony.parser.ColonyParserFacade
 import kotlin.test.*
 

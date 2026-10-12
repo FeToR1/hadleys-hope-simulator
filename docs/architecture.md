@@ -6,11 +6,11 @@
 Смежные документы: [requirements.md](requirements.md) (цели и границы), [spec/](spec/colony-language.md) (язык, исполнение, формат .cvm, HTTP/SSE),
 [adr/](adr/) (почему устроено так), [glossary.md](glossary.md) (термины).
 
-**Суть в одном абзаце.** Общий фронтенд Colony строит типизированный IR. Из него получаются
-два артефакта: стековый JSON-байт-код v1 для `ReferenceVm` (Kotlin/JVM) и бинарный CVM2
-для `hh-vm` (C++20, общий пул процессов). Семантика исполнителей сверяется conformance-векторами. Ядро мира `WorldKernel` детерминированно разрешает
-намерения и считает физику посёлка на 5000 домов (~20 028 контекстов поведения); `ObserverGateway`
-публикует состояние по HTTP/SSE (:8080), React-дашборд с Pixi.js/Three.js рисует карту (:5173).
+Компилятор Colony строит типизированный IR и единственный исполняемый артефакт CVM2.
+`hh-vm` (C++20) выполняет изолированные контексты в общем пуле процессов; JVM содержит компилятор,
+оркестратор `SimulationRun`, брокер и `WorldKernel`, но не интерпретатор инструкций.
+Ядро разрешает намерения и считает физику; `ObserverGateway` публикует HTTP/SSE (:8080), React рисует карту (:5173).
+Переход на один исполнитель и декларации `.settings` — [ADR 0010](adr/0010-single-cvm2-and-settings.md).
 
 Зональную экологию (лес, навоз, планктон, состояние людей) реализует `EcosystemController`, физические
 последствия применяет `WorldKernel`; механики отключены по умолчанию и включаются сценарием.
@@ -66,18 +66,19 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    SRC["Сценарии и программы<br/>examples/**/*.json, *.colony"] --> P["Парсер ANTLR4<br/>Colony.g4 → colony.parser"]
-    P --> AST["colony.ast"]
-    AST --> SEM["colony.semantics<br/>типы, контракт, диагностика"]
-    SEM --> IR["colony.ir<br/>типизированный IR"]
-    IR --> B["colony.bytecode<br/>JSON-байт-код v1"]
-    IR --> C["colony.cvm<br/>бинарный CVM2 .cvm"]
-    B --> REF["ReferenceVm (JVM)<br/>run / serve"]
-    C --> HH["hh-vm (C++20)<br/>run-native / serve-native"]
-    REF --> WK["WorldKernel<br/>физика, море, угрозы, креатин"]
-    HH --> WK
-    WK --> GW["ObserverGateway<br/>HTTP/SSE :8080"]
-    GW --> UI["Дашборд React 19 +<br/>Pixi.js / Three.js :5173"]
+    SRC["*.colony"] --> P["ANTLR4 → AST → проверка типов"]
+    P --> IR["Типизированный IR"]
+    IR --> C["CVM2: program.cvm"]
+    SETTINGS["colony.settings<br/>та же грамматика выражений"] --> BIND["Параметры, шаблоны, мир"]
+    P --> BIND
+    BIND --> MANIFEST["RunManifest + WorldConfig"]
+    C --> HH["Брокер → hh-vm (C++20)"]
+    MANIFEST --> RUN["SimulationRun"]
+    RUN -->|"VmFrame: view + события"| HH
+    HH -->|"VmResult: намерения + события + состояние"| RUN
+    RUN --> WK["WorldKernel"]
+    WK --> GW["ObserverGateway: HTTP/SSE"]
+    GW --> UI["React + Pixi.js/Three.js"]
 ```
 
 Проекты по слоям: [colony-dsl-parser/](../colony-dsl-parser) (компилятор, runtime, ядро мира), [native/](../native) (hh-vm),
@@ -110,7 +111,7 @@ flowchart TD
         Spatial["SpatialIndex\n(2D Spatial Hash Grid)"]
         Tasks["TaskQueue\n(Очередь ремонта строений и ПВО)"]
         Creatine["CreatineManager\n(Склад, Продажа, Исцеление)"]
-        CVM["Нативная C++ VM (hh-vm.exe) /\nJVM Fleet"]
+        CVM["Нативная C++ VM (hh-vm.exe)"]
     end
 
     subgraph Logistics ["Логистика и Население"]
@@ -135,23 +136,23 @@ flowchart TD
     SimulationCore --> UI
 ```
 
-### 2.3. Кросс-проверка исполнителей (conformance)
+### 2.3. Проверка исполнителя
 
 <a id="vectors"></a>
 
-```mermaid
-flowchart TD
-    V["conformance/*.json<br/>векторы: программа, кадры, ожидаемые<br/>намерения/события/состояние"] --> K["Kotlin<br/>ConformanceVectorsTest<br/>(эталонная ReferenceVm)"]
-    V --> CPP["C++<br/>NativeConformanceTest<br/>(процессы hh-vm)"]
-    V --> PY["Python<br/>conformance/run_vectors.py<br/>(независимая третья ВМ)"]
-    K -.->|"результаты совпадают:<br/>числа по значению, порядок списков важен"| OK["Кросс-проверка пройдена"]
-    CPP -.-> OK
-    PY -.-> OK
-```
-
-Векторы генерируются командой CLI `conformance` и сверяются тестами; подробнее — [AGENTS.md](../AGENTS.md).
+`conformance/*.json` хранит CVM2 в base64, входные кадры и зафиксированные ожидаемые результаты.
+Kotlin-тесты и CLI повторяют их на `hh-vm`; `NativeConformanceTest` дополнительно пересобирает исходники
+и сохраняет двоичные сессии. Python запускает повторение через CLI и независимо проверяет SHA-256 PRNG.
+Это регрессионные проверки одного исполнителя, а не независимые реализации ВМ.
+Ожидания при удалении v1 сохранены без изменения; смена формата конверта — версия conformance 2.
+Команды — [AGENTS.md](../AGENTS.md).
 
 ---
+
+Между слоями используются AST (`colony.ast`), `SemanticModel` (типы и разрешённые имена), IR (`colony.ir`),
+`CompiledProgram` (CVM2 и сведения для проверки привязок), `PreparedRun`/`RunManifest`/`WorldConfig` (экземпляры и мир),
+`VmFrame`/`VmResult` (граница исполнения), `TickSnapshot` (наблюдение). `colony.compiler` связывает стадии;
+`colony.runtime.SettingsScenario` по AST настроек строит ту же модель сценария, что и прежний JSON-загрузчик.
 
 ## 3. Структура кодовой базы
 
@@ -178,7 +179,7 @@ flowchart TD
 ### Редактор Colony
 
 [`tools/vscode-colony`](../tools/vscode-colony/README.md) — декларативное расширение VS Code.
-`package.json` связывает `.colony` с языком, `syntaxes/colony.tmLanguage.json` задаёт TextMate-токены,
+`package.json` связывает `.colony` и `.settings` с языком, `syntaxes/colony.tmLanguage.json` задаёт TextMate-токены,
 `language-configuration.json` — комментарии, скобки и отступы. Лексика следует `Colony.g4`.
 Скрипт `scripts/install-colony-vscode.ps1` упаковывает VSIX и по флагу устанавливает его локально.
 Проверки используют TextMate/Oniguruma. Компиляция и семантическая диагностика остаются в CLI;

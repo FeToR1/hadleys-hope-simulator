@@ -124,7 +124,7 @@ describe('live stream lifecycle', () => {
     options.onBatch.mockImplementation((batch) => manager.ingest(batch));
     live.connect();
     for (const tickId of [0, 1, 1, 2]) stream().emit('message', {
-      version: 1, runId: 'r1', runtimeMode: 'reference', seed: '426', full: true, tickId, timestamp: tickId * 1000,
+      version: 1, runId: 'r1', runtimeMode: 'process', seed: '426', full: true, tickId, timestamp: tickId * 1000,
       entities: [], postings: [{ tick: tickId, owner: 'settlement', kind: 'repair', amount: 10 }],
     });
     expect(manager.snapshot().tickId).toBe(2);
@@ -136,12 +136,12 @@ describe('live stream lifecycle', () => {
 
 describe('observer protocol v1', () => {
   const batch = {
-    version: 1, runId: 'test', runtimeMode: 'reference', seed: '426', full: true,
+    version: 1, runId: 'test', runtimeMode: 'process', seed: '426', full: true,
     tickId: 0, timestamp: 1000,
     entities: [{ id: 'home-1/house', pid: null, type: 'house', status: 'nominal', metrics: { temperature: 16 },
       connectedTo: [], coordinates: { x: 0, y: 0 }, parentId: null }],
   };
-  it('accepts reference snapshots and normalizes null parent IDs', () => {
+  it('accepts native snapshots and normalizes null parent IDs', () => {
     expect(parseTickBatch(batch).entities[0].parentId).toBeUndefined();
     expect(parseTickBatch(batch).entities[0].pid).toBeNull();
   });
@@ -218,13 +218,13 @@ describe('observer protocol v1', () => {
     expect(() => parseTickBatch({ ...batch, entities: [{ ...defense, metrics: { health: Number.POSITIVE_INFINITY } }] })).toThrow();
 
     const decoder = new ObserverDecoder();
-    const full = decoder.decode({ version: 2, runId: 'compact', runtimeMode: 'reference', seed: '1', full: true,
+    const full = decoder.decode({ version: 2, runId: 'compact', runtimeMode: 'process', seed: '1', full: true,
       tickId: 0, timestamp: 0, entities: [defense], removed: [] });
     expect(full.entities[0].metrics.refusal_reason).toBe('no_ammo');
-    const next = decoder.decode({ version: 2, runId: 'compact', runtimeMode: 'reference', seed: '1', full: false,
+    const next = decoder.decode({ version: 2, runId: 'compact', runtimeMode: 'process', seed: '1', full: false,
       baseTick: 0, tickId: 1, timestamp: 1, entities: [{ id: defense.id, metrics: { refusal_reason: 'cooldown' } }], removed: [] });
     expect(next.entities[0].metrics.refusal_reason).toBe('cooldown');
-    expect(() => decoder.decode({ version: 2, runId: 'compact', runtimeMode: 'reference', seed: '1', full: false,
+    expect(() => decoder.decode({ version: 2, runId: 'compact', runtimeMode: 'process', seed: '1', full: false,
       baseTick: 1, tickId: 2, timestamp: 2, entities: [{ id: defense.id, metrics: { refusal_reason: 'malformed' } }], removed: [] })).toThrow();
   });
 
@@ -232,14 +232,14 @@ describe('observer protocol v1', () => {
     const predator = { ...batch.entities[0], id: 'predator-1/predator', type: 'predator', metrics: { health: 100, mutation: 'swift' } };
     const parsed = parseTickBatch({ ...batch, entities: [predator] });
     expect(parsed.entities[0]).toMatchObject({ type: 'predator', metrics: { mutation: 'swift' } });
-    const compact = new ObserverDecoder().decode({ version: 2, runId: 'predators', runtimeMode: 'reference', seed: '1',
+    const compact = new ObserverDecoder().decode({ version: 2, runId: 'predators', runtimeMode: 'process', seed: '1',
       full: true, tickId: 0, timestamp: 0, entities: [predator], removed: [] });
     expect(compact.entities[0].type).toBe('predator');
   });
 });
 
 describe('run control', () => {
-  const health = { version: 1, runtimeMode: 'reference', runId: 'r1', status: 'paused', tick: 4, ticks: 120, stepsPerSecond: 3 };
+  const health = { version: 1, runtimeMode: 'process', runId: 'r1', status: 'paused', tick: 4, ticks: 120, stepsPerSecond: 3 };
 
   it('accepts the gateway health document and rejects anything else', () => {
     expect(parseHealth(health)).toEqual({ status: 'paused', runId: 'r1', tick: 4, ticks: 120, stepsPerSecond: 3, error: undefined });

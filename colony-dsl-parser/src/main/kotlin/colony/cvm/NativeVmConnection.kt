@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Drives one `hh-vm` process over the host protocol, the way the future broker will. Everything crossing the
- * pipe is binary; JSON appears only so a step can be compared with what the reference runtime produced.
+ * pipe is binary; JSON values are the host representation of typed frames and results.
  */
 class NativeVmConnection(
     executable: Path,

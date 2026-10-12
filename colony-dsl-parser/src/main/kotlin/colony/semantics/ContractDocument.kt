@@ -14,6 +14,12 @@ import kotlinx.serialization.json.putJsonObject
  */
 fun contractDocument(environment: SemanticEnvironment = SemanticEnvironment()): JsonObject = buildJsonObject {
     put("contractVersion", CONTRACT_VERSION)
+    putJsonObject("sourceFormats") {
+        put(".colony", "event and behavior declarations")
+        put(".settings", "settings, source, let, template, object using, param binding, population, world, constant lists")
+        put("settingsExpressions", "Colony constant expressions with the same types and canonical units")
+        put("executable", "CVM2")
+    }
     putJsonObject("units") {
         for (unit in PhysicalUnit.entries) putJsonObject(unit.suffix) {
             put("quantity", unit.kind?.let { Type.Physical(it).render() } ?: if (unit.category == UnitCategory.RATE) "Rate" else "Duration")

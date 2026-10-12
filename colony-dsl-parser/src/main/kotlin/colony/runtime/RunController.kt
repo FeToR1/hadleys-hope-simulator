@@ -11,19 +11,19 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 /**
- * Drives a [ReferenceRun] at a controllable pace (docs/simulation, section 7 of the interaction overview).
+ * Drives a [SimulationRun] at a controllable pace (docs/simulation, section 7 of the interaction overview).
  * Pause, single steps and speed only decide when steps happen, never what a step computes,
  * and a pause never interrupts a step that has begun. Nothing here knows about HTTP, so the whole
  * lifecycle can be tested with a plain loop.
  */
 class RunController(
     private val prepared: PreparedRun,
-    private val fleetFactory: (PreparedRun, String) -> VmFleet = { p, _ -> ReferenceFleet(p) },
+    private val fleetFactory: (PreparedRun, String) -> VmFleet = { p, _ -> NativeFleet(p) },
     private val replayCapacity: Int = 256,
     private val compactLive: Boolean = false,
     private val newRunId: () -> String = { UUID.randomUUID().toString() },
 ) : AutoCloseable {
-    private fun createRun(): ReferenceRun { val id = newRunId(); return ReferenceRun(prepared, id, fleetFactory(prepared, id)) }
+    private fun createRun(): SimulationRun { val id = newRunId(); return SimulationRun(prepared, id, fleetFactory(prepared, id)) }
     enum class Status { WAITING, RUNNING, PAUSED, COMPLETED, FAILED }
 
     /** One committed step exactly as observers receive it. */
@@ -216,7 +216,7 @@ class RunPacer(private val controller: RunController) : AutoCloseable {
                 return@Thread
             }
         }
-    }, "reference-run-pacer").apply { isDaemon = true }
+    }, "simulation-run-pacer").apply { isDaemon = true }
 
     fun start() = thread.start()
 

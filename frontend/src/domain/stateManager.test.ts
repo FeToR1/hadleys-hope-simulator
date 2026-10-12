@@ -3,7 +3,7 @@ import { StateManager } from './stateManager';
 import type { TickBatch } from './types';
 
 const initial = (): TickBatch => ({
-  runId: 'r1', runtimeMode: 'reference', seed: '426', full: true, tickId: 0, timestamp: 1000,
+  runId: 'r1', runtimeMode: 'process', seed: '426', full: true, tickId: 0, timestamp: 1000,
   entities: ['house-1', 'house-2'].map((id) => ({ id, pid: null, type: 'house', status: 'nominal',
     metrics: { temperature: 20 }, connectedTo: [], coordinates: { x: 0, y: 0 } })),
 });
@@ -89,7 +89,7 @@ describe('observed run log', () => {
     connectedTo: [], coordinates: { x: 0, y: 0 }, vmState: { demand: true },
   });
   const tick = (tickId: number, status: 'nominal' | 'dead', events: NonNullable<TickBatch['events']> = []): TickBatch => ({
-    version: 1, runId: 'r1', runtimeMode: 'reference', seed: '426', full: true, tickId, timestamp: (tickId + 1) * 1000,
+    version: 1, runId: 'r1', runtimeMode: 'process', seed: '426', full: true, tickId, timestamp: (tickId + 1) * 1000,
     entities: [entity(status)], events,
   });
   const attack = { id: 'e1', type: 'DamageApplied', tick: 1, entityId: 'home-1/heater', actorId: 'predator-1/predator', causationId: 'predator-1/predator@1#0',
@@ -97,7 +97,7 @@ describe('observed run log', () => {
   const broken = { id: 'e2', type: 'ObjectBroken', tick: 1, entityId: 'home-1/heater', causationId: 'e1',
     fields: { object: 'home-1/heater', reason: 'PredatorAttack' }, recipients: [] };
 
-  it('logs the events of a reference run once per tick and keeps them as history', () => {
+  it('logs the events of a native run once per tick and keeps them as history', () => {
     const manager = new StateManager();
     manager.ingest(tick(0, 'nominal'));
     expect(manager.snapshot().logs).toHaveLength(0);

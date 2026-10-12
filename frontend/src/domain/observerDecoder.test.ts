@@ -5,7 +5,7 @@ import { StateManager } from './stateManager';
 const home = { id: 'home', pid: null, type: 'house', status: 'nominal', metrics: { temperature: 20 },
   coordinates: { x: 0, y: 0 }, connectedTo: [], parentId: null, vmState: { demand: false } };
 const frame = (tickId: number, full: boolean, entities: unknown[], extra = {}) => ({ version: 2, runId: 'r',
-  runtimeMode: 'reference', seed: '426', timestamp: tickId * 1000, tickId, full, baseTick: full ? null : tickId - 1,
+  runtimeMode: 'process', seed: '426', timestamp: tickId * 1000, tickId, full, baseTick: full ? null : tickId - 1,
   entities, removed: [], events: [], postings: [], ...extra });
 
 describe('compact observer reconstruction', () => {

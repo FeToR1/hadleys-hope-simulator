@@ -5,7 +5,7 @@ import colony.semantics.Type
 import java.nio.file.Path
 import kotlin.test.*
 
-class ReferenceRunBindingTest {
+class SimulationRunBindingTest {
     private class RecordingFleet : VmFleet {
         override val mode = "test"
         override val pids = emptyMap<String, Int>()
@@ -24,7 +24,7 @@ class ReferenceRunBindingTest {
         val invalid = contracts + ("House" to contracts.getValue("House").copy(
             viewFields = contracts.getValue("House").viewFields + ("telepathy" to Type.Bool)))
         val fleet = RecordingFleet()
-        val failure = assertFailsWith<IllegalStateException> { ReferenceRun(prepared, "test", fleet, invalid) }
+        val failure = assertFailsWith<IllegalStateException> { SimulationRun(prepared, "test", fleet, invalid) }
         assertContains(failure.message.orEmpty(), "telepathy")
         assertTrue(fleet.closed)
         assertEquals(0, fleet.steps)
@@ -34,7 +34,7 @@ class ReferenceRunBindingTest {
         val prepared = prepareScenario(Path.of("../examples/physics/cascade.json"))
         val fleet = RecordingFleet()
         val failure = assertFailsWith<IllegalStateException> {
-            ReferenceRun(prepared, "test", fleet, SemanticEnvironment().kindContracts - "House")
+            SimulationRun(prepared, "test", fleet, SemanticEnvironment().kindContracts - "House")
         }
         assertContains(failure.message.orEmpty(), "Kind House has no observation contract")
         assertTrue(fleet.closed)

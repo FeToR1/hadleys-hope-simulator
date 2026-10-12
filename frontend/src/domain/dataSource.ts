@@ -200,7 +200,7 @@ export function parseObserverEntity(entity: unknown): TickBatch['entities'][numb
 /** Validate per-tick data separately so compact ticks need only validate changed entities. */
 export function parseObserverEnvelope(value: unknown): Omit<TickBatch, 'entities'> {
   if (!record(value) || value.version !== 1 || typeof value.runId !== 'string' || !value.runId ||
-    typeof value.seed !== 'string' || !['reference', 'process', 'shared-process'].includes(String(value.runtimeMode)) ||
+    typeof value.seed !== 'string' || !['process', 'shared-process'].includes(String(value.runtimeMode)) ||
     value.full !== true || !Number.isSafeInteger(value.tickId) || Number(value.tickId) < 0 ||
     !finite(value.timestamp) || !Array.isArray(value.entities)) throw new Error('Invalid observer envelope');
   return { ...value, effects: parseEffects(value.effects), events: parseEvents(value.events),

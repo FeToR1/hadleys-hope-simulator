@@ -42,3 +42,19 @@ test('tokenizes the maintained settlement program with valid state across lines'
   assert.ok(keywords > 100);
   assert.equal(stack.depth, 1);
 });
+
+
+test('settings use the Colony grammar and dimensional literals', async () => {
+  const g = await grammar();
+  const source = fs.readFileSync(path.join(__dirname, '../../../examples/settings/colony.settings'), 'utf8');
+  const words = new Set();
+  let stack;
+  for (const line of source.split(/\r?\n/)) {
+    const result = g.tokenizeLine(line, stack);
+    stack = result.ruleStack;
+    for (const token of result.tokens) if (token.scopes.at(-1) === 'keyword.control.colony')
+      words.add(line.slice(token.startIndex, token.endIndex));
+  }
+  for (const word of ['settings', 'source', 'template', 'object', 'using', 'param', 'population']) assert.ok(words.has(word), word);
+  assert.equal(stack.depth, 1);
+});

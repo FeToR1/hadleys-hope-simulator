@@ -1,5 +1,11 @@
 {
-    "contractVersion": 9,
+    "contractVersion": 10,
+    "sourceFormats": {
+        ".colony": "event and behavior declarations",
+        ".settings": "settings, source, let, template, object using, param binding, population, world, constant lists",
+        "settingsExpressions": "Colony constant expressions with the same types and canonical units",
+        "executable": "CVM2"
+    },
     "units": {
         "degC": {
             "quantity": "Temperature",

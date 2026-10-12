@@ -1,6 +1,6 @@
 package colony.runtime
 
-import colony.bytecode.Op
+import colony.compiler.Op
 import colony.semantics.Capability
 import colony.semantics.KindContract
 import colony.semantics.SemanticEnvironment
@@ -40,7 +40,7 @@ import kotlin.math.min
 )
 
 @Serializable data class TickSnapshot(
-    val version: Int = 1, val runId: String, val runtimeMode: String = "reference",
+    val version: Int = 1, val runId: String, val runtimeMode: String = "process",
     val seed: String, val tickId: Long, val timestamp: Long, val full: Boolean = true,
     val entities: List<EntitySnapshot>, val effects: List<TraceEvent>, val events: List<WorldEvent> = emptyList(),
     /** Money the world charged during this step; empty when the run has no economy. */
@@ -52,14 +52,11 @@ private const val WORLD = "world"
 private val APPLIANCES = setOf("Heater", "Kettle")
 
 /**
- * Deterministic reference harness, NOT the production world kernel or process broker.
- * Observations are scenario inputs plus what the run derives from its own state; no thermal, electrical or
- * network physics is inferred. Reducers show requested power, movement and damage. The run reports what it can
- * establish as world events: confirmation of actions, damage, broken objects and losses of power and water
- * that a scenario change causes. Events cross tick boundaries as the spec requires.
+ * Tick orchestration: project observations, execute the native fleet, commit world effects and deliver events.
+ * With WorldKernel it computes physical observations; without a world it runs the scenario observation harness.
  */
-class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUID().toString(),
-                   private val fleet: VmFleet = ReferenceFleet(prepared),
+class SimulationRun(val prepared: PreparedRun, val runId: String = UUID.randomUUID().toString(),
+                   private val fleet: VmFleet = NativeFleet(prepared),
                    private val kindContracts: Map<String, KindContract> = SemanticEnvironment().kindContracts) : AutoCloseable {
     val runtimeMode: String get() = fleet.mode
     val behaviorWorkers: Int get() = fleet.workerCount
@@ -392,7 +389,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
             val intents = results.values.flatMap { it.intents }
             val counters = HashMap<String, Int>()
             val refs = intents.map { "${it.source}@$tick#${counters.merge(it.source, 1, Int::plus)!! - 1}" }
-            // Validate the entire effect batch before applying reference reducers. A failure stops the run.
+            // Validate the entire effect batch before applying harness reducers. A failure stops the run.
             intents.forEach { intent ->
                 when (intent.operation) {
                     Op.POWER_REQUEST -> require(number(intent.arguments.single()) >= 0)

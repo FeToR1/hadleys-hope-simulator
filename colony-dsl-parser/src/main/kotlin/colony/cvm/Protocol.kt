@@ -4,7 +4,7 @@ import kotlinx.serialization.json.*
 
 /**
  * Host side of the protocol one VM process speaks (docs/spec/cvm-format.md, section 8). Values travel by their declared
- * type; JSON is only how this side names them, which keeps the host and the reference runtime comparable.
+ * type; JSON is only how this side names them, matching the host frame and result model.
  */
 object Protocol {
     const val VERSION = 1
@@ -62,7 +62,7 @@ fun writeValue(out: Sink, program: Program, type: VType, value: JsonElement) {
     }
 }
 
-/** Reads a value of a declared type back into the JSON shape the reference runtime uses. */
+/** Reads a value of a declared type back into the JSON shape the host uses. */
 fun readValue(src: Source, program: Program, type: VType): JsonElement {
     if (type is VType.Opt) {
         if (src.u8() == 0) return JsonNull

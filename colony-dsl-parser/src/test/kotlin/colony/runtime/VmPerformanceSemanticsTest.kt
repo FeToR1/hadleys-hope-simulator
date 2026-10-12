@@ -1,6 +1,6 @@
 package colony.runtime
 
-import colony.bytecode.*
+import colony.compiler.*
 import kotlinx.serialization.json.*
 import kotlin.test.*
 
@@ -23,7 +23,7 @@ class VmPerformanceSemanticsTest {
         val ignored = program.events.single { it.name == "Ignored" }.id
         fun event(sender: String, sequence: Long, n: Int) =
             DeliveredEvent(ping, JsonObject(mapOf("n" to JsonPrimitive(n))), sender, sequence)
-        val vm = ReferenceVm("house", program, "Test")
+        val vm = NativeVm("house", program, "Test")
         val state = vm.step(VmFrame(0, JsonObject(emptyMap()), listOf(
             event("b", 1, 3), event("a", 2, 2), event("a", 1, 1),
             DeliveredEvent(ignored, JsonObject(emptyMap()))
@@ -50,13 +50,12 @@ class VmPerformanceSemanticsTest {
             }
         """)
         val parameters = JsonObject(mapOf("peer" to JsonPrimitive("receiver")))
-        val actual = ReferenceVm("sender", program, "Test", parameters, seed = 97)
-        val control = ReferenceVm("sender", program, "Test", parameters, seed = 97)
+        val actual = NativeVm("sender", program, "Test", parameters, seed = 97)
+        val control = NativeVm("sender", program, "Test", parameters, seed = 97)
         assertEquals(control.step(VmFrame(0, view(1))), actual.step(VmFrame(0, view(1))))
         val snapshot = actual.stateSnapshot()
         repeat(3) {
             assertFailsWith<IllegalStateException> { actual.step(VmFrame(1, view(2))) }
-            assertEquals(1L, actual.randomDrawCount)
             assertEquals(snapshot, actual.stateSnapshot())
         }
         repeat(20) { tick ->
@@ -76,7 +75,7 @@ class VmPerformanceSemanticsTest {
                 }
             }
         """)
-        val vm = ReferenceVm("entity-\u2603", program, "Test", seed = Long.MIN_VALUE)
+        val vm = NativeVm("entity-\u2603", program, "Test", seed = Long.MIN_VALUE)
         repeat(100) { counter ->
             val state = vm.step(VmFrame(counter.toLong(), JsonObject(emptyMap()))).state
             for (site in listOf("first", "second")) {
@@ -84,28 +83,6 @@ class VmPerformanceSemanticsTest {
                 assertEquals(expected, state.getValue(site).jsonPrimitive.boolean)
             }
         }
-        assertEquals(200L, vm.randomDrawCount)
     }
 
-    @Test fun wholeObservationValueRemainsFrozenAfterItsBackingViewChanges() {
-        // Whole-view bytecode is valid even though the source language only permits field reads.
-        val original = compileSource("""
-            behavior Test for House {
-                state saved: Int64 = 0;
-                every 1s as tick { saved = view.occupants; }
-            }
-        """)
-        val behavior = original.behaviors.single()
-        val program = original.copy(behaviors = listOf(behavior.copy(code = behavior.code.map {
-            if (it.op == Op.LOAD_VIEW) it.copy(op = Op.LOAD_OBSERVATIONS) else it
-        })))
-        val backing = linkedMapOf<String, JsonElement>("occupants" to JsonPrimitive(7))
-        val vm = ReferenceVm("house", program, "Test")
-        val first = vm.step(VmFrame(0, JsonObject(backing))).state
-        backing["occupants"] = JsonPrimitive(99)
-        assertEquals(7, first.getValue("saved").jsonObject.getValue("occupants").jsonPrimitive.int)
-        val second = vm.step(VmFrame(1, JsonObject(backing))).state
-        assertEquals(99, second.getValue("saved").jsonObject.getValue("occupants").jsonPrimitive.int)
-        assertEquals(7, first.getValue("saved").jsonObject.getValue("occupants").jsonPrimitive.int)
-    }
 }

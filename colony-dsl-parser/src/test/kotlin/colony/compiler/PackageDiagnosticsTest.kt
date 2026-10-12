@@ -1,4 +1,4 @@
-package colony.bytecode
+package colony.compiler
 
 import kotlin.test.*
 
@@ -9,7 +9,7 @@ class PackageDiagnosticsTest {
 
     @Test fun validPackageCompilesLikeTheConcatenation() {
         val joined = compileSource(listOf(good, alsoGood).joinToString("\n") { it.text })
-        assertEquals(joined, compileSources(listOf(good, alsoGood)))
+        assertContentEquals(colony.cvm.ArtifactWriter.write(joined.nativeProgram), colony.cvm.ArtifactWriter.write(compileSources(listOf(good, alsoGood)).nativeProgram))
     }
 
     @Test fun syntaxErrorsPointIntoTheirOwnFile() {

@@ -50,3 +50,33 @@ behavior HeaterControl for Heater {
 Готовые примеры: [examples/physics](../../examples/physics) (сценарии и `settlement.colony`),
 [examples/integration](../../examples/integration), черновики — [colony-dsl-parser/examples/drafts](../../colony-dsl-parser/examples/drafts)
 (не рабочие примеры).
+
+## Colony settings
+
+Файл `colony.settings` использует отдельный вход `settingsProgram` той же `Colony.g4`;
+лексер, AST выражений, типы, проверка операторов и единицы измерения общие с `.colony`.
+`.colony` объявляет поведение; `.settings` связывает его параметры и создаёт экземпляры.
+В `settings Name { ... }` доступны `source "relative.colony";`, константы `let`,
+`template Name { object role using Behavior { param name = expression; ... } }`,
+`population Name as prefix { count = expression; }`, `seed`, `step`, `ticks` и блок `world`.
+Имена настроек — мягкие ключевые слова и остаются допустимыми идентификаторами в поведении.
+
+Основной сценарий Кляксы — [examples/physics/colony.settings](../../examples/physics/colony.settings),
+эквивалентный `settlement-5000.json` по манифесту и физическим параметрам.
+Проверяемый малый пример — [examples/settings/colony.settings](../../examples/settings/colony.settings),
+поведения — [behavior.colony](../../examples/settings/behavior.colony).
+Объект выводит свой вид из `behavior ... for Kind`; обязательные параметры сверяются с объявлениями `.colony`,
+ссылки — с видами созданных объектов. `parent` задаёт дом; `x`/`y` задают смещение с типом `Distance`.
+`$instance` подставляется при развёртывании. Шаблон описывается один раз независимо от численности.
+Группа может задать `columns`, `spacingX`, `spacingY`, `originX`, `originY`; без них сохраняется стандартная сетка.
+
+Выражения настроек вычисляются один раз до запуска: литералы, ранее объявленные константы, скобки,
+арифметика, сравнения и логика. Переполнение, нечисловые результаты и несовместимые размерности отвергаются.
+Наблюдения `view`, время и вызовы функций в настройках недоступны: это динамические возможности поведения.
+Типизированные поля требуют единиц (`step = 1s`, `param demand = 2kW`, `x = -2m`).
+`world` повторяет имена блоков `WorldConfig`; размерности задаёт `worldSettingQuantity` в `SettingsScenario.kt`.
+Составные коэффициенты, для которых в Colony пока нет размерности, задаются скалярами.
+Списки в присваиваниях настроек поддерживаются: `mutations = ["armored", "swift", "venomous", "pack"];`; элементы используют общие выражения Colony.
+Записи в выражениях настроек и переопределение параметров на отдельной группе пока не реализованы.
+Старые JSON-сценарии читаются совместимым загрузчиком; новые проекты могут использовать `.settings` без каталога JSON.
+Команды `check`, `prepare`, `run`, `serve` принимают `.settings`; `prepare` создаёт отдельные `program.cvm` и `manifest.json`.

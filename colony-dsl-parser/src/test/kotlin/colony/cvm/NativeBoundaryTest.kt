@@ -1,10 +1,6 @@
 package colony.cvm
 
-import colony.bytecode.SourceFile
-import colony.bytecode.compileSources
-import colony.runtime.DeliveredEvent
-import colony.runtime.ReferenceVm
-import colony.runtime.VmFrame
+import colony.compiler.SourceFile
 import kotlinx.serialization.json.*
 import java.math.BigDecimal
 import java.nio.file.Files
@@ -25,7 +21,6 @@ class NativeBoundaryTest {
             }
         """.trimIndent())
         val program = compileToCvm(listOf(source))
-        val reference = ReferenceVm("numeric", compileSources(listOf(source)), "Numeric")
         val sessions = Path.of("build/sessions").also(Files::createDirectories)
         val artifact = sessions.resolve("numeric.cvm")
         Files.write(artifact, ArtifactWriter.write(program))
@@ -54,8 +49,6 @@ class NativeBoundaryTest {
                     }
                     val outcome = native.step(tick.toLong(), JsonObject(emptyMap()), listOf(event))
                     assertNull(outcome.failure)
-                    val expectedReference = reference.step(VmFrame(tick.toLong(), JsonObject(emptyMap()),
-                        listOf(DeliveredEvent(eventId, fields, "test", tick.toLong())))).state
                     // BigDecimal(double) represents the exact binary floating-point value, without decimal rounding.
                     val order = BigDecimal.valueOf(integer).compareTo(BigDecimal(real))
                     fun answers(c: Int) = listOf(c == 0, c != 0, c < 0, c <= 0, c > 0, c >= 0)
@@ -63,7 +56,6 @@ class NativeBoundaryTest {
                         for (slot in listOf("value$i", "branch$i")) {
                             val where = "$integer vs $real: $slot (${expressions[i]})"
                             assertEquals(expected, outcome.state.getValue(slot).jsonPrimitive.boolean, "native $where")
-                            assertEquals(expected, expectedReference.getValue(slot).jsonPrimitive.boolean, "reference $where")
                         }
                     }
                 }

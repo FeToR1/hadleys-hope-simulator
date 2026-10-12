@@ -1,7 +1,7 @@
 package colony.runtime
 
-import colony.bytecode.SourceFile
-import colony.bytecode.compileSource
+import colony.compiler.SourceFile
+import colony.compiler.compileSource
 import colony.cvm.NativeVmConnection
 import kotlinx.serialization.json.*
 import java.nio.file.Path
@@ -17,7 +17,7 @@ class ProcessFleetTest {
         processes.forEach { it.onExit().get(10, TimeUnit.SECONDS); assertFalse(it.isAlive, "PID ${it.pid()} leaked") }
     }
 
-    @Test fun nativeSnapshotsMatchReferenceAcrossMessagesAndWorldEvents() {
+    @Test fun nativeSnapshotsMatchDefaultFleetAcrossMessagesAndWorldEvents() {
         val p = prepared()
         val f = fleet(p)
         val processes = handles(f)
@@ -25,14 +25,14 @@ class ProcessFleetTest {
         assertEquals(processes.size, processes.map { it.pid() }.toSet().size)
         assertTrue(f.workerCount < p.manifest.instances.size, "native contexts should share processes")
         assertTrue(processes.all { it.isAlive })
-        ReferenceRun(p, "test", f).use { native ->
-            ReferenceRun(p, "test").use { reference ->
+        SimulationRun(p, "test", f).use { native ->
+            SimulationRun(p, "test").use { reference ->
                 repeat(60) {
                     val actual = native.step()
                     assertEquals("process", actual.runtimeMode)
                     assertTrue(actual.entities.all { entity -> entity.pid == f.pids[entity.id] })
-                    val normalized = actual.copy(runtimeMode = "reference", entities = actual.entities.map { entity -> entity.copy(pid = null) })
-                    assertTrue(jsonEquivalent(observerJson.encodeToJsonElement(reference.step()), observerJson.encodeToJsonElement(normalized)), "Snapshot differs at tick $it")
+                    val normalized = actual.copy(runtimeMode = "process", entities = actual.entities.map { entity -> entity.copy(pid = null) })
+                    assertTrue(jsonEquivalent(observerJson.encodeToJsonElement(reference.step().withoutPids()), observerJson.encodeToJsonElement(normalized)), "Snapshot differs at tick $it")
                 }
             }
         }
@@ -46,8 +46,8 @@ class ProcessFleetTest {
         val processes = handles(one) + handles(two)
         assertEquals(1, one.pids.values.toSet().size)
         assertEquals(2, two.pids.values.toSet().size)
-        ReferenceRun(p, "shared-barrier", one).use { first ->
-            ReferenceRun(p, "shared-barrier", two).use { second ->
+        SimulationRun(p, "shared-barrier", one).use { first ->
+            SimulationRun(p, "shared-barrier", two).use { second ->
                 repeat(40) { tick ->
                     val left = first.step()
                     val right = second.step().let { snapshot -> snapshot.copy(entities = snapshot.entities.map { it.copy(pid = null) }) }
@@ -80,14 +80,14 @@ class ProcessFleetTest {
             manifest = expanded.manifest.copy(instances = expanded.manifest.instances.mapIndexed { index, instance ->
                 instance.copy(params = buildJsonObject { put("start", 9_007_199_254_740_993L + index) })
             }))
-        val expected = ReferenceRun(p, "binary-chunks").use { reference -> List(2) { reference.step() } }
+        val expected = SimulationRun(p, "binary-chunks").use { reference -> List(2) { reference.step().withoutPids() } }
         for (workers in listOf(1, 2)) {
             val f = fleet(p, workers)
             val processes = handles(f)
             assertEquals(workers + 1, processes.size)
-            ReferenceRun(p, "binary-chunks", f).use { native ->
+            SimulationRun(p, "binary-chunks", f).use { native ->
                 repeat(2) { tick ->
-                    val actual = native.step().let { snapshot -> snapshot.copy(runtimeMode = "reference",
+                    val actual = native.step().let { snapshot -> snapshot.copy(runtimeMode = "process",
                         entities = snapshot.entities.map { it.copy(pid = null) }) }
                     assertTrue(jsonEquivalent(observerJson.encodeToJsonElement(expected[tick]), observerJson.encodeToJsonElement(actual)),
                         "Binary broker changed the barrier with $workers workers at tick $tick")
@@ -136,7 +136,7 @@ class ProcessFleetTest {
         val badId = "failure-1/b_bad"
         val targetId = "failure-1/z_target"
         assertTrue(fleet.pids.getValue(goodId) != fleet.pids.getValue(badId), "the successful intent and failure must run in different shards")
-        ReferenceRun(prepared, "partial-tick", fleet).use { run ->
+        SimulationRun(prepared, "partial-tick", fleet).use { run ->
             val failure = assertFailsWith<IllegalStateException> { run.step() }
             assertTrue(failure.message.orEmpty().contains(badId), "the failing VM context must cause the barrier failure: $failure")
             assertEquals(100.0, run.kernel!!.healthOf(targetId), "no damage intent is committed when any VM fails")
@@ -144,7 +144,7 @@ class ProcessFleetTest {
         }
     }
 
-    @Test fun roverTransportsTheWholeSquadAndNativeSnapshotsMatchReference() {
+    @Test fun roverTransportsTheWholeSquadAndNativeSnapshotsMatchDefaultFleet() {
         val base = prepareScenario(Path.of("../examples/physics/cascade.json"))
         val world = base.scenario.world!!
         val p = base.copy(
@@ -165,11 +165,11 @@ class ProcessFleetTest {
         val boarded = mutableSetOf<String>()
         val alighted = mutableSetOf<String>()
         var assault = false
-        ReferenceRun(p, "transport", fleet(p)).use { native ->
-            ReferenceRun(p, "transport").use { reference ->
+        SimulationRun(p, "transport", fleet(p)).use { native ->
+            SimulationRun(p, "transport").use { reference ->
                 repeat(240) { tick ->
-                    val actual = native.step().let { s -> s.copy(runtimeMode = "reference", entities = s.entities.map { it.copy(pid = null) }) }
-                    assertTrue(jsonEquivalent(observerJson.encodeToJsonElement(reference.step()), observerJson.encodeToJsonElement(actual)),
+                    val actual = native.step().let { s -> s.copy(runtimeMode = "process", entities = s.entities.map { it.copy(pid = null) }) }
+                    assertTrue(jsonEquivalent(observerJson.encodeToJsonElement(reference.step().withoutPids()), observerJson.encodeToJsonElement(actual)),
                         "Transport snapshot differs at tick $tick")
                     actual.events.forEach { event ->
                         if (event.entityId.startsWith("marines-")) {
@@ -193,11 +193,11 @@ class ProcessFleetTest {
         val p = base.copy(manifest = base.manifest.copy(instances = base.manifest.instances.filter {
             it.id.startsWith("home-1/") || it.id.startsWith("home-2/")
         }))
-        ReferenceRun(p, "routine", fleet(p)).use { native ->
-            ReferenceRun(p, "routine").use { reference ->
+        SimulationRun(p, "routine", fleet(p)).use { native ->
+            SimulationRun(p, "routine").use { reference ->
                 repeat(180) { tick ->
-                    val actual = native.step().let { s -> s.copy(runtimeMode = "reference", entities = s.entities.map { it.copy(pid = null) }) }
-                    assertTrue(jsonEquivalent(observerJson.encodeToJsonElement(reference.step()), observerJson.encodeToJsonElement(actual)),
+                    val actual = native.step().let { s -> s.copy(runtimeMode = "process", entities = s.entities.map { it.copy(pid = null) }) }
+                    assertTrue(jsonEquivalent(observerJson.encodeToJsonElement(reference.step().withoutPids()), observerJson.encodeToJsonElement(actual)),
                         "Resident snapshot differs at tick $tick")
                 }
             }
@@ -206,7 +206,7 @@ class ProcessFleetTest {
     @Test fun deadBrokerCleansUpItsChildren() = failedProcess(true)
     private fun failedProcess(killBroker: Boolean) {
         val p = prepared(); val f = fleet(p); val processes = handles(f)
-        ReferenceRun(p, "test", f).use { run ->
+        SimulationRun(p, "test", f).use { run ->
             run.step()
             val victim = if (killBroker) processes.last() else processes.first()
             victim.destroyForcibly(); victim.onExit().get(10, TimeUnit.SECONDS)

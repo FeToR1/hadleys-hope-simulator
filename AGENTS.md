@@ -11,8 +11,8 @@
 
 ```
 DSL Colony → компилятор (Kotlin + ANTLR4) → общий типизированный IR
-  → JSON-байт-код v1 / бинарный CVM2 (.cvm)
-  → ReferenceVm (JVM, эталон v1) / hh-vm (C++20, CVM2), кросс-проверяются conformance-векторами
+  → бинарный CVM2 (.cvm)
+  → hh-vm (C++20), проверяется фиксированными conformance-векторами
   → ядро мира WorldKernel (физика, тепло, море, угрозы, креатин, TaskQueue, SpatialIndex)
   → HTTP/SSE сервер (:8080) → дашборд React 19 + TypeScript + Pixi.js/Three.js (:5173)
 ```
@@ -23,11 +23,11 @@ DSL Colony → компилятор (Kotlin + ANTLR4) → общий типиз�
 |---|---|
 | `colony-dsl-parser/` | Gradle-проект компилятора и runtime (Kotlin 2.2.21, JDK 17, ANTLR 4.13.2) |
 | `colony-dsl-parser/src/main/antlr/Colony.g4` | Грамматика языка Colony |
-| `colony-dsl-parser/src/main/kotlin/colony/` | Пакеты: `ast`, `parser`, `semantics` (в т.ч. `ContractDocument.kt`), `ir`, `bytecode`, `cvm`, `runtime` (`ReferenceVm`, `ObserverGateway`, `ProcessFleet`), `world` (ядро мира), `cli/Main.kt` — точка входа |
+| `colony-dsl-parser/src/main/kotlin/colony/` | Пакеты: `ast`, `parser`, `semantics` (в т.ч. `ContractDocument.kt`), `ir`, `compiler`, `cvm`, `runtime` (`SimulationRun`, `ObserverGateway`, `ProcessFleet`), `world` (ядро мира), `cli/Main.kt` — точка входа |
 | `colony-dsl-parser/src/test/kotlin/colony/` | Тесты (35 файлов), включая `ConformanceVectorsTest`, `NativeConformanceTest`, `LargeScaleSettlementTest` |
 | `native/` | hh-vm: C++20, CMake; `src/` (vm, reader, verify, random, protocol…), `tests/` |
 | `frontend/` | Дашборд React 19 + Vite; `src/domain/types.ts` — типы кадров SSE, `src/components/` |
-| `conformance/` | Векторы `*.json` + независимая Python-ВМ `run_vectors.py` |
+| `conformance/` | Векторы `*.json` + CVM2 regression runner `run_vectors.py` и независимая проверка PRNG |
 | `examples/` | Сценарии: `physics/` (cascade, full, full-5000, settlement-5000, settlement.colony), `integration/` |
 | `scripts/` | `start-5000.ps1` / `stop-5000.ps1` — запуск/остановка сценария «5000 домов» |
 | `docs/` | Документация; карта — в [README](README.md#документация), правила ведения — [docs/contribution/documentation-policy.md](docs/contribution/documentation-policy.md) |
@@ -53,20 +53,21 @@ python conformance/run_vectors.py                                     # неза
 
 # CLI (после installDist)
 $CLI check SOURCE                       # компиляция одного файла
-$CLI compile SOURCE OUTPUT              # JSON-представление байт-кода в файл
+$CLI compile SOURCE OUTPUT              # бинарный CVM2 в файл
 $CLI emit SOURCE OUT.cvm                # бинарный артефакт .cvm
 $CLI disasm ARTIFACT.cvm                # дизассемблирование артефакта
 $CLI prepare SCENARIO OUT_DIR           # program.cvm + manifest.json
 $CLI broker PROGRAM_DIR                 # нативный брокер ВМ (используется run-native/serve-native)
-$CLI run|run-native|run-fast SCENARIO [OUT.jsonl]   # прогоны (JVM / общий пул hh-vm / fast)
+$CLI run|run-native|run-fast SCENARIO [OUT.jsonl]   # прогоны (общий пул hh-vm / fast)
 $CLI serve|serve-native SCENARIO [PORT] # HTTP/SSE сервер (по умолчанию :8080)
 $CLI benchmark|benchmark-live|benchmark-fast SCENARIO [TICKS]
 $CLI conformance conformance            # перегенерация conformance-векторов (из корня репо)
+$CLI verify-conformance conformance     # повторение фиксированных CVM2-векторов
 $CLI contract docs/generated/contract.json          # перегенерация предметного контракта
 ```
 
 Переменные окружения: `HH_VM` (путь к hh-vm), `HH_NATIVE_WORKERS` (пул общих C++ исполнителей, 1–32,
-по умолчанию 1), `HH_REFERENCE_WORKERS` (потоки эталонного JVM-исполнителя, обычно 4), `HH_COMPACT_OBSERVER=1`,
+по умолчанию 1), `HH_COMPACT_OBSERVER=1`,
 `HH_BIND_HOST`, `HH_ALLOWED_HOSTS`, `HH_SCENARIO` (Docker), `JAVA_OPTS`.
 
 ## Читать перед изменением X

@@ -48,7 +48,7 @@ UI: <http://localhost:5173>, бэкенд: <http://localhost:8080>.
 
 `run-native` и `serve-native` используют общий пул нативных процессов: байт-код загружается один раз
 на процесс, каждый житель и прибор получает отдельный контекст. `HH_NATIVE_WORKERS` задаёт размер пула
-(1–32, по умолчанию 1); `HH_REFERENCE_WORKERS` относится только к эталонному JVM-исполнителю.
+(1–32, по умолчанию 1); все режимы используют C++ исполнитель.
 Исторический замер `full-5000.json` на объединённом `development` — около 6,22 тика/с (fast до 10,47)
 без HTTP и браузера; эти числа не измеряют новый сценарий экосистемы (2,85 тика/с, [отчёт](docs/history/optimization-5000.md#проверка-и-слияние-с-development)).
 Карта объединяет дома и жителей в группы издалека, при приближении рисует только видимую область.
@@ -80,7 +80,7 @@ UI: <http://localhost:5173>, backend: <http://localhost:8080>.
 ```powershell
 # Ручной запуск и замеры (после installDist; на Windows пересборка требует остановки работающего сервера)
 $env:JAVA_OPTS = '-Xms512m -Xmx2g'
-$env:HH_REFERENCE_WORKERS = '4'
+$env:HH_NATIVE_WORKERS = '4'
 $env:HH_COMPACT_OBSERVER = '1'
 .\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark examples/physics/full-5000.json 120
 .\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-live examples/physics/full-5000.json 120
@@ -102,14 +102,14 @@ npm ci
 npm run dev
 ```
 
-- Без `HH_REFERENCE_WORKERS` эталонный исполнитель использует один рабочий поток. Ручной `serve` начинает
+- Без `HH_NATIVE_WORKERS` используется один общий C++ процесс. Ручной `serve` начинает
   прогон при подключении наблюдателя или `POST /control/resume`.
 - Искусственные потолки 10 000 сущностей и 1 000 000 тиков сняты; количества — положительные/неотрицательные
   `Int`, общий размер манифеста проверяется до переполнения.
 - `HH_COMPACT_OBSERVER=1` отключает обязательное кодирование полных кадров на каждом шаге сервера;
   UI запрашивает `/stream?format=compact`, обычный `/stream` и JSONL сохраняют полный формат.
-- `run-native SCENARIO OUT.jsonl` сохраняет полный прогон; `serve` и `run` по умолчанию используют
-  эталонный JVM-исполнитель.
+- `run-native SCENARIO OUT.jsonl` сохраняет полный прогон; `serve` и `run` используют
+  тот же общий пул C++ процессов.
 - Внутренний обмен ядро ↔ брокер ↔ C++ и конфигурация брокера используют двоичный формат; JSON остаётся
   во внешнем API и журналах. [Описание протоколов](docs/spec/cvm-format.md#9-частный-протокол-ядро-jvm--jvm-брокер).
 - На Linux/macOS используйте `./colony-dsl-parser/gradlew` и CLI без суффикса `.bat`.
@@ -134,3 +134,22 @@ npm run dev
 Gradle `test`, CTest для `native/build`, `npm test` и `npm run build` в `frontend`,
 `python conformance/run_vectors.py`. Полный список команд и переменных окружения — [AGENTS.md](AGENTS.md);
 предметный контракт языка — генерируемый [docs/generated/contract.json](docs/generated/contract.json).
+
+## Сценарий на языке Colony
+
+Основной сценарий Кляксы на 5000 домов — [examples/physics/colony.settings](examples/physics/colony.settings).
+Он использует существующий `settlement.colony`; `scripts/start-5000.ps1` выбирает его по умолчанию.
+Численность меняется в `let houses`, мощность обогревателя — в `let heaterPower`.
+
+
+[examples/settings/colony.settings](examples/settings/colony.settings) задаёт мир, группы объектов и параметры
+поведений [behavior.colony](examples/settings/behavior.colony) без каталога JSON. В обоих файлах используются
+Colony, одинаковые выражения и единицы измерения; VS Code подсвечивает `.colony` и `.settings`.
+После сборки CLI и `hh-vm` можно проверить или запустить пример:
+
+```powershell
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat check examples/settings/colony.settings
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat serve examples/settings/colony.settings 8080
+```
+
+Синтаксис и ограничения — [спецификация](docs/spec/colony-language.md#colony-settings).

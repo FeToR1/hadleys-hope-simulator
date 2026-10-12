@@ -1,16 +1,16 @@
 param(
-    [ValidateSet('reference', 'native')][string]$Runtime = 'reference',
-    [ValidateRange(1, 256)][int]$Workers = 4,
+    [ValidateSet('native')][string]$Runtime = 'native',
+    [ValidateRange(1, 32)][int]$Workers = 4,
     [ValidateRange(1, 65535)][int]$BackendPort = 8080,
     [ValidateRange(1, 65535)][int]$FrontendPort = 5173,
     [ValidateRange(0.1, 100)][double]$Speed = 10,
-    [string]$Scenario = 'examples/physics/settlement-5000.json',
+    [string]$Scenario = 'examples/physics/colony.settings',
     [switch]$SkipBuild,
     [switch]$OpenBrowser
 )
 
 $ErrorActionPreference = 'Stop'
-$workerLimit = if ($Runtime -eq 'native') { 32 } else { 256 }
+$workerLimit = 32
 if ($Workers -gt $workerLimit) { throw "$Runtime runtime supports at most $workerLimit workers." }
 $workspaceRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $scenarioPath = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($Scenario)) { $Scenario } else { Join-Path $workspaceRoot $Scenario }))
@@ -65,16 +65,14 @@ try {
     if (!(Test-Path 'colony-dsl-parser/build/install/colony-dsl-parser/lib/colony-dsl-parser.jar')) {
         throw 'Build the backend before using -SkipBuild.'
     }
-    $oldWorkers = $env:HH_REFERENCE_WORKERS
     $oldNativeWorkers = $env:HH_NATIVE_WORKERS
     $oldNativeVm = $env:HH_VM
     $oldBackendUrl = $env:VITE_BACKEND_URL
     $oldCompactObserver = $env:HH_COMPACT_OBSERVER
     $frontend = $null
     try {
-        $env:HH_REFERENCE_WORKERS = if ($Runtime -eq 'reference') { "$Workers" } else { $null }
-        $env:HH_NATIVE_WORKERS = if ($Runtime -eq 'native') { "$Workers" } else { $null }
-        if ($Runtime -eq 'native') { $env:HH_VM = $nativeVm } else { $env:HH_VM = $null }
+        $env:HH_NATIVE_WORKERS = "$Workers"
+        $env:HH_VM = $nativeVm
         $env:HH_COMPACT_OBSERVER = '1'
         $env:VITE_BACKEND_URL = "http://127.0.0.1:$BackendPort"
         $javaExecutable = if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME 'bin/java.exe'))) {
@@ -83,7 +81,7 @@ try {
         $backend = Start-Process -FilePath $javaExecutable -WindowStyle Hidden -PassThru `
             -WorkingDirectory $workspaceRoot `
             -ArgumentList @('-Xms512m', '-Xmx2g', '-cp', "`"$classpath`"", 'colony.cli.MainKt',
-                $(if ($Runtime -eq 'native') { 'serve-native' } else { 'serve' }), "`"$scenarioPath`"", "$BackendPort") `
+                'serve', "`"$scenarioPath`"", "$BackendPort") `
             -RedirectStandardOutput (Join-Path $resultsDirectory 'backend-5000.log') `
             -RedirectStandardError (Join-Path $resultsDirectory 'backend-5000.err.log')
         try {
@@ -135,7 +133,6 @@ try {
             throw
         }
     } finally {
-        $env:HH_REFERENCE_WORKERS = $oldWorkers
         $env:HH_NATIVE_WORKERS = $oldNativeWorkers
         $env:HH_VM = $oldNativeVm
         $env:VITE_BACKEND_URL = $oldBackendUrl

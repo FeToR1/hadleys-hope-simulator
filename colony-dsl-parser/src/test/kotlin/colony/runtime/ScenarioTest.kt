@@ -32,7 +32,7 @@ class ScenarioTest {
         try {
             val base = prepareScenario(Path.of("../examples/physics/full.json"))
             val catalog = Path.of("../examples/physics/catalog.json").toAbsolutePath().normalize()
-            java.nio.file.Files.writeString(scenario, colony.bytecode.bytecodeJson.encodeToString(
+            java.nio.file.Files.writeString(scenario, colony.compiler.colonyJson.encodeToString(
                 Scenario.serializer(), base.scenario.copy(catalog = catalog.toString(), ticks = 2_592_000)))
             assertEquals(2_592_000, prepareScenario(scenario).scenario.ticks)
         } finally {
@@ -45,9 +45,9 @@ class ScenarioTest {
         val prepared = prepareScenario(Path.of("../examples/integration/small.json"))
         assertEquals(9, prepared.manifest.instances.size)
         assertEquals(JsonPrimitive("home-1/heater"), prepared.manifest.instances.single { it.id == "home-1/house" }.params["heater"])
-        val first = ReferenceRun(prepared, "test")
-        val second = ReferenceRun(prepared, "test")
-        val frames = (0..16).map { first.step().also { frame -> assertEquals(frame, second.step()) } }
+        val first = SimulationRun(prepared, "test")
+        val second = SimulationRun(prepared, "test")
+        val frames = (0..16).map { first.step().also { frame -> assertEquals(frame.withoutPids(), second.step().withoutPids()) } }
         fun power(tick: Int, id: String) = frames[tick].entities.single { it.id == id }.metrics.getValue("power_consumption").jsonPrimitive.double
         assertEquals(0.0, power(0, "home-1/heater"))
         assertEquals(2000.0, power(1, "home-1/heater"))
@@ -59,7 +59,7 @@ class ScenarioTest {
     @Test fun threeHundredHousesHaveOneVmForEveryObject() {
         val prepared = prepareScenario(Path.of("../examples/integration/colony-300.json"))
         assertEquals(1208, prepared.manifest.instances.size)
-        val run = ReferenceRun(prepared)
+        val run = SimulationRun(prepared)
         assertEquals(1208, run.step().entities.size)
         assertEquals(300, run.step().deliveredEvents)
     }
@@ -78,7 +78,7 @@ class ScenarioTest {
     }
 
     @Test fun aPowerOutageInTheDemoScenarioReachesTheHouseAndItsAppliances() {
-        val run = ReferenceRun(prepareScenario(Path.of("../examples/integration/small.json")), "test")
+        val run = SimulationRun(prepareScenario(Path.of("../examples/integration/small.json")), "test")
         val frames = (0..46).map { run.step() }
         fun power(tick: Int) = frames[tick].entities.single { it.id == "home-2/heater" }.metrics.getValue("power_consumption").jsonPrimitive.double
         fun stress(tick: Int) = frames[tick].entities.single { it.id == "home-2/resident" }.vmState.getValue("stress").jsonPrimitive.double

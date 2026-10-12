@@ -1,6 +1,6 @@
 package colony.runtime
 
-import colony.bytecode.Op
+import colony.compiler.Op
 import java.nio.file.Path
 import kotlinx.serialization.json.*
 import kotlin.test.*
@@ -15,7 +15,7 @@ class WorldCausalityRegressionTest {
         }
     }
 
-    private fun run(script: (Long, String, String) -> List<VmIntent>): ReferenceRun {
+    private fun run(script: (Long, String, String) -> List<VmIntent>): SimulationRun {
         val base = prepareScenario(Path.of("../examples/physics/cascade.json"))
         val config = base.scenario.world!!
         val prepared = base.copy(scenario = base.scenario.copy(ticks = 8, world = config.copy(
@@ -23,7 +23,7 @@ class WorldCausalityRegressionTest {
                 dispatchDelaySeconds = 0.0, workRadius = 10_000.0))))
         val attacker = prepared.manifest.instances.first { it.kind == "Predator" }.id
         val crew = prepared.manifest.instances.first { it.kind == "Rover" }.id
-        return ReferenceRun(prepared, "test", ScriptedFleet { tick -> script(tick, attacker, crew) })
+        return SimulationRun(prepared, "test", ScriptedFleet { tick -> script(tick, attacker, crew) })
     }
 
     private fun damage(source: String, target: String) = VmIntent(source, Op.DAMAGE_REQUEST,

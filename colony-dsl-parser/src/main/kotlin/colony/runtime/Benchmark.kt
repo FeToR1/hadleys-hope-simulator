@@ -11,13 +11,13 @@ fun benchmarkScenario(path: Path, measuredTicks: Int = 30, compact: Boolean = fa
     val started = System.nanoTime()
     val prepared = prepareScenario(path)
     val preparedAt = System.nanoTime()
-    val run = ReferenceRun(prepared, "benchmark")
+    val run = SimulationRun(prepared, "benchmark")
     val initializedAt = System.nanoTime()
     val warmup = minOf(10, maxOf(0, prepared.scenario.ticks - measuredTicks))
     val count = minOf(measuredTicks, prepared.scenario.ticks - warmup)
     val stepTimes = ArrayList<Double>()
     val encodeTimes = ArrayList<Double>()
-    val phases = ArrayList<ReferenceRun.StepTimings>()
+    val phases = ArrayList<SimulationRun.StepTimings>()
     val json = Json { encodeDefaults = true }
     val observer = if (compact) CompactObserver() else null
     var last: TickSnapshot? = null

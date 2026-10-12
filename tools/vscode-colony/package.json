@@ -2,7 +2,7 @@
   "name": "colony-language",
   "displayName": "Colony Language",
   "description": "Syntax highlighting and editing support for the Colony simulation language.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "klyaksa",
   "engines": {
     "vscode": "^1.85.0"
@@ -19,7 +19,8 @@
           "colony"
         ],
         "extensions": [
-          ".colony"
+          ".colony",
+          ".settings"
         ],
         "configuration": "./language-configuration.json"
       }

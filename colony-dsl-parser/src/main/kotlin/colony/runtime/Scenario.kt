@@ -1,6 +1,6 @@
 package colony.runtime
 
-import colony.bytecode.*
+import colony.compiler.*
 import colony.semantics.CONTRACT_VERSION
 import colony.semantics.SemanticEnvironment
 import colony.semantics.render
@@ -18,7 +18,9 @@ import kotlin.io.path.readText
     val parent: String? = null,
     val x: Double = 0.0, val y: Double = 0.0,
 )
-@Serializable data class Population(val template: String, val count: Int, val prefix: String)
+@Serializable data class GridLayout(val columns: Int = 20, val spacingX: Double = 70.0, val spacingY: Double = 70.0,
+    val originX: Double = 0.0, val originY: Double = 0.0)
+@Serializable data class Population(val template: String, val count: Int, val prefix: String, val grid: GridLayout? = null)
 @Serializable data class ObservationChange(val tick: Long, val target: String, val view: JsonObject)
 @Serializable data class Scenario(
     val version: Int = 1, val catalog: String, val seed: Long = 426, val step: String = "1s",
@@ -35,13 +37,14 @@ import kotlin.io.path.readText
     val view: JsonObject, val parent: String?, val x: Double, val y: Double,
 )
 @Serializable data class RunManifest(val version: Int = 1, val seed: Long, val stepSeconds: String, val instances: List<Instance>)
-data class PreparedRun(val scenario: Scenario, val program: BytecodeProgram, val manifest: RunManifest, val sources: List<SourceFile> = emptyList())
+data class PreparedRun(val scenario: Scenario, val program: CompiledProgram, val manifest: RunManifest, val sources: List<SourceFile> = emptyList())
 
 fun prepareScenario(path: Path): PreparedRun {
+    if (path.fileName.toString().endsWith(".settings")) return prepareSettings(path)
     val absolute = path.toAbsolutePath().normalize()
-    val scenario = bytecodeJson.decodeFromString<Scenario>(absolute.readText())
+    val scenario = colonyJson.decodeFromString<Scenario>(absolute.readText())
     val catalogPath = absolute.parent.resolve(scenario.catalog).normalize()
-    val catalog = bytecodeJson.decodeFromString<Catalog>(catalogPath.readText())
+    val catalog = colonyJson.decodeFromString<Catalog>(catalogPath.readText())
     require(scenario.version == 1 && catalog.version == 1) { "Unsupported scenario/catalog version" }
     require(scenario.ticks > 0) { "ticks must be positive" }
     require(catalog.sources.isNotEmpty() && catalog.sources.distinct().size == catalog.sources.size) { "Sources must be nonempty and unique" }
@@ -51,7 +54,7 @@ fun prepareScenario(path: Path): PreparedRun {
     return expandScenario(scenario, catalog, program).copy(sources = sources)
 }
 
-fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgram): PreparedRun {
+fun expandScenario(scenario: Scenario, catalog: Catalog, program: CompiledProgram): PreparedRun {
     require(program.contract == CONTRACT_VERSION) {
         "The program was compiled against contract ${program.contract}; this runtime implements contract $CONTRACT_VERSION"
     }
@@ -61,6 +64,8 @@ fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgra
     var groupIndex = 0
     for (population in scenario.populations) {
         require(population.count >= 0 && identifier.matches(population.prefix)) { "Invalid population count/prefix" }
+        population.grid?.let { require(it.columns > 0 && it.spacingX > 0 && it.spacingY > 0 &&
+            listOf(it.spacingX, it.spacingY, it.originX, it.originY).all(Double::isFinite)) { "Invalid population grid" } }
         val template = catalog.templates[population.template] ?: error("Unknown template ${population.template}")
         require(template.objects.isNotEmpty()) { "Empty template ${population.template}" }
         require(instances.size.toLong() + population.count.toLong() * template.objects.size <= Int.MAX_VALUE) { "Instance count exceeds JVM collection capacity" }
@@ -78,7 +83,8 @@ fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgra
                 require(spec.x.isFinite() && spec.y.isFinite()) { "Nonfinite coordinates" }
                 instances += Instance("$group/$role", spec.kind, spec.behavior, resolve(spec.params).jsonObject,
                     resolve(spec.view).jsonObject, spec.parent?.replace("\$instance", group),
-                    (groupIndex % 20) * 70.0 + spec.x, (groupIndex / 20) * 70.0 + spec.y)
+                    population.grid?.let { it.originX + (index % it.columns) * it.spacingX + spec.x } ?: ((groupIndex % 20) * 70.0 + spec.x),
+                    population.grid?.let { it.originY + (index / it.columns) * it.spacingY + spec.y } ?: ((groupIndex / 20) * 70.0 + spec.y))
             }
             groupIndex++
         }
@@ -122,7 +128,7 @@ fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgra
 }
 
 /**
- * The reference run stands in for the world kernel. It computes some observations itself every step
+ * The observation harness stands in for the world kernel. It computes some observations itself every step
  * (computed), overwrites others from state it owns (derived: position from motion, occupants from the house)
  * and takes the rest as scenario inputs, some of which may be omitted (defaults).
  */
