@@ -35,15 +35,18 @@ UI: <http://localhost:5173>, бэкенд: <http://localhost:8080>.
 **PowerShell.**
 
 ```powershell
-.\scripts\start-5000.ps1 -Scenario examples/physics/settlement-5000.json   # старт
-.\scripts\stop-5000.ps1                                                   # остановка
+.\scripts\start-5000.ps1   # старт
+.\scripts\stop-5000.ps1    # остановка
 ```
 
-Собирает backend и запускает backend/UI в фоне на портах 8080/5173. Сценарий — из `-Scenario`
-(по умолчанию `settlement-5000.json`); точное число контекстов зависит от состава служб сценария, шаг модели — 1 с.
+Собирает backend и C++ ВМ, запускает backend/UI в фоне на портах 8080/5173. Сценарий — из `-Scenario`
+(по умолчанию `examples/physics/colony.settings`); точное число контекстов зависит от состава служб сценария, шаг модели — 1 с.
 Параметры: `-Workers` (потоки), `-Speed`, `-BackendPort`, `-FrontendPort`, `-SkipBuild`, `-OpenBrowser`;
 `-Runtime native -Workers 1` включает общий нативный исполнитель (обычный запуск собирает его,
-`-SkipBuild` требует готовую ВМ). Скрипт останавливает только процессы этого проекта и отказывается
+`-SkipBuild` требует готовую ВМ). Для сборки выбирается Windows CMake из `PATH` или каталога
+компилятора; MSYS/Cygwin CMake пропускается, рабочая конфигурация компилятора сохраняется.
+Несовместимый кэш пересоздаётся через `--fresh` (для восстановления нужен CMake ≥ 3.24).
+Скрипт останавливает только процессы этого проекта и отказывается
 занимать порт с посторонним слушателем. Логи и PID — `results/local-5000.json`, `results/*-5000*.log`.
 
 `run-native` и `serve-native` используют общий пул нативных процессов: байт-код загружается один раз
@@ -92,8 +95,7 @@ $env:HH_COMPACT_OBSERVER = '1'
 .\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat run-fast examples/physics/full-5000.json
 
 # Сборка с нуля
-cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release
-cmake --build native/build --config Release
+.\scripts\build-native.ps1
 .\colony-dsl-parser\gradlew.bat -p colony-dsl-parser installDist
 .\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat serve-native examples/physics/cascade.json 8080
 

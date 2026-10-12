@@ -190,6 +190,8 @@ language server пока не реализован.
 Способы запуска — в [README](../README.md#запуск): VS Code в один клик (задачи
 [`.vscode/tasks.json`](../.vscode/tasks.json)), PowerShell-скрипты `scripts/start-5000.ps1` / `stop-5000.ps1`,
 Docker (`docker compose up --build`) и ручной запуск. Здесь запуск не дублируется.
+`scripts/build-native.ps1` объединяет сборку C++ ВМ для PowerShell-запуска и задач VS Code;
+выбор Windows CMake и восстановление несовместимого кэша выполняются в этом скрипте.
 
 ## 5. Запуск тестов и проверка работоспособности
 

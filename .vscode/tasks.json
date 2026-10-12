@@ -11,7 +11,7 @@
         "-File",
         "${workspaceFolder}/scripts/start-5000.ps1",
         "-Scenario",
-        "examples/physics/settlement-5000.json"
+        "examples/physics/colony.settings"
       ],
       "problemMatcher": [],
       "group": {
@@ -49,7 +49,7 @@
         "-ExecutionPolicy",
         "Bypass",
         "-Command",
-        "& '${workspaceFolder}/scripts/stop-5000.ps1'; & '${workspaceFolder}/scripts/start-5000.ps1' -Scenario 'examples/physics/settlement-5000.json'"
+        "& '${workspaceFolder}/scripts/stop-5000.ps1'; & '${workspaceFolder}/scripts/start-5000.ps1' -Scenario 'examples/physics/colony.settings'"
       ],
       "problemMatcher": [],
       "presentation": {
@@ -64,7 +64,7 @@
       "command": "powershell",
       "args": [
         "-Command",
-        "$ErrorActionPreference='Stop'; & cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release; if ($LASTEXITCODE -ne 0) { throw 'Native configure failed.' }; & cmake --build native/build --config Release; if ($LASTEXITCODE -ne 0) { throw 'Native build failed.' }; $env:JAVA_OPTS='-Xms512m -Xmx2g'; $env:HH_NATIVE_WORKERS='4'; $env:HH_COMPACT_OBSERVER='1'; & '${workspaceFolder}/colony-dsl-parser/gradlew.bat' -p colony-dsl-parser installDist; if ($LASTEXITCODE -ne 0) { throw 'Backend build failed.' }; & '${workspaceFolder}/colony-dsl-parser/build/install/colony-dsl-parser/bin/colony-dsl-parser.bat' serve examples/physics/colony.settings 8080"
+        "$ErrorActionPreference='Stop'; & '${workspaceFolder}/scripts/build-native.ps1'; $env:JAVA_OPTS='-Xms512m -Xmx2g'; $env:HH_NATIVE_WORKERS='4'; $env:HH_COMPACT_OBSERVER='1'; & '${workspaceFolder}/colony-dsl-parser/gradlew.bat' -p colony-dsl-parser installDist; if ($LASTEXITCODE -ne 0) { throw 'Backend build failed.' }; & '${workspaceFolder}/colony-dsl-parser/build/install/colony-dsl-parser/bin/colony-dsl-parser.bat' serve examples/physics/colony.settings 8080"
       ],
       "isBackground": true,
       "problemMatcher": [],
@@ -79,7 +79,7 @@
       "command": "powershell",
       "args": [
         "-Command",
-        "$ErrorActionPreference='Stop'; & cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release; if ($LASTEXITCODE -ne 0) { throw 'Native VM configure failed.' }; & cmake --build native/build --config Release; if ($LASTEXITCODE -ne 0) { throw 'Native VM build failed.' }; $env:JAVA_OPTS='-Xms512m -Xmx2g'; $env:HH_NATIVE_WORKERS='4'; $env:HH_COMPACT_OBSERVER='1'; & '${workspaceFolder}/colony-dsl-parser/gradlew.bat' -p colony-dsl-parser installDist; if ($LASTEXITCODE -ne 0) { throw 'Backend build failed.' }; & '${workspaceFolder}/colony-dsl-parser/build/install/colony-dsl-parser/bin/colony-dsl-parser.bat' serve-native examples/physics/ecosystem-small.json 8080"
+        "$ErrorActionPreference='Stop'; & '${workspaceFolder}/scripts/build-native.ps1'; $env:JAVA_OPTS='-Xms512m -Xmx2g'; $env:HH_NATIVE_WORKERS='4'; $env:HH_COMPACT_OBSERVER='1'; & '${workspaceFolder}/colony-dsl-parser/gradlew.bat' -p colony-dsl-parser installDist; if ($LASTEXITCODE -ne 0) { throw 'Backend build failed.' }; & '${workspaceFolder}/colony-dsl-parser/build/install/colony-dsl-parser/bin/colony-dsl-parser.bat' serve-native examples/physics/ecosystem-small.json 8080"
       ],
       "isBackground": true,
       "problemMatcher": [],
@@ -111,7 +111,7 @@
       "command": "powershell",
       "args": [
         "-Command",
-        "$ErrorActionPreference='Stop'; & cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release; if ($LASTEXITCODE -ne 0) { throw 'Native VM configure failed.' }; & cmake --build native/build --config Release; if ($LASTEXITCODE -ne 0) { throw 'Native VM build failed.' }"
+        "$ErrorActionPreference='Stop'; & '${workspaceFolder}/scripts/build-native.ps1'"
       ],
       "problemMatcher": []
     },

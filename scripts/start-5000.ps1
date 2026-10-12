@@ -48,18 +48,22 @@ try {
         }
         if (!$env:HH_VM) {
             if (!$SkipBuild) {
-                & cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release
-                if ($LASTEXITCODE -ne 0) { throw 'Native VM configure failed.' }
-                & cmake --build native/build --config Release
-                if ($LASTEXITCODE -ne 0) { throw 'Native VM build failed.' }
+                & (Join-Path $PSScriptRoot 'build-native.ps1')
                 $nativeVm = $nativeCandidates | ForEach-Object { Join-Path $workspaceRoot $_ } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
             }
             if (!$nativeVm) { throw 'Native VM executable is missing; run without -SkipBuild to build it.' }
         }
     }
     if (!$SkipBuild -or !(Test-Path 'frontend/node_modules/vite/bin/vite.js')) {
-        & npm.cmd --prefix frontend ci
-        if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency installation failed.' }
+        # Windows PowerShell reports stderr warnings as NativeCommandError when
+        # output is redirected. npm's exit code determines whether ci succeeded.
+        $previousErrorPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            & npm.cmd --prefix frontend ci
+            $npmExitCode = $LASTEXITCODE
+        } finally { $ErrorActionPreference = $previousErrorPreference }
+        if ($npmExitCode -ne 0) { throw 'Frontend dependency installation failed.' }
     }
     $classpath = Join-Path $workspaceRoot 'colony-dsl-parser/build/install/colony-dsl-parser/lib/*'
     if (!(Test-Path 'colony-dsl-parser/build/install/colony-dsl-parser/lib/colony-dsl-parser.jar')) {
