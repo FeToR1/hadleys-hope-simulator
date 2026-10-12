@@ -174,6 +174,15 @@ flowchart TD
 
 ---
 
+### Редактор Colony
+
+[`tools/vscode-colony`](../tools/vscode-colony/README.md) — декларативное расширение VS Code.
+`package.json` связывает `.colony` с языком, `syntaxes/colony.tmLanguage.json` задаёт TextMate-токены,
+`language-configuration.json` — комментарии, скобки и отступы. Лексика следует `Colony.g4`.
+Скрипт `scripts/install-colony-vscode.ps1` упаковывает VSIX и по флагу устанавливает его локально.
+Проверки используют TextMate/Oniguruma. Компиляция и семантическая диагностика остаются в CLI;
+language server пока не реализован.
+
 ## 4. Как запускать проект
 
 Способы запуска — в [README](../README.md#запуск): VS Code в один клик (задачи

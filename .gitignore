@@ -1,5 +1,6 @@
 .obsidian
 frontend/node_modules
+tools/vscode-colony/node_modules
 frontend/dist
 results/
 .gradle/

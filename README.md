@@ -9,6 +9,10 @@
 
 **Первое знакомство → [docs/onboarding.md](docs/onboarding.md)** — маршрут одного прохода (~20 минут).
 
+**Подсветка Colony в VS Code:** `./scripts/install-colony-vscode.ps1 -Install`, затем
+«Developer: Reload Window». Расширение автоматически распознаёт `.colony`;
+[подробности](tools/vscode-colony/README.md).
+
 ## Документация
 
 | Документ | Когда читать |
