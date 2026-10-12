@@ -1,6 +1,6 @@
-behavior Xenomorph for Xenomorph {
+behavior Predator for Predator {
     enum Mode { Patrol, Chase, Attack }
-    enum DamageCause { XenomorphAttack }
+    enum DamageCause { PredatorAttack }
     state mode: Mode = Patrol;
 
     every 1s as decide {
@@ -11,7 +11,7 @@ behavior Xenomorph for Xenomorph {
             } else {
                 mode = Attack;
                 if hazard(0.4per_s, "strike") {
-                    damage.request(target.id, 35hp, XenomorphAttack);
+                    damage.request(target.id, 35hp, PredatorAttack);
                 }
             }
         } else {

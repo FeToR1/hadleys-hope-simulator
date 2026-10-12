@@ -13,11 +13,10 @@ class ContractAlignmentTest {
         "Heater" to setOf("home_occupants", "power_connected", "broken", "power_granted"),
         "Kettle" to setOf("home_occupants", "power_connected", "broken", "power_granted", "water_temperature"),
         "Human" to setOf("position", "health", "medical_required", "cold", "reachable_breakables", "home", "workplace", "meeting_point", "routine_slot", "day_minute", "available_vehicles", "in_vehicle", "boarding_radius"),
-        "Xenomorph" to setOf("position", "visible_infrastructure", "visible_humans", "patrol_waypoint", "routed", "attack_active"),
         "Predator" to setOf("position", "visible_infrastructure", "visible_humans", "patrol_waypoint", "routed", "attack_active"),
         // The crew of a rover: the spec adds materials and speed on top of the jobs it can see.
         "Rover" to setOf("position", "speed_eff", "active_jobs", "materials_remaining", "depot", "work_radius", "passenger_count", "passenger_capacity", "transport_ready", "transport_target", "boarding_pending"),
-        "Marine" to setOf("position", "health", "visible_xenomorphs", "visible_predators", "available_vehicles", "in_vehicle", "boarding_radius", "dispatch_ready", "squad_ready", "squad_size", "squad_leader", "depot"),
+        "Marine" to setOf("position", "health", "visible_predators", "available_vehicles", "in_vehicle", "boarding_radius", "dispatch_ready", "squad_ready", "squad_size", "squad_leader", "depot"),
     )
 
     @Test fun observationsMatchTheSpecificationPerKind() {
@@ -45,7 +44,7 @@ class ContractAlignmentTest {
             }
             behavior K for Kettle { state p: Power = 0W; every 1s as w { p = view.power_granted; } }
             behavior R for Human { state hp: Health = 0hp; every 1s as w { hp = view.health; } }
-            behavior X for Xenomorph {
+            behavior X for Predator {
                 state kind: String = "";
                 state hp: Health = 0hp;
                 every 1s as w { if let t = nearest(view.visible_humans) { kind = t.kind; hp = t.health; } }

@@ -37,7 +37,7 @@ class WorldEventsTest {
             state power_lost: Int64 = 0;
             on PowerLost(m) as dark { power_lost = power_lost + 1; }
         }
-        behavior Biter for Xenomorph {
+        behavior Biter for Predator {
             param dmg: Health;
             enum Cause { Bite }
             state confirmed: Int64 = 0;
@@ -53,7 +53,7 @@ class WorldEventsTest {
 
     private fun ref(id: String) = buildJsonObject { put("id", "\$instance/$id") }
     private fun point(x: Int, y: Int) = buildJsonObject { put("x", x); put("y", y) }
-    private fun alien(targets: List<String>, damage: Int, x: Double) = ObjectSpec("Xenomorph", "Biter",
+    private fun predator(targets: List<String>, damage: Int, x: Double) = ObjectSpec("Predator", "Biter",
         params = buildJsonObject { put("dmg", damage) }, x = x, view = buildJsonObject {
             put("patrol_waypoint", point(0, 0))
             put("visible_infrastructure", buildJsonArray { add(ref("house")) })
@@ -76,7 +76,7 @@ class WorldEventsTest {
 
     @Test fun damageProducesAChainOfEventsThatEndsInABrokenObject() {
         // 60 hp per bite: the heater survives the first bite and is destroyed by the second.
-        val run = run(mapOf("house" to house, "heater" to heater, "biter" to alien(listOf("heater"), 60, 100.0)))
+        val run = run(mapOf("house" to house, "heater" to heater, "biter" to predator(listOf("heater"), 60, 100.0)))
         val first = run.step()
         assertEquals(listOf("ActionSucceeded", "DamageApplied"), first.events.map { it.type })
         val applied = first.eventsOf("DamageApplied").single()
@@ -93,7 +93,7 @@ class WorldEventsTest {
     }
 
     @Test fun programsReceiveWorldEventsInTheNextFrameOnlyIfTheyDeclaredThem() {
-        val run = run(mapOf("house" to house, "heater" to heater, "biter" to alien(listOf("heater"), 60, 100.0)))
+        val run = run(mapOf("house" to house, "heater" to heater, "biter" to predator(listOf("heater"), 60, 100.0)))
         val first = run.step()
         assertEquals(0, first.state("g-1/house", "hits").int, "events of step 0 are not visible in step 0")
         assertEquals(0, first.state("g-1/biter", "confirmed").int)
@@ -110,9 +110,9 @@ class WorldEventsTest {
         // Y destroys X in step 0; X, alive in S_0, still hits Z. From step 1 X is dead and its bites are rejected.
         val run = run(mapOf(
             "house" to house,
-            "x" to alien(listOf("z"), 30, 100.0),
-            "y" to alien(listOf("x"), 100, 200.0),
-            "z" to alien(emptyList(), 30, 300.0),
+            "x" to predator(listOf("z"), 30, 100.0),
+            "y" to predator(listOf("x"), 100, 200.0),
+            "z" to predator(emptyList(), 30, 300.0),
         ))
         val first = run.step()
         assertEquals("dead", first.entities.single { it.id == "g-1/x" }.status)

@@ -123,7 +123,7 @@
       "sightRadius": 2000.0,
       "listLimit": 16,
       "attackRadius": 3.0,
-      "xenomorphRadius": 150.0
+      "predatorRadius": 150.0
     },
     "fence": {
       "enabled": true,

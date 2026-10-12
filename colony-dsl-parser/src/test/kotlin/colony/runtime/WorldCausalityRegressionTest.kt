@@ -21,7 +21,7 @@ class WorldCausalityRegressionTest {
         val prepared = base.copy(scenario = base.scenario.copy(ticks = 8, world = config.copy(
             repair = config.repair.copy(duration = mapOf("pole" to 1.0, "pipe" to 1.0, "device" to 1.0),
                 dispatchDelaySeconds = 0.0, workRadius = 10_000.0))))
-        val attacker = prepared.manifest.instances.first { it.kind == "Xenomorph" }.id
+        val attacker = prepared.manifest.instances.first { it.kind == "Predator" }.id
         val crew = prepared.manifest.instances.first { it.kind == "Rover" }.id
         return ReferenceRun(prepared, "test", ScriptedFleet { tick -> script(tick, attacker, crew) })
     }

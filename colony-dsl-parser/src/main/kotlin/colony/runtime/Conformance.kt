@@ -55,7 +55,7 @@ internal fun prngVectors(): List<PrngVector> {
     val seeds = listOf(426L, 0L, -1L, Long.MAX_VALUE)
     val keys = listOf(
         Triple("home-1/heater", "HeaterControl", "apply"),
-        Triple("alien-3/xenomorph", "Xenomorph", "decide"),
+        Triple("predator-3/predator", "Predator", "decide"),
         Triple("дом-7/чайник", "ЧайникУправление", "нагрев"), // non-ASCII keys pin down UTF-8 and the length prefix
     )
     val sites = listOf("strike", "", "vandalism")
@@ -126,7 +126,7 @@ private val PROGRAMS: List<ProgramSpec> = listOf(
         // Seed 1 vandalizes at step 60, seed 6 at step 120 and seed 2 never: both outcomes of the draw are covered.
         listOf(1L, 2L, 6L).map { seed -> CaseInput("resident-seed-$seed", "Resident", "home-1/resident", frames, seed = seed) }
     },
-    ProgramSpec("xenomorph", "colony-dsl-parser/examples/xenomorph.colony") { _ ->
+    ProgramSpec("predator", "colony-dsl-parser/examples/predator.colony") { _ ->
         val waypoint = point(400, 300)
         val frames = (0L until 30L).map { tick ->
             val list = when {
@@ -138,7 +138,7 @@ private val PROGRAMS: List<ProgramSpec> = listOf(
                 put("position", point(0, 0)); put("patrol_waypoint", waypoint); put("visible_infrastructure", buildJsonArray { list.forEach { add(it) } })
             })
         }
-        listOf(426L, 7L).map { seed -> CaseInput("hunt-and-patrol-seed-$seed", "Xenomorph", "alien-1/xenomorph", frames, seed = seed) }
+        listOf(426L, 7L).map { seed -> CaseInput("hunt-and-patrol-seed-$seed", "Predator", "predator-1/predator", frames, seed = seed) }
     },
     ProgramSpec("kettle", "examples/integration/devices.colony") { _ ->
         val kettleView = { water: Number, broken: Boolean, connected: Boolean ->
@@ -164,7 +164,7 @@ private val LANGUAGE = ProgramSpec("language", "conformance/programs/language.co
     listOf(
         CaseInput("numbers", "Numbers", "home-1/house", (0L..5L).map { frame(it, houseView(it.toInt())) }),
         CaseInput("short-circuit", "ShortCircuit", "home-1/house", (0L until 40L).map { frame(it, houseView(if (it % 3 == 0L) 0 else 1)) }),
-        CaseInput("branches", "Branches", "alien-1/xenomorph", listOf(
+        CaseInput("branches", "Branches", "predator-1/predator", listOf(
             frame(0, infrastructure(listOf(target("a", "Heater", 0, 0, 5)), 0)),
             frame(1, infrastructure(listOf(target("b", "Heater", 0, 0, 5)), 0)),
             frame(2, infrastructure(listOf(target("c", "Heater", 0, 0, 5)), 0)),

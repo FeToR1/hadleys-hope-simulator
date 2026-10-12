@@ -22,7 +22,7 @@ class WorldIntegrationRegressionTest {
     private fun manifest(vararg instances: Instance) = RunManifest(seed = 1, stepSeconds = "1", instances = instances.toList())
 
     @Test fun disabledMechanicsDoNotChangeTheLegacyFixtureSetOrSpawnCrocodiles() {
-        val m = manifest(instance("house", "House"), instance("xeno", "Xenomorph", x = -100.0))
+        val m = manifest(instance("house", "House"), instance("xeno", "Predator", x = -100.0))
         val config = WorldConfig()
         val topology = buildTopology(m, config)
         assertTrue(topology.airDefenses.isEmpty())
@@ -81,7 +81,7 @@ class WorldIntegrationRegressionTest {
 
     @Test fun groundDefenseRequiresGridPowerAndSpendsFiniteAmmoOnlyWhenItFires() {
         fun defenseWorld(unpowered: Boolean): Pair<WorldKernel, String> {
-            val base = manifest(instance("house", "House"), instance("xeno", "Xenomorph", x = -100.0))
+            val base = manifest(instance("house", "House"), instance("xeno", "Predator", x = -100.0))
             val cfg = WorldConfig(defense = DefenseConfig(enabled = true, initialAmmoPerUnit = 1, powerPerUnit = 100.0),
                 power = if (unpowered) PowerConfig(reactorPower = 0.0, solarPeak = 0.0, upsInitialCharge = 0.0) else PowerConfig())
             val initialTopology = buildTopology(base, cfg)

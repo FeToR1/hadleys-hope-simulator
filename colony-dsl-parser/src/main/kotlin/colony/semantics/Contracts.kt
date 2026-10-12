@@ -7,7 +7,7 @@ import colony.ast.SourceSpan
  * version (docs/spec/http-api.md#contract), and compiled artifacts record the version
  * they were built against so that a kernel or VM can refuse a mismatch.
  */
-const val CONTRACT_VERSION = 8
+const val CONTRACT_VERSION = 9
 
 /** Entity-kind contract supplied by runtime/simulation owners (Role #7). */
 data class KindContract(
@@ -152,7 +152,6 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
         viewFields = mapOf(
             "position" to Type.Kind("Position"),
             "health" to Type.Physical(PhysicalKind.HEALTH),
-            "visible_xenomorphs" to Type.List(Type.Kind("Target")),
             "visible_predators" to Type.List(Type.Kind("Target")),
             "available_vehicles" to Type.List(Type.Kind("VehicleTarget")),
             "in_vehicle" to Type.Bool,
@@ -162,19 +161,6 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
             "squad_size" to Type.Int64,
             "squad_leader" to Type.Bool,
             "depot" to Type.Kind("Position"),
-        ),
-        capabilities = setOf(Capability.DAMAGE_REQUEST, Capability.MOTION_REQUEST),
-    ),
-    KindContract(
-        kind = "Xenomorph",
-        viewFields = mapOf(
-            "position" to Type.Kind("Position"),
-            "visible_infrastructure" to Type.List(Type.Kind("Target")),
-            "visible_humans" to Type.List(Type.Kind("Target")),
-            "attack_active" to Type.Bool,
-            "patrol_waypoint" to Type.Kind("Position"),
-            // Marines drove it off: until it is out and keeps away, the waypoint leads out of the settlement.
-            "routed" to Type.Bool,
         ),
         capabilities = setOf(Capability.DAMAGE_REQUEST, Capability.MOTION_REQUEST),
     ),

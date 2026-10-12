@@ -1,6 +1,6 @@
 {
     "conformance": 1,
-    "contract": 8,
+    "contract": 9,
     "name": "language",
     "source": "conformance/programs/language.colony",
     "program": {
@@ -1579,7 +1579,7 @@
             },
             {
                 "name": "Branches",
-                "kind": "Xenomorph",
+                "kind": "Predator",
                 "params": [],
                 "state": [
                     {
@@ -4092,7 +4092,7 @@
                 ]
             }
         ],
-        "contract": 8
+        "contract": 9
     },
     "cases": [
         {
@@ -4810,7 +4810,7 @@
         {
             "name": "branches",
             "behavior": "Branches",
-            "entityId": "alien-1/xenomorph",
+            "entityId": "predator-1/predator",
             "seed": 426,
             "params": {},
             "initialState": {

@@ -18,15 +18,12 @@ class ScenarioTest {
             large.scenario.populations.filter { it.template != "household" })
     }
 
-    @Test fun klyaksaScenariosHaveNoXenomorphsButLegacyScenarioKeepsThem() {
-        for (name in listOf("ecosystem-small.json", "settlement-5000.json")) {
+    @Test fun klyaksaScenariosUseLocalGroundThreats() {
+        for (name in listOf("ecosystem-small.json", "settlement-5000.json", "full.json", "full-5000.json", "cascade.json")) {
             val prepared = prepareScenario(Path.of("../examples/physics/$name"))
-            assertFalse(prepared.manifest.instances.any { it.kind == "Xenomorph" }, name)
             assertTrue(prepared.manifest.instances.any { it.kind == "Predator" }, name)
+            assertTrue(prepared.manifest.instances.all { it.kind in colony.semantics.SemanticEnvironment().kindContracts }, name)
         }
-
-        val legacy = prepareScenario(Path.of("../examples/physics/colony-300.json"))
-        assertTrue(legacy.manifest.instances.any { it.kind == "Xenomorph" })
     }
 
     @Test fun aMonthAtOneSecondStepsPassesScenarioValidation() {

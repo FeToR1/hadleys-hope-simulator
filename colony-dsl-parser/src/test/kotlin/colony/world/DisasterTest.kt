@@ -56,7 +56,7 @@ class DisasterTest {
         val config = prepared.scenario.world!!.let { it.copy(ecosystem = it.ecosystem.copy(
             predator = it.ecosystem.predator.copy(enabled = true, attackDurationSeconds = 0.0))) }
         val world = world(config)
-        val monster = prepared.manifest.instances.filter { it.kind in setOf("Xenomorph", "Predator") }.minBy { it.id }
+        val monster = prepared.manifest.instances.filter { it.kind in setOf("Predator") }.minBy { it.id }
         val previous = world.positionOf(monster.id)
         val movement = VmIntent(monster.id, Op.MOTION_REQUEST, listOf(
             buildJsonObject { put("x", previous.x); put("y", previous.y) }, JsonPrimitive(1000.0)))

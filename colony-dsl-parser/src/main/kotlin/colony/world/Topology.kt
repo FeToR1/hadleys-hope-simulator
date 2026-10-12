@@ -164,7 +164,7 @@ fun buildTopology(manifest: RunManifest, config: WorldConfig): Topology {
         }
     }
 
-    // The fence encloses everything the colony owns and uses; the xenomorphs/threats are the ones it keeps out.
+    // The fence encloses everything the colony owns and uses; the predators/threats are the ones it keeps out.
     require(config.geometry.gates.isEmpty() || config.fence.enabled) { "Geometry gates require an enabled perimeter fence" }
     val fenceBox = if (!config.fence.enabled) null else {
         val configuredServices = listOf(services, meeting) +
@@ -237,7 +237,7 @@ fun buildTopology(manifest: RunManifest, config: WorldConfig): Topology {
 }
 
 /** Instances by id, with the roles the kernel needs to find quickly. */
-internal val GROUND_THREAT_KINDS = setOf("Xenomorph", "Predator")
+internal val GROUND_THREAT_KINDS = setOf("Predator")
 
 internal class Population(manifest: RunManifest) {
     val byId: Map<String, Instance> = manifest.instances.associateBy { it.id }
@@ -245,9 +245,8 @@ internal class Population(manifest: RunManifest) {
     val appliances: List<Instance> = manifest.instances.filter { it.kind == "Heater" || it.kind == "Kettle" }
     val residents: List<Instance> = manifest.instances.filter { it.kind == "Human" }
     val marines: List<Instance> = manifest.instances.filter { it.kind == "Marine" }
-    val xenomorphs: List<Instance> = manifest.instances.filter { it.kind == "Xenomorph" }
     val predators: List<Instance> = manifest.instances.filter { it.kind == "Predator" }
-    val groundThreats: List<Instance> = xenomorphs + predators
+    val groundThreats: List<Instance> = predators
     val rovers: List<Instance> = manifest.instances.filter { it.kind == "Rover" }
     val childrenOf: Map<String, List<Instance>> = manifest.instances.filter { it.parent != null }.groupBy { it.parent!! }
 }

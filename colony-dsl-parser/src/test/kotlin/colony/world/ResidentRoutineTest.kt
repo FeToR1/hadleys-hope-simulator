@@ -14,7 +14,7 @@ class ResidentRoutineTest {
                 human = HumanConfig(startMinute = startMinute),
                 climate = Climate(meanTemperature = 20.0, amplitude = 0.0),
             )),
-            manifest = base.manifest.copy(instances = base.manifest.instances.filter { it.kind !in setOf("Rover", "Xenomorph") }),
+            manifest = base.manifest.copy(instances = base.manifest.instances.filter { it.kind !in setOf("Rover", "Predator") }),
         )
     }
 
@@ -100,7 +100,7 @@ class ResidentRoutineTest {
     }
 
     @Test fun assignmentsAreBalancedAndTheClockWrapsAtMidnight() {
-        val p = prepareScenario(Path.of("../examples/physics/colony-300.json"))
+        val p = prepareScenario(Path.of("../examples/physics/full.json"))
         val config = p.scenario.world!!.copy(human = HumanConfig(startMinute = 1439))
         val world = WorldKernel(p.manifest, config, buildTopology(p.manifest, config), 60.0)
         val humans = p.manifest.instances.filter { it.kind == "Human" }

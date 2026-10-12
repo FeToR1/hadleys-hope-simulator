@@ -17,7 +17,7 @@ describe('map scene detail', () => {
     const defenses = city.map((item) => ({ ...item, id: item.id.replace('/house', '/air-defense'), type: 'air_defense' as const }));
     const rovers = city.map((item) => ({ ...item, id: item.id.replace('/house', '/rover'), type: 'rover' as const }));
     const selectedId = defenses[0].id;
-    const threat: EntityState = { ...house(0), id: 'xeno-1', type: 'xenomorph' };
+    const threat: EntityState = { ...house(0), id: 'predator-1', type: 'predator' };
     const visible = new MapSceneIndex([...city, ...defenses, ...rovers, threat], DEFAULT_MAP_LAYERS, selectedId)
       .visible({ x: -100, y: -100, width: 1800, height: 18000 }, 0.036);
     const districts = visible.filter((marker) => marker.composition);

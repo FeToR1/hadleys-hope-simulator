@@ -1,20 +1,20 @@
 {
     "conformance": 1,
-    "contract": 8,
-    "name": "xenomorph",
-    "source": "colony-dsl-parser/examples/xenomorph.colony",
+    "contract": 9,
+    "name": "predator",
+    "source": "colony-dsl-parser/examples/predator.colony",
     "program": {
         "stepSeconds": "1",
         "events": [],
         "behaviors": [
             {
-                "name": "Xenomorph",
-                "kind": "Xenomorph",
+                "name": "Predator",
+                "kind": "Predator",
                 "params": [],
                 "state": [
                     {
                         "name": "mode",
-                        "type": "Xenomorph.Mode"
+                        "type": "Predator.Mode"
                     }
                 ],
                 "temporaryCount": 26,
@@ -30,7 +30,7 @@
                 "code": [
                     {
                         "op": "CONST",
-                        "type": "Xenomorph.Mode",
+                        "type": "Predator.Mode",
                         "value": "Patrol",
                         "line": 4,
                         "column": 24
@@ -234,7 +234,7 @@
                     },
                     {
                         "op": "CONST",
-                        "type": "Xenomorph.Mode",
+                        "type": "Predator.Mode",
                         "value": "Chase",
                         "line": 9,
                         "column": 24
@@ -323,7 +323,7 @@
                     },
                     {
                         "op": "CONST",
-                        "type": "Xenomorph.Mode",
+                        "type": "Predator.Mode",
                         "value": "Attack",
                         "line": 12,
                         "column": 24
@@ -456,8 +456,8 @@
                     },
                     {
                         "op": "CONST",
-                        "type": "Xenomorph.DamageCause",
-                        "value": "XenomorphAttack",
+                        "type": "Predator.DamageCause",
+                        "value": "PredatorAttack",
                         "line": 14,
                         "column": 53
                     },
@@ -516,7 +516,7 @@
                     },
                     {
                         "op": "CONST",
-                        "type": "Xenomorph.Mode",
+                        "type": "Predator.Mode",
                         "value": "Patrol",
                         "line": 18,
                         "column": 20
@@ -598,13 +598,13 @@
                 ]
             }
         ],
-        "contract": 8
+        "contract": 9
     },
     "cases": [
         {
             "name": "hunt-and-patrol-seed-426",
-            "behavior": "Xenomorph",
-            "entityId": "alien-1/xenomorph",
+            "behavior": "Predator",
+            "entityId": "predator-1/predator",
             "seed": 426,
             "params": {},
             "initialState": {
@@ -1083,7 +1083,7 @@
                                 "arguments": [
                                     "home-1/heater",
                                     35,
-                                    "XenomorphAttack"
+                                    "PredatorAttack"
                                 ]
                             }
                         ],
@@ -1128,16 +1128,6 @@
                     },
                     "events": [],
                     "expect": {
-                        "intents": [
-                            {
-                                "operation": "DAMAGE_REQUEST",
-                                "arguments": [
-                                    "home-1/heater",
-                                    35,
-                                    "XenomorphAttack"
-                                ]
-                            }
-                        ],
                         "state": {
                             "mode": "Attack"
                         }
@@ -1179,6 +1169,16 @@
                     },
                     "events": [],
                     "expect": {
+                        "intents": [
+                            {
+                                "operation": "DAMAGE_REQUEST",
+                                "arguments": [
+                                    "home-1/heater",
+                                    35,
+                                    "PredatorAttack"
+                                ]
+                            }
+                        ],
                         "state": {
                             "mode": "Attack"
                         }
@@ -1220,6 +1220,16 @@
                     },
                     "events": [],
                     "expect": {
+                        "intents": [
+                            {
+                                "operation": "DAMAGE_REQUEST",
+                                "arguments": [
+                                    "home-1/heater",
+                                    35,
+                                    "PredatorAttack"
+                                ]
+                            }
+                        ],
                         "state": {
                             "mode": "Attack"
                         }
@@ -1261,16 +1271,6 @@
                     },
                     "events": [],
                     "expect": {
-                        "intents": [
-                            {
-                                "operation": "DAMAGE_REQUEST",
-                                "arguments": [
-                                    "home-1/heater",
-                                    35,
-                                    "XenomorphAttack"
-                                ]
-                            }
-                        ],
                         "state": {
                             "mode": "Attack"
                         }
@@ -1394,6 +1394,16 @@
                     },
                     "events": [],
                     "expect": {
+                        "intents": [
+                            {
+                                "operation": "DAMAGE_REQUEST",
+                                "arguments": [
+                                    "home-1/heater",
+                                    35,
+                                    "PredatorAttack"
+                                ]
+                            }
+                        ],
                         "state": {
                             "mode": "Attack"
                         }
@@ -1476,6 +1486,16 @@
                     },
                     "events": [],
                     "expect": {
+                        "intents": [
+                            {
+                                "operation": "DAMAGE_REQUEST",
+                                "arguments": [
+                                    "home-1/heater",
+                                    35,
+                                    "PredatorAttack"
+                                ]
+                            }
+                        ],
                         "state": {
                             "mode": "Attack"
                         }
@@ -1805,8 +1825,8 @@
         },
         {
             "name": "hunt-and-patrol-seed-7",
-            "behavior": "Xenomorph",
-            "entityId": "alien-1/xenomorph",
+            "behavior": "Predator",
+            "entityId": "predator-1/predator",
             "seed": 7,
             "params": {},
             "initialState": {
@@ -2320,16 +2340,6 @@
                     },
                     "events": [],
                     "expect": {
-                        "intents": [
-                            {
-                                "operation": "DAMAGE_REQUEST",
-                                "arguments": [
-                                    "home-1/heater",
-                                    35,
-                                    "XenomorphAttack"
-                                ]
-                            }
-                        ],
                         "state": {
                             "mode": "Attack"
                         }
@@ -2412,16 +2422,6 @@
                     },
                     "events": [],
                     "expect": {
-                        "intents": [
-                            {
-                                "operation": "DAMAGE_REQUEST",
-                                "arguments": [
-                                    "home-1/heater",
-                                    35,
-                                    "XenomorphAttack"
-                                ]
-                            }
-                        ],
                         "state": {
                             "mode": "Attack"
                         }
@@ -2463,16 +2463,6 @@
                     },
                     "events": [],
                     "expect": {
-                        "intents": [
-                            {
-                                "operation": "DAMAGE_REQUEST",
-                                "arguments": [
-                                    "home-1/heater",
-                                    35,
-                                    "XenomorphAttack"
-                                ]
-                            }
-                        ],
                         "state": {
                             "mode": "Attack"
                         }
@@ -2514,16 +2504,6 @@
                     },
                     "events": [],
                     "expect": {
-                        "intents": [
-                            {
-                                "operation": "DAMAGE_REQUEST",
-                                "arguments": [
-                                    "home-1/heater",
-                                    35,
-                                    "XenomorphAttack"
-                                ]
-                            }
-                        ],
                         "state": {
                             "mode": "Attack"
                         }
@@ -2565,6 +2545,16 @@
                     },
                     "events": [],
                     "expect": {
+                        "intents": [
+                            {
+                                "operation": "DAMAGE_REQUEST",
+                                "arguments": [
+                                    "home-1/heater",
+                                    35,
+                                    "PredatorAttack"
+                                ]
+                            }
+                        ],
                         "state": {
                             "mode": "Attack"
                         }
@@ -2647,6 +2637,16 @@
                     },
                     "events": [],
                     "expect": {
+                        "intents": [
+                            {
+                                "operation": "DAMAGE_REQUEST",
+                                "arguments": [
+                                    "home-1/heater",
+                                    35,
+                                    "PredatorAttack"
+                                ]
+                            }
+                        ],
                         "state": {
                             "mode": "Attack"
                         }

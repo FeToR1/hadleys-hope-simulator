@@ -3,7 +3,7 @@
   "sources": [
     "../../colony-dsl-parser/examples/heater.colony",
     "../../colony-dsl-parser/examples/resident.colony",
-    "../../colony-dsl-parser/examples/xenomorph.colony",
+    "../../colony-dsl-parser/examples/predator.colony",
     "devices.colony"
   ],
   "templates": {
@@ -31,10 +31,10 @@
         }
       }
     },
-    "alien": {
+    "predator": {
       "objects": {
-        "xenomorph": {
-          "kind": "Xenomorph", "behavior": "Xenomorph",
+        "predator": {
+          "kind": "Predator", "behavior": "Predator",
           "view": {
             "position": {"x": 0, "y": 0}, "patrol_waypoint": {"x": 400, "y": 300},
             "visible_infrastructure": [

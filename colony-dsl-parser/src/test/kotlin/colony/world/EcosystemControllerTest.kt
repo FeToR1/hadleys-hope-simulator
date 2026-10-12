@@ -84,8 +84,8 @@ class EcosystemControllerTest {
                 alcoholDurationSeconds = 100.0))
         val one = EcosystemController(config, 426).also { it.configureBounds(bounds, 20.0) }
         val two = EcosystemController(config, 426).also { it.configureBounds(bounds, 20.0) }
-        val entities = listOf(EcosystemEntity("alien", "xenomorph", Point(15.0, 5.0)), EcosystemEntity("resident", "civilian", Point(15.0, 5.0)))
-        assertEquals(one.mutationOf("alien", 1200.0), two.mutationOf("alien", 1200.0))
+        val entities = listOf(EcosystemEntity("predator", "predator", Point(15.0, 5.0)), EcosystemEntity("resident", "civilian", Point(15.0, 5.0)))
+        assertEquals(one.mutationOf("predator", 1200.0), two.mutationOf("predator", 1200.0))
         val resultA = one.step(0.0, 1.0, entities)
         val resultB = two.step(0.0, 1.0, entities)
         assertEquals(resultA.unavailableHumans, resultB.unavailableHumans)

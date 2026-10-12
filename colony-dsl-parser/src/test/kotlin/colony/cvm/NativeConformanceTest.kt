@@ -102,9 +102,9 @@ class NativeConformanceTest {
         assertEquals(378, runFile("resident", source("examples/resident.colony")))
     }
 
-    @Test fun xenomorphWithHazardAndMovement() {
+    @Test fun predatorWithHazardAndMovement() {
         if (executable == null) return
-        assertEquals(60, runFile("xenomorph", source("examples/xenomorph.colony")))
+        assertEquals(60, runFile("predator", source("examples/predator.colony")))
     }
 
     @Test fun everyLanguageFeature() {

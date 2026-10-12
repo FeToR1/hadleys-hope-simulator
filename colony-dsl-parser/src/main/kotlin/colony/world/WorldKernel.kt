@@ -174,9 +174,9 @@ class WorldKernel(
     /** Residents walking to each rover during the latest step, and when its first resident got on. */
     private var walkersOf: Map<String, List<String>> = emptyMap()
     private val boardingSince = HashMap<String, Double>()
-    /** The closed fence segment a xenomorph last ran into. */
+    /** The closed fence segment a predator last ran into. */
     private val blockedBy = HashMap<String, String>()
-    /** Xenomorphs a squad has driven off, and until when they keep away. */
+    /** Predators a squad has driven off, and until when they keep away. */
     private val routedUntil = HashMap<String, Double>()
     private var upsCharge = config.power.upsInitialCharge
     private var poweredNow = emptySet<String>()
@@ -465,9 +465,9 @@ class WorldKernel(
             // The substation is fenced off; what stands in the open is the distribution poles, and the fence
             // segment the hunter has just run into.
             "visible_infrastructure" -> targets(id, topology.poles.filter { it.id != BUS && !isBroken(it.id) }.map { it.id } +
-                listOfNotNull(blockedBy[id]?.takeUnless(::isBroken)), config.sight.xenomorphRadius)
+                listOfNotNull(blockedBy[id]?.takeUnless(::isBroken)), config.sight.predatorRadius)
             // People indoors or inside a rover are out of reach; marines are not prey.
-            "visible_humans" -> nearbyTargets(id, config.sight.xenomorphRadius) { targetId ->
+            "visible_humans" -> nearbyTargets(id, config.sight.predatorRadius) { targetId ->
                 val resident = people.byId[targetId] ?: return@nearbyTargets false
                 resident.kind == "Human" && !isBroken(resident.id) && resident.id !in passengerVehicle &&
                     positionOf(resident.id).distanceTo(positionOf(resident.parent ?: resident.id)) > HOUSE_ZONE
@@ -496,7 +496,6 @@ class WorldKernel(
             "available_vehicles" -> targets(id, availableTransportVehicles(id), if (squadOf(id) == null) config.transport.walkRadius else config.sight.sightRadius)
             "in_vehicle" -> JsonPrimitive(id in passengerVehicle)
             "dispatch_ready" -> JsonPrimitive(elapsedSeconds >= config.marine.responseDelaySeconds)
-            "visible_xenomorphs" -> targets(id, listOfNotNull(squadTarget(id)).filter { people.byId[it]?.kind == "Xenomorph" }, radius = null)
             "visible_predators" -> targets(id, listOfNotNull(squadTarget(id)).filter { people.byId[it]?.kind == "Predator" }, radius = null)
             "squad_size" -> JsonPrimitive(marineSquad(id).count { !isBroken(it.id) })
             "squad_leader" -> JsonPrimitive(isMarineLeader(id))
@@ -599,10 +598,10 @@ class WorldKernel(
         squadTargets[squad]?.takeUnless { isBroken(it) || isRouted(it) }?.let { return it }
         val leader = marineSquad(marineId).filter { !isBroken(it.id) }
             .sortedWith(compareBy({ !isMarineLeader(it.id) }, { it.id })).firstOrNull() ?: return null
-        return nearestVisibleXenomorph(leader.id)
+        return nearestVisiblePredator(leader.id)
     }
 
-    private fun nearestVisibleXenomorph(marineId: String): String? {
+    private fun nearestVisiblePredator(marineId: String): String? {
         val here = positionOf(marineId)
         return people.groundThreats.asSequence()
             // Behind a fence the squads defend the colony: they go after intruders, not what roams outside.
@@ -836,14 +835,14 @@ class WorldKernel(
     /** Inside the fence, or inside the settlement itself when it has none. */
     private val settlementArea: Box get() = topology.fenceBox ?: roamBox
 
-    /** A routed xenomorph runs until it is out of the settlement and its time to keep away has passed. */
+    /** A routed predator runs until it is out of the settlement and its time to keep away has passed. */
     private fun isRouted(id: String): Boolean {
         val until = routedUntil[id] ?: return false
         return !isBroken(id) && (settlementArea.contains(positionOf(id)) || elapsedSeconds < until)
     }
 
     /**
-     * Where a routed xenomorph runs from inside: through the nearest breach, first to its inner side and then
+     * Where a routed predator runs from inside: through the nearest breach, first to its inner side and then
      * straight out, or else to the nearest stretch of the fence, which it breaks through.
      */
     private fun exitPoint(id: String): Point {
@@ -952,7 +951,7 @@ class WorldKernel(
     }
 
     init {
-        // Xenomorphs come from the wilds: with a fence they appear outside it, each at its own place.
+        // Predators come from the wilds: with a fence they appear outside it, each at its own place.
         if (topology.fenceBox != null) {
             for (predator in people.groundThreats) {
                 position[predator.id] = roamingPoint(predator.id)
@@ -1101,7 +1100,6 @@ class WorldKernel(
             val kind = when {
                 instance.kind == "House" -> "house"
                 instance.kind == "Human" -> "civilian"
-                instance.kind == "Xenomorph" -> "xenomorph"
                 instance.kind == "Predator" -> "predator"
                 instance.kind == "Rover" && (instance.behavior == "CleanupRover" || instance.id.substringBefore('/').startsWith("cleanup-")) -> "cleanup-rover"
                 instance.kind == "Rover" && (instance.behavior == "Forester" || instance.id.substringBefore('/').startsWith("forester-")) -> "forester"
@@ -1502,7 +1500,7 @@ class WorldKernel(
     /** A broken object becomes a job for the crews; a dead person or creature is only a fact of the world. */
     private fun breakOf(tick: Long, target: String, reason: String, actor: String?): KernelEvent {
         val instance = people.byId[target]
-        if (instance != null && instance.kind in setOf("Human", "Marine", "Xenomorph", "Predator")) {
+        if (instance != null && instance.kind in setOf("Human", "Marine", "Predator")) {
             return KernelEvent("EntityDied", target, actor, buildJsonObject { put("entity", target) })
         }
         openJob(target, tick)
@@ -1861,7 +1859,7 @@ class WorldKernel(
     }
 
     /**
-     * A xenomorph that would cross a closed fence segment stops half a metre short of it and remembers the
+     * A predator that would cross a closed fence segment stops half a metre short of it and remembers the
      * segment, which then shows among what it can attack. Anything else, and a broken segment, lets it through.
      */
     private fun fenceStop(id: String, from: Point, to: Point): Point? {
@@ -2004,9 +2002,9 @@ class WorldKernel(
         const val HOUSE_ZONE = 25.0
         /** How far outside the settlement a patrol route runs. */
         const val PATROL_MARGIN = 30.0
-        /** How far short of a closed fence a xenomorph stops. */
+        /** How far short of a closed fence a predator stops. */
         const val FENCE_GAP = 0.5
-        /** A routed xenomorph lines up this far inside a breach and runs this far beyond the fence. */
+        /** A routed predator lines up this far inside a breach and runs this far beyond the fence. */
         const val EXIT_STEP = 5.0
         const val EXIT_RUN = 25.0
         const val BUS = "grid/bus"

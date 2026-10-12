@@ -92,10 +92,10 @@ describe('observed run log', () => {
     version: 1, runId: 'r1', runtimeMode: 'reference', seed: '426', full: true, tickId, timestamp: (tickId + 1) * 1000,
     entities: [entity(status)], events,
   });
-  const attack = { id: 'e1', type: 'DamageApplied', tick: 1, entityId: 'home-1/heater', actorId: 'alien-1/xenomorph', causationId: 'alien-1/xenomorph@1#0',
-    fields: { target: 'home-1/heater', amount: 100, reason: 'XenomorphAttack' }, recipients: [] };
+  const attack = { id: 'e1', type: 'DamageApplied', tick: 1, entityId: 'home-1/heater', actorId: 'predator-1/predator', causationId: 'predator-1/predator@1#0',
+    fields: { target: 'home-1/heater', amount: 100, reason: 'PredatorAttack' }, recipients: [] };
   const broken = { id: 'e2', type: 'ObjectBroken', tick: 1, entityId: 'home-1/heater', causationId: 'e1',
-    fields: { object: 'home-1/heater', reason: 'XenomorphAttack' }, recipients: [] };
+    fields: { object: 'home-1/heater', reason: 'PredatorAttack' }, recipients: [] };
 
   it('logs the events of a reference run once per tick and keeps them as history', () => {
     const manager = new StateManager();

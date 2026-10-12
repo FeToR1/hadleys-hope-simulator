@@ -1,6 +1,6 @@
 grammar Colony;
 
-// Colony MVP grammar for the Hadley's Hope simulator.
+// Colony MVP grammar for the Klyaksa colony simulator.
 // The grammar defines the source syntax. Further processing happens after AST construction.
 
 program

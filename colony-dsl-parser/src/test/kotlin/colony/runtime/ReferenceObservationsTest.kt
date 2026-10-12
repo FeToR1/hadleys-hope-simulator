@@ -21,7 +21,7 @@ class ReferenceObservationsTest {
             state hp: Health = 0hp;
             every 1s as w { hp = view.health; }
         }
-        behavior AlienWatch for Xenomorph {
+        behavior PredatorWatch for Predator {
             enum Cause { Bite }
             state seen: String = "";
             state seen_kind: String = "";
@@ -44,7 +44,7 @@ class ReferenceObservationsTest {
         "human" to ObjectSpec("Human", "HumanWatch", parent = "\$instance/house", x = 30.0, y = 0.0, view = buildJsonObject {
             put("cold", false); put("reachable_breakables", buildJsonArray { })
         }),
-        "alien" to ObjectSpec("Xenomorph", "AlienWatch", x = 100.0, y = 0.0, view = buildJsonObject {
+        "predator" to ObjectSpec("Predator", "PredatorWatch", x = 100.0, y = 0.0, view = buildJsonObject {
             put("patrol_waypoint", buildJsonObject { put("x", 0); put("y", 0) })
             // Deliberately listed far-first: the run must sort by distance.
             put("visible_infrastructure", buildJsonArray { add(ref("house")); add(ref("heater")) })
@@ -67,23 +67,23 @@ class ReferenceObservationsTest {
         assertEquals(2, first.state("g-1/heater", "occupants").jsonPrimitive.int, "occupants come from the house")
         assertEquals(0.0, first.state("g-1/heater", "granted").jsonPrimitive.double, "nothing was granted before step 0")
         assertEquals(100.0, first.state("g-1/human", "hp").jsonPrimitive.double)
-        assertEquals("g-1/human", first.state("g-1/alien", "seen").jsonPrimitive.content)
-        assertEquals("Human", first.state("g-1/alien", "seen_kind").jsonPrimitive.content)
-        assertEquals(100.0, first.state("g-1/alien", "seen_hp").jsonPrimitive.double)
-        assertEquals("g-1/heater", first.state("g-1/alien", "nearest_first").jsonPrimitive.content, "sorted by distance, not by input order")
+        assertEquals("g-1/human", first.state("g-1/predator", "seen").jsonPrimitive.content)
+        assertEquals("Human", first.state("g-1/predator", "seen_kind").jsonPrimitive.content)
+        assertEquals(100.0, first.state("g-1/predator", "seen_hp").jsonPrimitive.double)
+        assertEquals("g-1/heater", first.state("g-1/predator", "nearest_first").jsonPrimitive.content, "sorted by distance, not by input order")
 
         val second = run.step()
         assertEquals(1500.0, second.state("g-1/heater", "granted").jsonPrimitive.double, "power_granted is last step's allocation")
         assertEquals(70.0, second.state("g-1/human", "hp").jsonPrimitive.double, "the bite of step 0 is visible in step 1")
-        assertEquals(70.0, second.state("g-1/alien", "seen_hp").jsonPrimitive.double)
+        assertEquals(70.0, second.state("g-1/predator", "seen_hp").jsonPrimitive.double)
     }
     @Test fun aDestroyedApplianceShowsAsBrokenInItsHousesDeviceList() {
-        val biter = objects.getValue("alien").copy(view = buildJsonObject {
+        val biter = objects.getValue("predator").copy(view = buildJsonObject {
             put("patrol_waypoint", buildJsonObject { put("x", 0); put("y", 0) })
             put("visible_infrastructure", buildJsonArray { add(ref("house")) })
             put("visible_humans", buildJsonArray { add(ref("heater")) })
         })
-        val run = ReferenceRun(prepare(objects + ("alien" to biter), ticks = 6), "test")
+        val run = ReferenceRun(prepare(objects + ("predator" to biter), ticks = 6), "test")
         val broken = (0 until 5).map { run.step().state("g-1/house", "first_broken").jsonPrimitive.boolean }
         // 30 hp per step: the heater is destroyed in step 3 and its house sees that from step 4 on.
         assertEquals(listOf(false, false, false, false, true), broken)
@@ -94,9 +94,9 @@ class ReferenceObservationsTest {
         assertEquals(JsonPrimitive(true), house.view["power_connected"])
         assertEquals(JsonPrimitive(true), house.view["water_available"])
 
-        val alien = objects.getValue("alien")
-        val withoutHumans = alien.copy(view = JsonObject(alien.view - "visible_humans"))
-        val filled = prepare(objects + ("alien" to withoutHumans)).manifest.instances.single { it.id == "g-1/alien" }
+        val predator = objects.getValue("predator")
+        val withoutHumans = predator.copy(view = JsonObject(predator.view - "visible_humans"))
+        val filled = prepare(objects + ("predator" to withoutHumans)).manifest.instances.single { it.id == "g-1/predator" }
         assertEquals(JsonArray(emptyList()), filled.view["visible_humans"])
 
         val withDevices = objects.getValue("house").copy(view = buildJsonObject {

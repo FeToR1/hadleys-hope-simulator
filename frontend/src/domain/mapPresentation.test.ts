@@ -18,9 +18,9 @@ describe('map markers', () => {
   it('keeps a travelling resident at their actual position and never hides threats with distance', () => {
     const house = entity('home', 'house');
     const resident = entity('person', 'civilian', { parentId: 'home', coordinates: { x: 120, y: 20 } });
-    const alien = entity('alien', 'xenomorph', { coordinates: { x: -200, y: 0 } });
-    const markers = createMapMarkers([house, resident, alien], DEFAULT_MAP_LAYERS);
-    expect(markers.map(({ entity }) => entity)).toEqual([house, resident, alien]);
+    const predator = entity('predator', 'predator', { coordinates: { x: -200, y: 0 } });
+    const markers = createMapMarkers([house, resident, predator], DEFAULT_MAP_LAYERS);
+    expect(markers.map(({ entity }) => entity)).toEqual([house, resident, predator]);
   });
 
   it('only hides a rider when their visible rover is physically co-located', () => {
@@ -42,10 +42,10 @@ describe('map markers', () => {
   });
 
   it('filters mobile layers independently and keeps network fixtures intact', () => {
-    const input = [entity('house', 'house'), entity('person', 'civilian'), entity('alien', 'xenomorph'),
+    const input = [entity('house', 'house'), entity('person', 'civilian'), entity('predator', 'predator'),
       entity('rover', 'rover'), entity('marine', 'marine'), entity('pipe', 'power_node'), entity('heater', 'heater')];
     const markers = createMapMarkers(input, { ...DEFAULT_MAP_LAYERS, civilian: false, marine: false });
-    expect(markers.map(({ entity }) => entity.id)).toEqual(['house', 'alien', 'rover', 'pipe']);
+    expect(markers.map(({ entity }) => entity.id)).toEqual(['house', 'predator', 'rover', 'pipe']);
   });
 
   it('keeps ecology zones out of point markers so their area overlays do not cover buildings', () => {

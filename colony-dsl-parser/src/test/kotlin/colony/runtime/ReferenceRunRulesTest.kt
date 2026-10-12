@@ -30,7 +30,7 @@ class ReferenceRunRulesTest {
 
     @Test fun destroyedExecutorsAreRejectedAndDamageComesBeforePower() {
         val source = """
-            behavior Killer for Xenomorph {
+            behavior Killer for Predator {
                 enum Cause { Kill }
                 every 1s as strike {
                     if let target = nearest(view.visible_infrastructure) { damage.request(target.id, 100hp, Kill); }
@@ -39,12 +39,12 @@ class ReferenceRunRulesTest {
             behavior Load for Heater { every 1s as draw { power.request(1kW); } }
         """
         val target = buildJsonObject { put("id", "\$instance/heater"); put("position", point(0, 0)); put("distance", 0) }
-        val alienView = buildJsonObject {
+        val predatorView = buildJsonObject {
             put("position", point(0, 0)); put("patrol_waypoint", point(0, 0))
             put("visible_infrastructure", buildJsonArray { add(target) })
         }
         val run = ReferenceRun(prepare(source, mapOf(
-            "alien" to ObjectSpec("Xenomorph", "Killer", view = alienView),
+            "predator" to ObjectSpec("Predator", "Killer", view = predatorView),
             "heater" to ObjectSpec("Heater", "Load", view = heaterView)), ticks = 3), "test")
 
         val first = run.step()
@@ -58,7 +58,7 @@ class ReferenceRunRulesTest {
         // Dead in S_1: the request is rejected outright.
         assertFalse(second.effects.single { it.source == "g-1/heater" }.accepted)
         assertEquals(0.0, second.entity("g-1/heater").number("power_consumption"))
-        assertEquals(100.0, second.entity("g-1/alien").number("health"))
+        assertEquals(100.0, second.entity("g-1/predator").number("health"))
     }
 
     @Test fun coordinatesMayBeNegativeButDistancesMayNot() {

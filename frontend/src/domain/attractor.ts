@@ -55,7 +55,7 @@ export function classifyAttractor(history: readonly PhasePoint[], scenario?: str
   if (latest.x < 0 && hasExponentialLosses(window)) return 'collapse';
   if (window.length >= 10 && isStationary(window)) return 'stationary';
   if (window.length >= 12 && isPeriodic(window)) return 'periodic';
-  if ((scenario === 'storm' || scenario === 'xenomorph') && hasChaoticJumps(window)) return 'chaotic';
+  if ((scenario === 'storm' || scenario === 'predator') && hasChaoticJumps(window)) return 'chaotic';
   return hasChaoticJumps(window) ? 'chaotic' : 'transient';
 }
 

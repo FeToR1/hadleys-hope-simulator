@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
 class EcosystemScenarioIntegrationTest {
     @Test fun `small ecology scenario cleans street manure and unloads at its depot`() {
         val prepared = prepareScenario(Path.of("../examples/physics/ecosystem-small.json"))
-        assertFalse(prepared.manifest.instances.any { it.kind == "Xenomorph" })
+        assertTrue(prepared.manifest.instances.all { it.kind in colony.semantics.SemanticEnvironment().kindContracts })
         val predator = assertNotNull(prepared.manifest.instances.firstOrNull { it.kind == "Predator" })
         val observedEvents = ArrayList<colony.runtime.WorldEvent>()
         var mutation: String? = null

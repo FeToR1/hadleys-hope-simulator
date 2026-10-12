@@ -13,7 +13,7 @@ class LanguageSemanticsTest {
 
     @Test fun ifLetElseChainWithNestedShortCircuit() {
         val code = compileSource("""
-            behavior T for Xenomorph {
+            behavior T for Predator {
                 state out: Int64 = 0;
                 every 1s as go {
                     if let t = nearest(view.visible_infrastructure) {

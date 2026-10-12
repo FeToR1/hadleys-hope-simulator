@@ -58,7 +58,7 @@ export function Sidebar({ selected, devices, logs, causalChain, causalEmptyText,
         <Metric label="Общий запас топлива" value={selected.metrics.shared_fuel_remaining} suffix=" ед." />
       </section>}
       {selected.type === 'civilian' && selected.metrics.available === false && <p className="status status-warning">Житель временно недоступен</p>}
-      {(selected.type === 'xenomorph' || selected.type === 'predator') && selected.metrics.mutation && <section><h3>Мутация</h3><p>{mutationLabel(selected.metrics.mutation)}</p></section>}
+      {selected.type === 'predator' && selected.metrics.mutation && <section><h3>Мутация</h3><p>{mutationLabel(selected.metrics.mutation)}</p></section>}
       {selected.type === 'mine' ? <section className="mine-details"><h3>Рабочая смена (Добыча креатина)</h3>
         <Metric label="Шахтёров на работе" value={selected.metrics.workers} digits={0} />
         <p className="muted">{(selected.metrics.workers ?? 0) > 0 ? 'Шахтёры прибыли и добывают ценный креатин.' : 'Шахта ожидает следующую смену.'}</p>

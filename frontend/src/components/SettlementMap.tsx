@@ -290,7 +290,7 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
           // Minimum screen sizes keep threats and vehicles readable in the colony overview.
           const minimum = kind === 'mine' ? 54 : kind === 'house' ? 16 : kind === 'civilian' ? 10 : kind === 'power_node' ? 8 : (kind === 'air_defense' || kind === 'depository' || kind === 'medical_center') ? 22 : 17;
           view.root.scale.set(Math.max(design.size, minimum / scale) / 36);
-          view.root.zIndex = chosen ? 100 : kind === 'house' ? 1 : kind === 'power_node' ? 0 : (kind === 'xenomorph' || kind === 'predator' || kind === 'crocodile') ? 25 : kind === 'air_defense' ? 15 : 10;
+          view.root.zIndex = chosen ? 100 : kind === 'house' ? 1 : kind === 'power_node' ? 0 : (kind === 'predator' || kind === 'crocodile') ? 25 : kind === 'air_defense' ? 15 : 10;
           view.label.text = clustered ? '' : shortMapLabel(entity);
           view.label.scale.set(1 / (view.root.scale.x * scale));
           const labelBox = { x: entity.coordinates.x * scale, y: entity.coordinates.y * scale + 22 * view.root.scale.x * scale,
@@ -381,7 +381,7 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
     </div>
     <div className="map-layerbar" aria-label="Слои карты">
       <span className="map-layer-label">Показать</span>
-      {MOBILE_LAYERS.filter((kind) => (kind !== 'xenomorph' && kind !== 'predator') || (counts[kind] ?? 0) > 0).map((kind) => <button type="button" key={kind} className="map-layer" aria-pressed={layers[kind]}
+      {MOBILE_LAYERS.filter((kind) => (kind !== 'predator') || (counts[kind] ?? 0) > 0).map((kind) => <button type="button" key={kind} className="map-layer" aria-pressed={layers[kind]}
         onClick={() => setLayers((previous) => ({ ...previous, [kind]: !previous[kind] }))}>
         <MapIcon kind={kind} /><span>{MAP_TYPES[kind].label}</span><small>{counts[kind] ?? 0}</small>
       </button>)}
@@ -411,7 +411,6 @@ export function SettlementMap({ entities, onSelect, selectedId, onClearSelection
         <div className="map-legend-grid">{(['house', 'mine', 'civilian', 'rover', 'air_defense', 'crocodile', 'depository', 'medical_center', 'marine', 'power_node', 'fence'] as const).map((kind) =>
           <div key={kind} className="map-legend-item"><MapIcon kind={kind} /><span>{MAP_TYPES[kind].label}</span></div>)}</div>
         {(counts.predator ?? 0) > 0 && <div className="map-legend-item"><MapIcon kind="predator" /><span>{MAP_TYPES.predator.label}</span></div>}
-        {(counts.xenomorph ?? 0) > 0 && <div className="map-legend-item"><MapIcon kind="xenomorph" /><span>{MAP_TYPES.xenomorph.label}</span></div>}
         <div className="map-status-legend"><span>Без метки — норма</span><span className="map-warning">! Внимание</span><span className="map-critical">! Критическое</span><span className="map-dead">× Погиб / разрушен</span></div>
         <p>Издалека дома и жители объединяются в группы. Нажмите на группу, чтобы приблизить. Экологические слои показывают только биомассу из данных симуляции.</p>
       </div>}

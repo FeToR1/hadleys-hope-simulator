@@ -1,4 +1,4 @@
-export const KNOWN_ENTITY_TYPES = ['house', 'mine', 'heater', 'kettle', 'civilian', 'xenomorph', 'predator', 'rover', 'marine', 'power_node', 'fence', 'air_defense', 'ground_turret', 'burner', 'crocodile', 'depository', 'medical_center', 'fog', 'ecology_zone'] as const;
+export const KNOWN_ENTITY_TYPES = ['house', 'mine', 'heater', 'kettle', 'civilian', 'predator', 'rover', 'marine', 'power_node', 'fence', 'air_defense', 'ground_turret', 'burner', 'crocodile', 'depository', 'medical_center', 'fog', 'ecology_zone'] as const;
 /** Kinds the observer may add later are shown generically instead of invalidating the whole snapshot. */
 export type EntityType = (typeof KNOWN_ENTITY_TYPES)[number] | 'other';
 
@@ -95,7 +95,7 @@ export interface TickBatch {
   runId?: string;
   runtimeMode?: 'reference' | 'process' | 'shared-process';
   seed?: string;
-  scenario?: 'storm' | 'weekend' | 'xenomorph' | 'marines';
+  scenario?: 'storm' | 'weekend' | 'predator' | 'marines';
   full?: boolean;
   tickId: number;
   timestamp: number;

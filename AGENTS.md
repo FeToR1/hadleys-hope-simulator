@@ -10,8 +10,9 @@
 (~20 028 контекстов поведения). Конвейер:
 
 ```
-DSL Colony → компилятор (Kotlin + ANTLR4) → стековый байт-код .cvm
-  → две ВМ: ReferenceVm (JVM, эталон) и hh-vm (C++20), кросс-проверяются conformance-векторами
+DSL Colony → компилятор (Kotlin + ANTLR4) → общий типизированный IR
+  → JSON-байт-код v1 / бинарный CVM2 (.cvm)
+  → ReferenceVm (JVM, эталон v1) / hh-vm (C++20, CVM2), кросс-проверяются conformance-векторами
   → ядро мира WorldKernel (физика, тепло, море, угрозы, креатин, TaskQueue, SpatialIndex)
   → HTTP/SSE сервер (:8080) → дашборд React 19 + TypeScript + Pixi.js/Three.js (:5173)
 ```

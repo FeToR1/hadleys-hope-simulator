@@ -12,7 +12,7 @@
 
 ## Решение
 
-- Векторы `conformance/*.json` (heater, kettle, resident, xenomorph, language, prng) генерируются командой
+- Векторы `conformance/*.json` (heater, kettle, resident, predator, language, prng) генерируются командой
   CLI `conformance`: программа + начальное состояние + кадры + ожидаемые намерения/события/состояние.
 - Одна и та же программа прогоняется тремя исполнителями: Kotlin (`ConformanceVectorsTest`),
   C++ (`NativeConformanceTest` через реальные процессы hh-vm) и независимый Python-ВМ

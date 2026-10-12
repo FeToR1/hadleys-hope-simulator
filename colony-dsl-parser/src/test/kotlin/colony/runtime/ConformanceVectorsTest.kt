@@ -47,7 +47,7 @@ class ConformanceVectorsTest {
         assertTrue(load("language").cases.single { it.name == "rollback" }.steps.count { it.expect.failure } == 2, "failed steps are part of the vectors")
         val receiver = load("language").cases.single { it.name == "receiver" }
         assertEquals(JsonPrimitive(5), receiver.steps[2].expect.state.getValue("last"), "the last event by (sender, sequence) wins, not the last delivered")
-        val strikes = load("xenomorph").cases.map { case -> case.steps.filter { s -> s.expect.intents.any { it.operation == "DAMAGE_REQUEST" } }.map { it.tick } }
+        val strikes = load("predator").cases.map { case -> case.steps.filter { s -> s.expect.intents.any { it.operation == "DAMAGE_REQUEST" } }.map { it.tick } }
         assertTrue(strikes.toSet().size == strikes.size, "different seeds strike at different steps")
         assertTrue(load("heater").cases.flatMap { it.steps }.any { step -> step.expect.events.isNotEmpty() }, "outgoing events are recorded")
     }

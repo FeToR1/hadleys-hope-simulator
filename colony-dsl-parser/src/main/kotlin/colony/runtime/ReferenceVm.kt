@@ -14,7 +14,7 @@ import java.security.MessageDigest
 @Serializable data class VmFrame(val tick: Long, val view: JsonObject, val events: List<DeliveredEvent> = emptyList())
 @Serializable data class VmResult(val intents: List<VmIntent>, val events: List<OutgoingEvent>, val state: JsonObject)
 
-/** Temporary, in-process reference for the future native VM. It executes the actual stack artifact. */
+/** In-process semantic reference VM. Executes the v1 stack artifact; the native VM executes CVM2. */
 class ReferenceVm private constructor(
     val entityId: String,
     private val program: BytecodeProgram,

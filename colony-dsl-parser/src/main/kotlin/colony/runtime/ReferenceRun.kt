@@ -438,7 +438,7 @@ class ReferenceRun(val prepared: PreparedRun, val runId: String = UUID.randomUUI
                 events += applied
                 if (before > 0 && health.getValue(target) <= 0) {
                     val kind = objects.getValue(target).kind
-                    events += if (kind in setOf("Human", "Marine", "Xenomorph", "Predator")) {
+                    events += if (kind in setOf("Human", "Marine", "Predator")) {
                         worldEvent("EntityDied", target, intent.source, applied.id, obj("entity" to target), emptyList())
                     } else {
                         worldEvent("ObjectBroken", target, intent.source, applied.id, obj("object" to target, "reason" to reason), listOfNotNull(owner))

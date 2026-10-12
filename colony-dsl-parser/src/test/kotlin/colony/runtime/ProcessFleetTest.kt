@@ -106,7 +106,7 @@ class ProcessFleetTest {
 
     @Test fun failureInSecondNativeShardDoesNotCommitFirstShardIntent() {
         val source = """
-            behavior Attack for Xenomorph {
+            behavior Attack for Predator {
                 enum Cause { Test }
                 param should_fail: Bool;
                 state attempts: Real64 = 0.0;
@@ -121,8 +121,8 @@ class ProcessFleetTest {
         """.trimIndent()
         val program = compileSource(source)
         val template = Template(linkedMapOf(
-            "a_good" to ObjectSpec("Xenomorph", "Attack", buildJsonObject { put("should_fail", false) }),
-            "b_bad" to ObjectSpec("Xenomorph", "Attack", buildJsonObject { put("should_fail", true) }),
+            "a_good" to ObjectSpec("Predator", "Attack", buildJsonObject { put("should_fail", false) }),
+            "b_bad" to ObjectSpec("Predator", "Attack", buildJsonObject { put("should_fail", true) }),
             "z_target" to ObjectSpec("Human", "Idle"),
             "zz_home" to ObjectSpec("House", "Home"),
         ))
@@ -153,12 +153,12 @@ class ProcessFleetTest {
                 repair = world.repair.copy(dispatchDelaySeconds = 10000.0),
                 sight = world.sight.copy(sightRadius = 2000.0))),
             manifest = base.manifest.copy(instances = base.manifest.instances.filter {
-                it.kind in setOf("Rover", "Marine", "Xenomorph") || it.id.startsWith("home-1/")
+                it.kind in setOf("Rover", "Marine", "Predator") || it.id.startsWith("home-1/")
             }.map { instance -> when (instance.kind) {
                 "Rover" -> instance.copy(behavior = "PassengerRover", x = 0.0, y = 0.0)
                 "Marine" -> instance.copy(x = instance.id.last().digitToInt() * 5.0, y = 0.0,
                     params = JsonObject(instance.params + ("success_probability" to JsonPrimitive(1.0))))
-                "Xenomorph" -> instance.copy(x = 200.0, y = 0.0)
+                "Predator" -> instance.copy(x = 200.0, y = 0.0)
                 else -> instance
             } }),
         )

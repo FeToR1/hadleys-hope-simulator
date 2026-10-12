@@ -73,14 +73,6 @@
         }
       }
     },
-    "alien": {
-      "objects": {
-        "xenomorph": {
-          "kind": "Xenomorph",
-          "behavior": "Xenomorph"
-        }
-      }
-    },
     "predator": {
       "objects": {
         "predator": {

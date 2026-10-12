@@ -16,9 +16,9 @@
       "prefix": "crew"
     },
     {
-      "template": "alien",
+      "template": "predator",
       "count": 1,
-      "prefix": "alien"
+      "prefix": "predator"
     },
     {
       "template": "marine_squad",

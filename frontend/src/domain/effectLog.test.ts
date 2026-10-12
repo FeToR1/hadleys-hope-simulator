@@ -10,16 +10,16 @@ const batch = (events: WorldEvent[]): TickBatch => ({ tickId: 7, timestamp: 8000
 describe('world event log', () => {
   it('reports attacks, breaks and deaths and skips the confirmation that only repeats the attack', () => {
     const drafts = describeEvents(batch([
-      event({ type: 'ActionSucceeded', entityId: 'alien-1/xenomorph' }),
-      event({ type: 'DamageApplied', entityId: 'home-1/heater', actorId: 'alien-1/xenomorph',
-        fields: { target: 'home-1/heater', amount: 35, reason: 'XenomorphAttack' } }),
-      event({ type: 'ObjectBroken', entityId: 'home-1/heater', fields: { object: 'home-1/heater', reason: 'XenomorphAttack' } }),
+      event({ type: 'ActionSucceeded', entityId: 'predator-1/predator' }),
+      event({ type: 'DamageApplied', entityId: 'home-1/heater', actorId: 'predator-1/predator',
+        fields: { target: 'home-1/heater', amount: 35, reason: 'PredatorAttack' } }),
+      event({ type: 'ObjectBroken', entityId: 'home-1/heater', fields: { object: 'home-1/heater', reason: 'PredatorAttack' } }),
       event({ type: 'EntityDied', entityId: 'home-1/resident', fields: { entity: 'home-1/resident' } }),
     ]), 123);
     expect(drafts.map((draft) => draft.level)).toEqual(['warning', 'error', 'error']);
     expect(drafts[0].timestamp).toBe(123);
     expect(drafts[0].message).toContain('[тик 7]');
-    expect(drafts[0].message).toContain('alien-1/xenomorph → урон home-1/heater: −35 hp (XenomorphAttack)');
+    expect(drafts[0].message).toContain('predator-1/predator → урон home-1/heater: −35 hp (PredatorAttack)');
     expect(drafts[1].message).toContain('сломан home-1/heater');
     expect(drafts[2].message).toContain('погиб home-1/resident');
   });

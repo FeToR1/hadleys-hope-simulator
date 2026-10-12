@@ -31,7 +31,7 @@ behavior ShortCircuit for House {
     }
 }
 
-behavior Branches for Xenomorph {
+behavior Branches for Predator {
     state out: Int64 = 0;
     state near_id: String = "";
     every 1s as go {

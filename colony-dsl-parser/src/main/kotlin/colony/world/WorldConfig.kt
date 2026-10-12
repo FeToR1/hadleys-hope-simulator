@@ -236,14 +236,14 @@ data class HumanConfig(
 
 @Serializable
 data class MarineConfig(
-    /** Initial response delay in seconds; the manifest's xenomorphs are present from time zero. */
+    /** Initial response delay in seconds; the manifest's predators are present from time zero. */
     val responseDelaySeconds: Double = 300.0,
-    /** Marines must gather within this radius of the selected xenomorph before the leader attacks. */
+    /** Marines must gather within this radius of the selected predator before the leader attacks. */
     val assaultRadius: Double = 4.0,
     /** A squad is expected to contain four or five living members. */
     val minSquadSize: Int = 4,
     val maxSquadSize: Int = 5,
-    /** How long a xenomorph that a squad drove off keeps away once it is out of the settlement. */
+    /** How long a predator that a squad drove off keeps away once it is out of the settlement. */
     val routSeconds: Double = 600.0,
 ) {
     fun validate() {
@@ -321,22 +321,22 @@ data class Tariffs(
 
 @Serializable
 data class SightConfig(
-    /** How far marines detect xenomorphs and how far the other observation lists reach. */
+    /** How far marines detect predators and how far the other observation lists reach. */
     val sightRadius: Double = 260.0,
     /** Most objects an observation list may hold. */
     val listLimit: Int = 16,
     val attackRadius: Double = 3.0,
-    /** How far a xenomorph sees infrastructure and people; a short sight spreads the hunters over the map. */
-    val xenomorphRadius: Double = 260.0,
+    /** How far a predator sees infrastructure and people; a short sight spreads the hunters over the map. */
+    val predatorRadius: Double = 260.0,
 ) {
     fun validate() {
-        requireFinite(sightRadius, attackRadius, xenomorphRadius)
-        require(sightRadius >= 0 && listLimit in 1..4096 && attackRadius >= 0 && xenomorphRadius >= 0) { "Bad observation limits" }
+        requireFinite(sightRadius, attackRadius, predatorRadius)
+        require(sightRadius >= 0 && listLimit in 1..4096 && attackRadius >= 0 && predatorRadius >= 0) { "Bad observation limits" }
     }
 }
 
 /**
- * A perimeter fence around everything the colony uses. It stops xenomorphs only: a closed segment has to be
+ * A perimeter fence around everything the colony uses. It stops predators only: a closed segment has to be
  * broken before one can pass, and a broken segment becomes a repair job like a pole.
  */
 @Serializable
@@ -346,7 +346,7 @@ data class FenceConfig(
     val margin: Double = 40.0,
     val segmentLength: Double = 60.0,
     val health: Double = 400.0,
-    /** How far outside the fence the xenomorphs roam and where they appear. */
+    /** How far outside the fence the predators roam and where they appear. */
     val roamingDistance: Double = 60.0,
 ) {
     fun validate() {

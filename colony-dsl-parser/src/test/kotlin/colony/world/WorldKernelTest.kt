@@ -105,7 +105,7 @@ class WorldKernelTest {
         val dry = assertNotNull(firstOf("WaterLost"), "the house loses its water")
         val repaired = assertNotNull(firstOf("RepairCompleted"), "the crew has to finish something")
 
-        assertEquals("XenomorphAttack", broken.second.fields.getValue("reason").jsonPrimitive.content)
+        assertEquals("PredatorAttack", broken.second.fields.getValue("reason").jsonPrimitive.content)
         assertEquals("freezing", frozen.second.fields.getValue("reason").jsonPrimitive.content)
         // docs/simulation/trigger-conditions.md, section 3: ObjectBroken reaches the owner and every crew,
         // so a crew can react to the event instead of polling active_jobs.

@@ -87,7 +87,7 @@ class ReferenceVmTest {
     }
 
     @Test fun nearestAndDomainInstructionsCompileFromActualExamples() {
-        for (file in listOf("resident", "xenomorph")) {
+        for (file in listOf("resident", "predator")) {
             val program = compileSource(File("examples/$file.colony").readText())
             val vm = ReferenceVm(file, program, program.behaviors.single().name)
             val position = obj("x" to JsonPrimitive(0), "y" to JsonPrimitive(0))
