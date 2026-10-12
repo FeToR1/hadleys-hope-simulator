@@ -19,7 +19,7 @@ class SimulationRunBindingTest {
     }
 
     @Test fun unsupportedObservationClosesTheFleetBeforeAnyTick() {
-        val prepared = prepareScenario(Path.of("../examples/physics/cascade.json"))
+        val prepared = prepareScenario(Path.of("../examples/physics/cascade.settings"))
         val contracts = SemanticEnvironment().kindContracts
         val invalid = contracts + ("House" to contracts.getValue("House").copy(
             viewFields = contracts.getValue("House").viewFields + ("telepathy" to Type.Bool)))
@@ -31,7 +31,7 @@ class SimulationRunBindingTest {
     }
 
     @Test fun missingKindReportsBindingErrorAndClosesTheFleet() {
-        val prepared = prepareScenario(Path.of("../examples/physics/cascade.json"))
+        val prepared = prepareScenario(Path.of("../examples/physics/cascade.settings"))
         val fleet = RecordingFleet()
         val failure = assertFailsWith<IllegalStateException> {
             SimulationRun(prepared, "test", fleet, SemanticEnvironment().kindContracts - "House")

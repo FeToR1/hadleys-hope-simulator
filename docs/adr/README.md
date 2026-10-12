@@ -42,6 +42,7 @@ ADR **не нужен** для: исправлений багов без сме�
 | [0008](0008-generiruemyy-predmetnyy-kontrakt.md) | Генерируемый предметный контракт contract.json | принято |
 | [0009](0009-klyaksa-only.md) | Единая предметная модель Кляксы | принято |
 | [0010](0010-single-cvm2-and-settings.md) | Единственный исполнитель CVM2 и настройки на языке Colony | принято |
+| [0011](0011-settings-only-scenarios.md) | Сценарии только на Colony settings | принято |
 
 ADR 0001–0008 ретроспективно зафиксированы из [history/optimization-5000.md](../history/optimization-5000.md)
 и git-истории; в них указано, какие детали восстановлены по косвенным данным.

@@ -28,7 +28,7 @@ DSL Colony → компилятор (Kotlin + ANTLR4) → общий типиз�
 | `native/` | hh-vm: C++20, CMake; `src/` (vm, reader, verify, random, protocol…), `tests/` |
 | `frontend/` | Дашборд React 19 + Vite; `src/domain/types.ts` — типы кадров SSE, `src/components/` |
 | `conformance/` | Векторы `*.json` + CVM2 regression runner `run_vectors.py` и независимая проверка PRNG |
-| `examples/` | Сценарии: `physics/` (cascade, full, full-5000, settlement-5000, settlement.colony), `integration/` |
+| `examples/` | Сценарии: `physics/` (cascade, full, full-5000, colony.settings, catalog.settings, settlement.colony), `integration/` |
 | `scripts/` | `start-5000.ps1` / `stop-5000.ps1` — запуск/остановка сценария «5000 домов» |
 | `docs/` | Документация; карта — в [README](README.md#документация), правила ведения — [docs/contribution/documentation-policy.md](docs/contribution/documentation-policy.md) |
 | `docs/generated/contract.json` | Генерируемый предметный контракт (язык/мир) — руками не править |

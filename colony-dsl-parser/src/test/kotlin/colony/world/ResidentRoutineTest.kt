@@ -8,7 +8,7 @@ import kotlin.test.*
 
 class ResidentRoutineTest {
     private fun prepared(startMinute: Int = 480): PreparedRun {
-        val base = prepareScenario(Path.of("../examples/physics/cascade.json"))
+        val base = prepareScenario(Path.of("../examples/physics/cascade.settings"))
         return base.copy(
             scenario = base.scenario.copy(world = base.scenario.world!!.copy(
                 human = HumanConfig(startMinute = startMinute),
@@ -100,7 +100,7 @@ class ResidentRoutineTest {
     }
 
     @Test fun assignmentsAreBalancedAndTheClockWrapsAtMidnight() {
-        val p = prepareScenario(Path.of("../examples/physics/full.json"))
+        val p = prepareScenario(Path.of("../examples/physics/full.settings"))
         val config = p.scenario.world!!.copy(human = HumanConfig(startMinute = 1439))
         val world = WorldKernel(p.manifest, config, buildTopology(p.manifest, config), 60.0)
         val humans = p.manifest.instances.filter { it.kind == "Human" }

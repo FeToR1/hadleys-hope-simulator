@@ -16,7 +16,8 @@ fun contractDocument(environment: SemanticEnvironment = SemanticEnvironment()): 
     put("contractVersion", CONTRACT_VERSION)
     putJsonObject("sourceFormats") {
         put(".colony", "event and behavior declarations")
-        put(".settings", "settings, source, let, template, object using, param binding, population, world, constant lists")
+        put(".settings", "settings, include, source, let, template, object using, param binding, population, world, constant lists and records, at tick for target")
+        put("scenarioInput", ".settings only; includes are declaration libraries")
         put("settingsExpressions", "Colony constant expressions with the same types and canonical units")
         put("executable", "CVM2")
     }

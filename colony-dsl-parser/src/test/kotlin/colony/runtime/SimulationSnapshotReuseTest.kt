@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 
 class SimulationSnapshotReuseTest {
     @Test fun unchangedInfrastructureFixturesReuseTheirImmutableSnapshots() {
-        val prepared = prepareScenario(Path.of("../examples/physics/cascade.json"))
+        val prepared = prepareScenario(Path.of("../examples/physics/cascade.settings"))
         assertTrue(prepared.scenario.world?.creatine?.enabled != true, "fixture-only mine metrics stay absent in the legacy scenario")
         SimulationRun(prepared, "snapshot-reuse").use { run ->
             val firstSnapshot = run.step()
@@ -26,7 +26,7 @@ class SimulationSnapshotReuseTest {
     }
 
     @Test fun ecologyZonesAreObservableAndReuseUnchangedSnapshots() {
-        val base = prepareScenario(Path.of("../examples/physics/cascade.json"))
+        val base = prepareScenario(Path.of("../examples/physics/cascade.settings"))
         val world = base.scenario.world!!
         val prepared = base.copy(scenario = base.scenario.copy(world = world.copy(ecosystem = EcosystemConfig(enabled = true))))
         SimulationRun(prepared, "zone-snapshots").use { run ->

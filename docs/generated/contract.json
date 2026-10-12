@@ -1,8 +1,9 @@
 {
-    "contractVersion": 10,
+    "contractVersion": 11,
     "sourceFormats": {
         ".colony": "event and behavior declarations",
-        ".settings": "settings, source, let, template, object using, param binding, population, world, constant lists",
+        ".settings": "settings, include, source, let, template, object using, param binding, population, world, constant lists and records, at tick for target",
+        "scenarioInput": ".settings only; includes are declaration libraries",
         "settingsExpressions": "Colony constant expressions with the same types and canonical units",
         "executable": "CVM2"
     },

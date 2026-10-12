@@ -1,0 +1,10 @@
+// Параметры запуска на языке Colony.
+settings colony_300 {
+    include "catalog.settings";
+    seed = 426; step = 1s; ticks = 30;
+    population household as home { count = 300; }
+    population predator as predator { count = 8; }
+    at 5 for "home-1/house" {
+        occupants = 0;
+    }
+}

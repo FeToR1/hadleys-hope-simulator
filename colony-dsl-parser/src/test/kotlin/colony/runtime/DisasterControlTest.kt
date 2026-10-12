@@ -10,7 +10,7 @@ import java.nio.file.Path
 import kotlin.test.*
 
 class DisasterControlTest {
-    private fun prepared() = prepareScenario(Path.of("../examples/physics/ecosystem-small.json"))
+    private fun prepared() = prepareScenario(Path.of("../examples/physics/ecosystem-small.settings"))
 
     @Test fun pausedCommandCommitsOnNextStepWithCausalLinksAndResetDropsTheQueue() {
         RunController(prepared()).use { controller ->
@@ -71,7 +71,7 @@ class DisasterControlTest {
                 controller.queueDisaster(Disaster.Crocodiles(1), controller.health().getValue("runId").jsonPrimitive.content)
             }
         }
-        RunController(prepareScenario(Path.of("../examples/integration/small.json"))).use { controller ->
+        RunController(prepareScenario(Path.of("../examples/integration/small.settings"))).use { controller ->
             assertNull(controller.health()["disasters"])
             assertFailsWith<IllegalArgumentException> {
                 controller.queueDisaster(Disaster.Crocodiles(1), controller.health().getValue("runId").jsonPrimitive.content)

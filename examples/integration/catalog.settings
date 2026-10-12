@@ -1,0 +1,55 @@
+// Общие программы поведения и шаблоны экземпляров Colony.
+settings IntegrationCatalog {
+    source "../../colony-dsl-parser/examples/heater.colony";
+    source "../../colony-dsl-parser/examples/resident.colony";
+    source "../../colony-dsl-parser/examples/predator.colony";
+    source "devices.colony";
+    template household {
+        object house using HouseControl {
+            param heater = "$instance/heater";
+            view {
+                occupants = 1;
+                temperature = 16degC;
+            }
+        }
+        object heater using HeaterControl {
+            parent = "$instance/house";
+            x = 10m;
+            y = 10m;
+            view {
+                home_occupants = 1;
+                broken = false;
+                power_connected = true;
+            }
+        }
+        object kettle using KettleControl {
+            parent = "$instance/house";
+            x = 20m;
+            y = 10m;
+            view {
+                water_temperature = 20degC;
+                broken = false;
+                power_connected = true;
+            }
+        }
+        object resident using Resident {
+            parent = "$instance/house";
+            x = 25m;
+            y = 25m;
+            view {
+                cold = true;
+                position = Position { x: 0m, y: 0m };
+                reachable_breakables = [];
+            }
+        }
+    }
+    template predator {
+        object predator using Predator {
+            view {
+                position = Position { x: 0m, y: 0m };
+                patrol_waypoint = Position { x: 400m, y: 300m };
+                visible_infrastructure = [Target { id: "home-1/heater", position: Position { x: 10m, y: 10m }, distance: 1m }];
+            }
+        }
+    }
+}

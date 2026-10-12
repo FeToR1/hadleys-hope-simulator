@@ -152,7 +152,8 @@ Kotlin-тесты и CLI повторяют их на `hh-vm`; `NativeConformanc
 Между слоями используются AST (`colony.ast`), `SemanticModel` (типы и разрешённые имена), IR (`colony.ir`),
 `CompiledProgram` (CVM2 и сведения для проверки привязок), `PreparedRun`/`RunManifest`/`WorldConfig` (экземпляры и мир),
 `VmFrame`/`VmResult` (граница исполнения), `TickSnapshot` (наблюдение). `colony.compiler` связывает стадии;
-`colony.runtime.SettingsScenario` по AST настроек строит ту же модель сценария, что и прежний JSON-загрузчик.
+`colony.runtime.SettingsScenario` по AST настроек строит модель сценария; `SettingsPackage` разрешает подключения библиотек.
+JSON-загрузчик сценариев удалён ([ADR 0011](adr/0011-settings-only-scenarios.md)).
 
 ## 3. Структура кодовой базы
 
@@ -168,7 +169,7 @@ Kotlin-тесты и CLI повторяют их на `hh-vm`; `NativeConformanc
 | [`colony-dsl-parser/src/main/kotlin/colony/world/TaskQueue.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/TaskQueue.kt) | Глобальная очередь ремонтных задач с привязкой к координатам и spatial-индексу. |
 | [`colony-dsl-parser/src/main/kotlin/colony/world/Topology.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/Topology.kt) | Генерация топологии: дома, ЛЭП, водопровод, склад, медцентр, ПВО по периметру и крышам. |
 | [`colony-dsl-parser/src/main/kotlin/colony/world/WorldKernel.kt`](../colony-dsl-parser/src/main/kotlin/colony/world/WorldKernel.kt) | Главный физический цикл: интеграция моря, угроз, ПВО, креатина, респираторов и ремонта. |
-| [`examples/physics/settlement-5000.json`](../examples/physics/settlement-5000.json) | Конфигурация сценария на 5000 домов: земной климат (+19 °C), активное море, ПВО, креатин. |
+| [`examples/physics/colony.settings`](../examples/physics/colony.settings) | Конфигурация сценария на 5000 домов: земной климат (+19 °C), активное море, ПВО, креатин. |
 | [`frontend/src/domain/mapPresentation.ts`](../frontend/src/domain/mapPresentation.ts) | Определение типов `air_defense`, `crocodile`, `depository`, `medical_center` и их SVG-иконок. |
 | [`frontend/src/components/SettlementMap.tsx`](../frontend/src/components/SettlementMap.tsx) | Отрисовка карты на Pixi.js: отображение леса, моря, динамического тумана, юнитов ПВО и угроз. |
 | [`frontend/src/components/Sidebar.tsx`](../frontend/src/components/Sidebar.tsx) | Информационная панель сущностей: состояние ПВО, запас креатина, урон от моря, респираторы. |

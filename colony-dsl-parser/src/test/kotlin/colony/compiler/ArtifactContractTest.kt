@@ -25,7 +25,7 @@ class ArtifactContractTest {
     }
 
     @Test fun aRuntimeRefusesAProgramFromAnotherContract() {
-        val scenario = Scenario(catalog = "inline", ticks = 1, populations = listOf(Population("t", 1, "g")))
+        val scenario = Scenario(ticks = 1, populations = listOf(Population("t", 1, "g")))
         val catalog = Catalog(sources = listOf("inline"), templates = mapOf("t" to Template(emptyMap())))
         val stale = program.copy(contract = CONTRACT_VERSION - 1)
         val refusal = assertFailsWith<IllegalArgumentException> { expandScenario(scenario, catalog, stale) }

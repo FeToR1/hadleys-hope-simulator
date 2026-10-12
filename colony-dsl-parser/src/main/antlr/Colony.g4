@@ -14,9 +14,11 @@ settingsProgram
 
 settingsMember
     : SOURCE STRING SEMI
+    | INCLUDE STRING SEMI
     | letStatement
     | TEMPLATE identifier LBRACE settingsObject* RBRACE
     | POPULATION identifier AS identifier LBRACE settingsNode* RBRACE
+    | AT expression FOR STRING LBRACE settingsNode* RBRACE
     | settingsNode
     ;
 
@@ -251,7 +253,7 @@ typeName
     ;
 
 identifier
-    : IDENTIFIER | SETTINGS | SOURCE | TEMPLATE | POPULATION | OBJECT | USING
+    : IDENTIFIER | SETTINGS | SOURCE | TEMPLATE | POPULATION | OBJECT | USING | INCLUDE | AT
     ;
 
 // ---------- Lexer ----------
@@ -262,6 +264,8 @@ TEMPLATE       : 'template';
 POPULATION     : 'population';
 OBJECT         : 'object';
 USING          : 'using';
+INCLUDE        : 'include';
+AT             : 'at';
 
 BEHAVIOR       : 'behavior';
 FOR            : 'for';

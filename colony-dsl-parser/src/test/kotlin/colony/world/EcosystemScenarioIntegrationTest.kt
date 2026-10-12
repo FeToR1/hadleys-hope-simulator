@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 
 class EcosystemScenarioIntegrationTest {
     @Test fun `small ecology scenario cleans street manure and unloads at its depot`() {
-        val prepared = prepareScenario(Path.of("../examples/physics/ecosystem-small.json"))
+        val prepared = prepareScenario(Path.of("../examples/physics/ecosystem-small.settings"))
         assertTrue(prepared.manifest.instances.all { it.kind in colony.semantics.SemanticEnvironment().kindContracts })
         val predator = assertNotNull(prepared.manifest.instances.firstOrNull { it.kind == "Predator" })
         val observedEvents = ArrayList<colony.runtime.WorldEvent>()
@@ -38,7 +38,7 @@ class EcosystemScenarioIntegrationTest {
     }
 
     @Test fun `ground predator emits its distinct attack cause`() {
-        val base = prepareScenario(Path.of("../examples/physics/ecosystem-small.json"))
+        val base = prepareScenario(Path.of("../examples/physics/ecosystem-small.settings"))
         val kept = base.manifest.instances.filter { it.id.startsWith("home-1/") || it.id.startsWith("predator-1/") }
         val world = checkNotNull(base.scenario.world).copy(
             fence = FenceConfig(enabled = false),

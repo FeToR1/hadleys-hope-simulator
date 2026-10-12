@@ -40,14 +40,11 @@ class SettingsScenarioTest {
 
     @Test fun mainSettingsPreserveThe5000Planet() {
         val settings = prepareScenario(Path.of("../examples/physics/colony.settings"))
-        val existing = prepareScenario(Path.of("../examples/physics/settlement-5000.json"))
-        assertTrue(jsonEquivalent(colony.compiler.colonyJson.encodeToJsonElement(RunManifest.serializer(), existing.manifest),
-            colony.compiler.colonyJson.encodeToJsonElement(RunManifest.serializer(), settings.manifest)),
-            "Settings must preserve every instance, coordinate and binding (numeric values compare by value)")
-        assertEquals(existing.scenario.world, settings.scenario.world)
-        assertEquals(existing.scenario.ticks, settings.scenario.ticks)
-        assertContentEquals(colony.cvm.ArtifactWriter.write(existing.program.nativeProgram),
-            colony.cvm.ArtifactWriter.write(settings.program.nativeProgram))
+        assertEquals(5000, settings.manifest.instances.count { it.kind == "House" })
+        assertEquals(20224, settings.manifest.instances.size)
+        assertEquals(86400, settings.scenario.ticks)
+        assertEquals(19.0, settings.scenario.world!!.climate.meanTemperature)
+        assertEquals(8000.0, settings.manifest.instances.first { it.kind == "Heater" }.params.getValue("rating").jsonPrimitive.double)
     }
 
     @Test fun sharedExpressionsNormalizeUnitsAndPermitNegativeCoordinates() {
@@ -101,7 +98,7 @@ class SettingsScenarioTest {
     }
 
     @Test fun newWordsRemainIdentifiersInBehaviorPrograms() {
-        val ast = ColonyParserFacade().parse("event Marker { object: Int64; source: Bool; } behavior template for House { state settings: Int64 = 0; }")
+        val ast = ColonyParserFacade().parse("event Marker { object: Int64; source: Bool; include: Bool; at: Int64; } behavior template for House { state settings: Int64 = 0; }")
         assertEquals(2, ast.declarations.size)
     }
 }

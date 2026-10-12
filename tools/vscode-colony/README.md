@@ -5,7 +5,7 @@
 Диагностику типов и компиляцию выполняет CLI; language server пока не реализован.
 
 Из корня репозитория: `./scripts/install-colony-vscode.ps1 -Install`.
-Скрипт создаёт `results/colony-language-0.2.0.vsix` и устанавливает его через `code`.
+Скрипт создаёт `results/colony-language-0.3.0.vsix` и устанавливает его через `code`.
 Без `-Install` только собирает VSIX; файл можно установить через «Extensions: Install from VSIX…».
 После установки выполните «Developer: Reload Window»; режим файла должен называться Colony.
 

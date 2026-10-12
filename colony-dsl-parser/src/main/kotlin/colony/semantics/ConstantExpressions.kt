@@ -30,15 +30,33 @@ class ConstantExpressions {
     fun evaluate(expression: Expr): TypedConstant {
         fun requireConstant(expr: Expr) {
             when (expr) {
-                is CallExpr, is MemberExpr, is IndexExpr, is RecordExpr ->
+                is CallExpr, is MemberExpr, is IndexExpr ->
                     error("${expr.span.startLine}:${expr.span.startColumn}: settings expressions must be constant; calls and observations are unavailable")
                 is BinaryExpr -> { requireConstant(expr.left); requireConstant(expr.right) }
                 is UnaryExpr -> requireConstant(expr.operand)
                 is ParenExpr -> requireConstant(expr.expression)
+                is RecordExpr -> expr.fields.forEach { requireConstant(it.value) }
                 else -> Unit
             }
         }
         requireConstant(expression)
+        if (expression is ParenExpr) return evaluate(expression.expression)
+        if (expression is RecordExpr) {
+            val schema = SemanticEnvironment().recordFields(expression.typeName)
+                ?: error("Unknown settings record ${expression.typeName}")
+            require(expression.fields.map { it.name }.distinct().size == expression.fields.size) { "Duplicate record field" }
+            val fields = expression.fields.associate { field ->
+                val expected = schema[field.name] ?: error("Unknown ${expression.typeName} field ${field.name}")
+                val actual = evaluate(field.value)
+                require(expected.isAssignableFrom(actual.type) || (expected is Type.Ref && actual.type == Type.String)) {
+                    "${expression.typeName}.${field.name}: expected ${expected.render()}, got ${actual.type.render()}"
+                }
+                field.name to actual
+            }
+            val required = if (expression.typeName == "Target") setOf("id") else schema.keys
+            require(fields.keys.containsAll(required)) { "${expression.typeName}: missing fields ${required - fields.keys}" }
+            return TypedConstant(Type.Kind(expression.typeName), ConstantValue.Record(fields))
+        }
         val sink = DiagnosticSink()
         val model = SemanticModel()
         TypeChecker(SemanticEnvironment(), symbols, model, sink, "Settings", "House", null,

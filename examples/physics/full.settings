@@ -1,0 +1,214 @@
+// Параметры запуска на языке Colony.
+settings full {
+    include "catalog.settings";
+    seed = 426; step = 1s; ticks = 86400;
+    population crew as crew { count = 4; }
+    population transport as transport { count = 2; }
+    population marine_squad as marines { count = 2; }
+    population household as home { count = 300; }
+    population predator as predator { count = 12; }
+    world {
+        version = 1;
+        climate {
+            meanTemperature = -30.0degC;
+            amplitude = 10.0degC;
+            dayLengthSeconds = 86400.0s;
+            sunriseSeconds = 21600.0s;
+            sunsetSeconds = 64800.0s;
+            weatherFactor = 0.8;
+        }
+        power {
+            reactorPower = 2000000.0W;
+            solarPeak = 600000.0W;
+            upsCapacity = 1800000000.0J;
+            upsInitialCharge = 1800000000.0J;
+            upsMaxPower = 300000.0W;
+            upsEfficiency = 0.95;
+            housesPerPole = 20;
+            poleHealth = 100.0hp;
+            priorities {
+                Pump = 0;
+                Ups = 0;
+                Heater = 1;
+                Kettle = 2;
+            }
+        }
+        water {
+            pumpPower = 40000.0W;
+            freezeThresholdIndoor = 5400.0s;
+            houseDemand = 6e-06;
+        }
+        house {
+            conductance = 200.0;
+            capacity = 10000000.0;
+            heaterEfficiency = 1.0;
+            initialTemperature = 20.0degC;
+            coldThreshold = 10.0degC;
+            kettleVolume = 1.7L;
+            kettleHeatLoss = 3.0;
+        }
+        human {
+            startMinute = 480;
+            harmThreshold = 5.0degC;
+            harmPerKelvinHour = 0.5;
+            vandalRadius = 12.0m;
+        }
+        marine {
+            responseDelaySeconds = 300.0s;
+            assaultRadius = 4.0m;
+            minSquadSize = 4;
+            maxSquadSize = 5;
+            routSeconds = 600.0s;
+        }
+        transport {
+            boardRadius = 6.0m;
+            passengerCapacity = 5;
+            walkRadius = 120.0m;
+            boardingWaitSeconds = 90.0s;
+        }
+        repair {
+            duration {
+                pole = 300.0s;
+                pipe = 600.0s;
+                device = 180.0s;
+                fence = 240.0s;
+            }
+            parts {
+                pole = 120000;
+                pipe = 80000;
+                device = 40000;
+                fence = 30000;
+            }
+            hourlyRate = 150000;
+            workRadius = 6.0m;
+            dispatchDelaySeconds = 120.0s;
+            materials = 24;
+            roverSpeed = 9.0mps;
+            initialDepotMaterials = 0;
+            depotRestockPerSecond = 0.0;
+            materialCost = 40000;
+        }
+        tariffs {
+            electricityPerKwh = 900;
+            waterPerCubicMetre = 4500;
+            billingIntervalSeconds = 3600s;
+            monthSeconds = 2592000s;
+        }
+        sight {
+            sightRadius = 2000.0m;
+            listLimit = 16;
+            attackRadius = 3.0m;
+            predatorRadius = 150.0m;
+        }
+        fence {
+            enabled = true;
+            margin = 40.0m;
+            segmentLength = 60.0m;
+            health = 400.0hp;
+            roamingDistance = 120.0m;
+        }
+        sea {
+            enabled = false;
+            coastalZoneWidth = 120.0m;
+            erosionDamageRate = 1.2;
+            fogPeriodSeconds = 180.0s;
+            fogDurationSeconds = 75.0s;
+            fogMaxPenetration = 350.0m;
+            fogAdvanceSpeed = 8.0mps;
+            fogSuffocationDamageRate = 4.0;
+            cloudWidth = 1200.0m;
+            cloudHeight = 1400.0m;
+            initialRespirators = 0;
+            respiratorRestockPerSecond = 0.0;
+        }
+        creatine {
+            enabled = false;
+            pricePerUnit = 1200;
+            sellFraction = 0.45;
+            healCost = 2.0;
+            lowHealthThreshold = 50.0hp;
+            yieldPerWorkerHour = 4.0;
+            initialDepotStock = 50.0;
+            initialMedicalStock = 50.0;
+        }
+        defense {
+            enabled = false;
+            initialAmmoPerUnit = 0;
+            powerPerUnit = 0.0W;
+            ammoCostPerRound = 150000;
+            ammoRestockPerSecond = 0.0;
+        }
+        ecosystem {
+            enabled = false;
+            zoneSize = 140.0m;
+            forest {
+                enabled = false;
+                initialBiomassPerZone = 100.0;
+                regrowthPerSecond = 0.02;
+                clearingPerSecond = 2.0;
+            }
+            predator {
+                enabled = false;
+                mutations = ["armored", "swift", "venomous"];
+                attackPeriodSeconds = 600.0s;
+                attackDurationSeconds = 180.0s;
+            }
+            cleanup {
+                enabled = false;
+                loadCapacity = 600.0;
+                cleanPerSecond = 2.0;
+                unloadAt {
+                    x = 0.0m;
+                    y = 0.0m;
+                }
+                unloadRadius = 12.0m;
+                costPerUnit = 2;
+                fuelPricePerUnit = 100;
+                initialFuel = 100000.0;
+                fuelPerUnit = 0.04;
+                fuelPerMetre = 0.1;
+                initialDepotFuel = 0.0;
+                depotFuelCapacity = 100000.0;
+                fuelRestockPerSecond = 0.0;
+            }
+            plankton {
+                enabled = false;
+                coastalWidth = 120.0m;
+                wavePeriodSeconds = 3600.0s;
+                initialBiomassPerCoastalZone = 500.0;
+                regrowthPerSecond = 0.05;
+                damagePerSecond = 0.04;
+                burningPerSecond = 5.0;
+                burnFuelPerBiomass = 0.2;
+                burnPowerPerSecond = 4000.0W;
+                initialBurnFuel = 10000.0;
+                fuelCostPerUnit = 3;
+                fuelCapacity = 10000.0;
+                fuelRestockPerSecond = 0.0;
+                burnerCount = 1;
+                burnerSpacing = 140.0;
+            }
+            humanFactors {
+                enabled = false;
+                availabilityCycleSeconds = 1800.0s;
+                unavailableSeconds = 120.0s;
+                boredomSeconds = 180.0s;
+                vandalPeriodSeconds = 2400.0s;
+                vandalDamage = 5.0hp;
+                vandalChancePercent = 8;
+                vandalRadius = 12.0m;
+                alcoholPeriodSeconds = 3600.0s;
+                alcoholDurationSeconds = 180.0s;
+            }
+            crocodileManurePerSecond = 0.15;
+        }
+        geometry {
+            coastX = none;
+            mine = none;
+            depository = none;
+            medicalCenter = none;
+            gates = [];
+            gateWidth = 12.0m;
+        }
+    }
+}

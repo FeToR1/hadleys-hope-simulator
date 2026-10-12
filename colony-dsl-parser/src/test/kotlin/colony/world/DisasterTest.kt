@@ -8,7 +8,7 @@ import java.nio.file.Path
 import kotlin.test.*
 
 class DisasterTest {
-    private val prepared = prepareScenario(Path.of("../examples/physics/ecosystem-small.json"))
+    private val prepared = prepareScenario(Path.of("../examples/physics/ecosystem-small.settings"))
     private fun world(config: WorldConfig = prepared.scenario.world!!) =
         WorldKernel(prepared.manifest, config, buildTopology(prepared.manifest, config), 1.0)
 

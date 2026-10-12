@@ -7,9 +7,8 @@ import colony.semantics.render
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.nio.file.Path
-import kotlin.io.path.readText
 
-@Serializable data class Catalog(val version: Int = 1, val sources: List<String>, val templates: Map<String, Template>)
+data class Catalog(val sources: List<String>, val templates: Map<String, Template>)
 @Serializable data class Template(val objects: Map<String, ObjectSpec>)
 @Serializable data class ObjectSpec(
     val kind: String, val behavior: String,
@@ -23,7 +22,7 @@ import kotlin.io.path.readText
 @Serializable data class Population(val template: String, val count: Int, val prefix: String, val grid: GridLayout? = null)
 @Serializable data class ObservationChange(val tick: Long, val target: String, val view: JsonObject)
 @Serializable data class Scenario(
-    val version: Int = 1, val catalog: String, val seed: Long = 426, val step: String = "1s",
+    val seed: Long = 426, val step: String = "1s",
     val ticks: Int = 120, val populations: List<Population>,
     val changes: List<ObservationChange> = emptyList(),
     /**
@@ -40,18 +39,8 @@ import kotlin.io.path.readText
 data class PreparedRun(val scenario: Scenario, val program: CompiledProgram, val manifest: RunManifest, val sources: List<SourceFile> = emptyList())
 
 fun prepareScenario(path: Path): PreparedRun {
-    if (path.fileName.toString().endsWith(".settings")) return prepareSettings(path)
-    val absolute = path.toAbsolutePath().normalize()
-    val scenario = colonyJson.decodeFromString<Scenario>(absolute.readText())
-    val catalogPath = absolute.parent.resolve(scenario.catalog).normalize()
-    val catalog = colonyJson.decodeFromString<Catalog>(catalogPath.readText())
-    require(scenario.version == 1 && catalog.version == 1) { "Unsupported scenario/catalog version" }
-    require(scenario.ticks > 0) { "ticks must be positive" }
-    require(catalog.sources.isNotEmpty() && catalog.sources.distinct().size == catalog.sources.size) { "Sources must be nonempty and unique" }
-    // The sources form one compilation package; diagnostics are mapped back to the individual file names.
-    val sources = catalog.sources.map { SourceFile(it, catalogPath.parent.resolve(it).readText()) }
-    val program = compileSources(sources, scenario.step)
-    return expandScenario(scenario, catalog, program).copy(sources = sources)
+    require(path.fileName.toString().endsWith(".settings")) { "Scenario input must be .settings; JSON scenarios are no longer supported: $path" }
+    return prepareSettings(path)
 }
 
 fun expandScenario(scenario: Scenario, catalog: Catalog, program: CompiledProgram): PreparedRun {
@@ -214,6 +203,6 @@ internal fun validateValue(value: JsonElement, type: String, instances: Map<Stri
             if (type == "Probability" && number !in 0.0..1.0) fail()
             if (type in setOf("Rate", "Duration", "Power", "Energy", "Volume", "Distance", "Speed", "Health") && number < 0) fail()
         }
-        else -> error("$location: unsupported JSON parameter type $type; enum parameters need a versioned enum schema")
+        else -> error("$location: unsupported parameter type $type; enum parameters need a versioned enum schema")
     }
 }

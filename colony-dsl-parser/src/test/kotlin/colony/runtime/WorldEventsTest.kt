@@ -66,7 +66,7 @@ class WorldEventsTest {
     })
 
     private fun run(objects: Map<String, ObjectSpec>, ticks: Int = 8, changes: List<ObservationChange> = emptyList()): SimulationRun {
-        val scenario = Scenario(catalog = "inline", ticks = ticks, populations = listOf(Population("t", 1, "g")), changes = changes)
+        val scenario = Scenario(ticks = ticks, populations = listOf(Population("t", 1, "g")), changes = changes)
         val catalog = Catalog(sources = listOf("inline"), templates = mapOf("t" to Template(objects)))
         return SimulationRun(expandScenario(scenario, catalog, program), "test")
     }

@@ -43,6 +43,18 @@ test('tokenizes the maintained settlement program with valid state across lines'
   assert.equal(stack.depth, 1);
 });
 
+test('settings libraries and scheduled observations are highlighted', async () => {
+  const g = await grammar();
+  const lines = ['include "catalog.settings";', 'at 5 for "home-1/house" { occupants = 0; }'];
+  const words = new Set();
+  for (const line of lines) {
+    for (const token of g.tokenizeLine(line).tokens) {
+      if (token.scopes.at(-1) === 'keyword.control.colony') words.add(line.slice(token.startIndex, token.endIndex));
+    }
+  }
+  for (const word of ['include', 'at', 'for']) assert.ok(words.has(word), word);
+});
+
 
 test('settings use the Colony grammar and dimensional literals', async () => {
   const g = await grammar();

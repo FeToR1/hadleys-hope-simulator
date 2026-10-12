@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.*
 
 class ProcessFleetTest {
-    private fun prepared() = prepareScenario(Path.of("../examples/integration/small.json"))
+    private fun prepared() = prepareScenario(Path.of("../examples/integration/small.settings"))
     private fun fleet(p: PreparedRun, workers: Int = 1) = ProcessFleet(p, assertNotNull(NativeVmConnection.executable()), "test", workers = workers)
     private fun handles(f: ProcessFleet) = (f.pids.values.toSet().map { it.toLong() } + f.brokerPid)
         .map { ProcessHandle.of(it).orElseThrow() }
@@ -74,7 +74,7 @@ class ProcessFleetTest {
             params = buildJsonObject { put("start", 0) },
             view = buildJsonObject { put("cold", false); put("reachable_breakables", JsonArray(emptyList())) })))
         val expanded = expandScenario(
-            Scenario(catalog = "binary", ticks = 2, populations = listOf(Population("meter", 513, "meter"))),
+            Scenario(ticks = 2, populations = listOf(Population("meter", 513, "meter"))),
             Catalog(sources = listOf("meter.cly"), templates = mapOf("meter" to template)), compileSource(source))
         val p = expanded.copy(sources = listOf(SourceFile("meter.cly", source)),
             manifest = expanded.manifest.copy(instances = expanded.manifest.instances.mapIndexed { index, instance ->
@@ -126,8 +126,8 @@ class ProcessFleetTest {
             "z_target" to ObjectSpec("Human", "Idle"),
             "zz_home" to ObjectSpec("House", "Home"),
         ))
-        val world = prepareScenario(Path.of("../examples/physics/cascade.json")).scenario.world!!
-        val scenario = Scenario(catalog = "failure", ticks = 3, populations = listOf(Population("failure", 1, "failure")), world = world)
+        val world = prepareScenario(Path.of("../examples/physics/cascade.settings")).scenario.world!!
+        val scenario = Scenario(ticks = 3, populations = listOf(Population("failure", 1, "failure")), world = world)
         val prepared = expandScenario(scenario, Catalog(sources = listOf("failure.cly"), templates = mapOf("failure" to template)), program)
             .copy(sources = listOf(SourceFile("failure.cly", source)))
         val executable = assertNotNull(NativeVmConnection.executable())
@@ -145,7 +145,7 @@ class ProcessFleetTest {
     }
 
     @Test fun roverTransportsTheWholeSquadAndNativeSnapshotsMatchDefaultFleet() {
-        val base = prepareScenario(Path.of("../examples/physics/cascade.json"))
+        val base = prepareScenario(Path.of("../examples/physics/cascade.settings"))
         val world = base.scenario.world!!
         val p = base.copy(
             scenario = base.scenario.copy(world = world.copy(
@@ -189,7 +189,7 @@ class ProcessFleetTest {
     }
 
     @Test fun residentRoutineMovesIdenticallyThroughTheBroker() {
-        val base = prepareScenario(Path.of("../examples/physics/cascade.json"))
+        val base = prepareScenario(Path.of("../examples/physics/cascade.settings"))
         val p = base.copy(manifest = base.manifest.copy(instances = base.manifest.instances.filter {
             it.id.startsWith("home-1/") || it.id.startsWith("home-2/")
         }))

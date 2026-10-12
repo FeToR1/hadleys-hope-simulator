@@ -27,7 +27,12 @@ class AstBuilder : ColonyBaseVisitor<AstNode>() {
                 SettingsPopulation(it.identifier(0).text, it.identifier(1).text,
                     it.settingsNode().map { node -> visit(node) as SettingsNode }, span(it))
             },
-            members.filter { it.POPULATION() == null }.flatMap { it.settingsNode() }.map { visit(it) as SettingsNode }, span(ctx))
+            members.filter { it.POPULATION() == null && it.AT() == null }.flatMap { it.settingsNode() }.map { visit(it) as SettingsNode }, span(ctx),
+            includes = members.filter { it.INCLUDE() != null }.map { unquote(it.STRING().text) },
+            changes = members.filter { it.AT() != null }.map {
+                SettingsChange(visit(it.expression()) as Expr, unquote(it.STRING().text),
+                    it.settingsNode().map { node -> visit(node) as SettingsNode }, span(it))
+            })
     }
 
     override fun visitSettingsNode(ctx: ColonyParser.SettingsNodeContext): SettingsNode = when {

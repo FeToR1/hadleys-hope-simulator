@@ -52,7 +52,7 @@ UI: <http://localhost:5173>, бэкенд: <http://localhost:8080>.
 `run-native` и `serve-native` используют общий пул нативных процессов: байт-код загружается один раз
 на процесс, каждый житель и прибор получает отдельный контекст. `HH_NATIVE_WORKERS` задаёт размер пула
 (1–32, по умолчанию 1); все режимы используют C++ исполнитель.
-Исторический замер `full-5000.json` на объединённом `development` — около 6,22 тика/с (fast до 10,47)
+Исторический замер `full-5000.settings` на объединённом `development` — около 6,22 тика/с (fast до 10,47)
 без HTTP и браузера; эти числа не измеряют новый сценарий экосистемы (2,85 тика/с, [отчёт](docs/history/optimization-5000.md#проверка-и-слияние-с-development)).
 Карта объединяет дома и жителей в группы издалека, при приближении рисует только видимую область.
 
@@ -62,9 +62,9 @@ UI: <http://localhost:5173>, бэкенд: <http://localhost:8080>.
 docker compose up --build        # остановка: docker compose down
 ```
 
-Backend по умолчанию — `serve-native examples/physics/full-5000.json`; другой сценарий — через `HH_SCENARIO`
-(компактный: `HH_SCENARIO=examples/physics/cascade.json`). Профиль `simulation` (`docker compose --profile simulation up`)
-делает разовый прогон `run-native` на 300 домах (`full.json`) с записью JSONL в `./results`.
+Backend по умолчанию — `serve-native examples/physics/full-5000.settings`; другой сценарий — через `HH_SCENARIO`
+(компактный: `HH_SCENARIO=examples/physics/cascade.settings`). Профиль `simulation` (`docker compose --profile simulation up`)
+делает разовый прогон `run-native` на 300 домах (`full.settings`) с записью JSONL в `./results`.
 UI: <http://localhost:5173>, backend: <http://localhost:8080>.
 
 ## Ручные напасти
@@ -85,19 +85,19 @@ UI: <http://localhost:5173>, backend: <http://localhost:8080>.
 $env:JAVA_OPTS = '-Xms512m -Xmx2g'
 $env:HH_NATIVE_WORKERS = '4'
 $env:HH_COMPACT_OBSERVER = '1'
-.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark examples/physics/full-5000.json 120
-.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-live examples/physics/full-5000.json 120
-.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-fast examples/physics/full-5000.json 120
-.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat serve examples/physics/full-5000.json 8080
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark examples/physics/full-5000.settings 120
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-live examples/physics/full-5000.settings 120
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-fast examples/physics/full-5000.settings 120
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat serve examples/physics/full-5000.settings 8080
 
 # Расчёт без карты: все тики, полный снимок только в конце; с файлом — журнал фактов
 # (события и проводки каждого тика, промежуточные кадры full=false), без файла — JSON-итог с контрольной суммой
-.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat run-fast examples/physics/full-5000.json
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat run-fast examples/physics/full-5000.settings
 
 # Сборка с нуля
 .\scripts\build-native.ps1
 .\colony-dsl-parser\gradlew.bat -p colony-dsl-parser installDist
-.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat serve-native examples/physics/cascade.json 8080
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat serve-native examples/physics/cascade.settings 8080
 
 Set-Location frontend
 npm ci
@@ -122,11 +122,11 @@ npm run dev
 
 | Сценарий | Что показывает |
 |---|---|
-| [settlement-5000.json](examples/physics/settlement-5000.json) | Полная экосистема: 5000 домов, лес/море, крокодилы, ПВО, креатин |
-| [full-5000.json](examples/physics/full-5000.json) | Те же настройки мира на 5000 домов — 20 028 контекстов (замеры, conformance) |
-| [full.json](examples/physics/full.json) | 300 домов: компактный полный набор мира |
-| [cascade.json](examples/physics/cascade.json) | Каскад: повреждение сети → остывание → замерзание труб → ремонт и расходы |
-| [ecosystem-small.json](examples/physics/ecosystem-small.json) | 80 домов: короткие циклы угроз, уборка и лесная служба |
+| [colony.settings](examples/physics/colony.settings) | Полная экосистема: 5000 домов, лес/море, крокодилы, ПВО, креатин |
+| [full-5000.settings](examples/physics/full-5000.settings) | Те же настройки мира на 5000 домов — 20 028 контекстов (замеры, conformance) |
+| [full.settings](examples/physics/full.settings) | 300 домов: компактный полный набор мира |
+| [cascade.settings](examples/physics/cascade.settings) | Каскад: повреждение сети → остывание → замерзание труб → ремонт и расходы |
+| [ecosystem-small.settings](examples/physics/ecosystem-small.settings) | 80 домов: короткие циклы угроз, уборка и лесная служба |
 
 Программы поведения — [settlement.colony](examples/physics/settlement.colony); черновики неподдерживаемых
 видов (не рабочие примеры) — [colony-dsl-parser/examples/drafts](colony-dsl-parser/examples/drafts).
@@ -141,7 +141,7 @@ Gradle `test`, CTest для `native/build`, `npm test` и `npm run build` в `fr
 
 Основной сценарий Кляксы на 5000 домов — [examples/physics/colony.settings](examples/physics/colony.settings).
 Он использует существующий `settlement.colony`; `scripts/start-5000.ps1` выбирает его по умолчанию.
-Численность меняется в `let houses`, мощность обогревателя — в `let heaterPower`.
+Численность меняется в `let houses`, мощность обогревателя — в `let heaterPower` общей библиотеки [catalog.settings](examples/physics/catalog.settings).
 
 
 [examples/settings/colony.settings](examples/settings/colony.settings) задаёт мир, группы объектов и параметры

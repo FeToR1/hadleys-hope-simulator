@@ -85,9 +85,8 @@ class UpsPowerRegressionTest {
     }
 
     @Test fun fullScenariosKeepChargingInPriorityClassZero() {
-        for (name in listOf("full.json", "full-5000.json")) {
-            val scenario = Json.parseToJsonElement(Files.readString(Path.of("../examples/physics/$name"))).jsonObject
-            val config = Json.decodeFromJsonElement<WorldConfig>(scenario.getValue("world"))
+        for (name in listOf("full.settings", "full-5000.settings")) {
+            val config = colony.runtime.prepareScenario(Path.of("../examples/physics/$name")).scenario.world!!
             assertEquals(0, config.power.priorityOf("Ups"), name)
         }
     }

@@ -2,6 +2,9 @@
 
 > **Статус:** историческое · **Обновлять при:** никогда (новые замеры оформляются новым отчётом) · **Аудитория:** разработчики · **Источник истины:** исторические результаты и указанные ревизии
 
+Названия JSON-сценариев ниже относятся к историческим запускам. Их актуальные `.settings`-версии
+сохраняют входы; переход — [ADR 0011](../adr/0011-settings-only-scenarios.md).
+
 Проверка 5 октября после исправления слияний: тот же старый сценарий и 4 потока — 5,15 тика/с
 против 4,96 у отдельно собранного `a3a3b09`, 10+120 тиков с компактным кодированием.
 Последний полный снимок совпал побайтно. Новый сценарий экосистемы — 2,85 тика/с;
@@ -132,9 +135,9 @@
 ```powershell
 $env:JAVA_OPTS = '-Xms512m -Xmx2g'
 $env:HH_REFERENCE_WORKERS = '4'
-.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-live examples/physics/full-5000.json 120
-.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-fast examples/physics/full-5000.json 120
-.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat run-fast examples/physics/full-5000.json results\fast.jsonl
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-live examples/physics/full-5000.settings 120
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-fast examples/physics/full-5000.settings 120
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat run-fast examples/physics/full-5000.settings results\fast.jsonl
 ```
 
 В командах замера встроены 10 прогревочных тиков. Исторические таблицы выше относятся к прежним сериям оптимизаций и сохраняют свои исходные значения.
@@ -245,8 +248,8 @@ Host использует пакеты по 512 контекстов; обмен
 ```powershell
 $env:JAVA_OPTS = '-Xms512m -Xmx2g'
 $env:HH_REFERENCE_WORKERS = '4'
-.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark examples/physics/full-5000.json 120
-.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-live examples/physics/full-5000.json 120
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark examples/physics/full-5000.settings 120
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-live examples/physics/full-5000.settings 120
 ```
 
 Сравнивать варианты последовательно и с одинаковыми аргументами. `benchmark` выводит JSON с фазами,

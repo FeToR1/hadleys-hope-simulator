@@ -1,0 +1,44 @@
+// Параметры запуска на языке Colony.
+settings cascade {
+    include "catalog.settings";
+    seed = 426; step = 1s; ticks = 1800;
+    population household as home { count = 6; }
+    population crew as crew { count = 1; }
+    population predator as predator { count = 1; }
+    population marine_squad as marines { count = 1; }
+    world {
+        climate {
+            meanTemperature = -38.0degC;
+            amplitude = 6.0degC;
+        }
+        house {
+            conductance = 120.0;
+            capacity = 120000.0;
+        }
+        water {
+            freezeThresholdIndoor = 400.0s;
+        }
+        repair {
+            duration {
+                pole = 600.0s;
+                pipe = 240.0s;
+                device = 90.0s;
+            }
+            dispatchDelaySeconds = 120.0s;
+        }
+        sight {
+            sightRadius = 400.0m;
+        }
+        tariffs {
+            billingIntervalSeconds = 600s;
+        }
+        marine {
+            responseDelaySeconds = 300.0s;
+            assaultRadius = 4.0m;
+        }
+        transport {
+            boardRadius = 6.0m;
+            passengerCapacity = 5;
+        }
+    }
+}

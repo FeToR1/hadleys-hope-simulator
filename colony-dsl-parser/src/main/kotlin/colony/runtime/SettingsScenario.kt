@@ -2,7 +2,6 @@ package colony.runtime
 
 import colony.ast.*
 import colony.compiler.*
-import colony.parser.ColonyParserFacade
 import colony.semantics.*
 import colony.world.WorldConfig
 import kotlinx.serialization.json.*
@@ -13,7 +12,7 @@ import kotlin.io.path.readText
 fun prepareSettings(path: Path): PreparedRun {
     val file = path.toAbsolutePath().normalize()
     try {
-        val ast = ColonyParserFacade().parseSettings(file.readText())
+        val ast = loadSettingsPackage(file)
         val expressions = ConstantExpressions()
         ast.constants.forEach(expressions::declare)
         fun evaluate(value: SettingsValue): TypedConstant = try { expressions.evaluate(value.expression) }
@@ -33,6 +32,7 @@ fun prepareSettings(path: Path): PreparedRun {
                 is ConstantValue.Decimal -> JsonPrimitive(v.value.toDouble().also { require(it.isFinite()) })
                 ConstantValue.None -> JsonNull
                 is ConstantValue.EnumValue -> JsonPrimitive(v.value)
+                is ConstantValue.Record -> JsonObject(v.fields.mapValues { value(it.value) })
             }
         }
         fun properties(nodes: List<SettingsNode>, scope: String): Map<String, SettingsNode> {
@@ -64,7 +64,7 @@ fun prepareSettings(path: Path): PreparedRun {
         require(ast.sources.isNotEmpty() && ast.sources.distinct().size == ast.sources.size) { "Sources must be nonempty and unique" }
         val sources = ast.sources.map { name ->
             require(name.endsWith(".colony")) { "source must reference a .colony file: $name" }
-            SourceFile(name, file.parent.resolve(name).normalize().readText())
+            SourceFile(name, Path.of(name).readText())
         }
         val program = compileSources(sources, step)
         require(ast.templates.map { it.name }.distinct().size == ast.templates.size) { "Duplicate template" }
@@ -107,7 +107,8 @@ fun prepareSettings(path: Path): PreparedRun {
                     require(expected != null || (!constant.type.isPhysical() && constant.type !in setOf(Type.Duration, Type.Rate))) {
                         "$key: units are unavailable for this coefficient; use a scalar"
                     }
-                    val result = value(constant, expected)
+                    val result = if (key == "world.geometry.coastX" && constant.value == ConstantValue.None) JsonNull
+                        else value(constant, expected)
                     // World billing periods are integral seconds, unlike most physical settings.
                     if (key in setOf("world.tariffs.billingIntervalSeconds", "world.tariffs.monthSeconds"))
                         JsonPrimitive(result.jsonPrimitive.content.toBigDecimal().longValueExact()) else result
@@ -118,10 +119,21 @@ fun prepareSettings(path: Path): PreparedRun {
             require(it is SettingsBlock) { "world requires a block" }
             colonyJson.decodeFromJsonElement<WorldConfig>(worldObject(it.properties, "world"))
         }
-        val scenario = Scenario(catalog = file.fileName.toString(),
+        val changes = ast.changes.map { change ->
+            val tick = value(expressions.evaluate(change.tick), "Int64").jsonPrimitive.long
+            // Resolve a concrete target's kind from its population, template and role.
+            val role = change.target.substringAfterLast('/')
+            val group = change.target.substringBeforeLast('/', "")
+            val prefix = group.substringBeforeLast('-', "")
+            val population = populations.find { it.prefix == prefix } ?: error("Unknown change target ${change.target}")
+            val obj = templates.getValue(population.template).objects[role] ?: error("Unknown change target ${change.target}")
+            val types = SemanticEnvironment().kindContract(obj.kind)!!.viewFields.mapValues { it.value.render() }
+            ObservationChange(tick, change.target, objectValues(change.properties, "at $tick for ${change.target}", types))
+        }
+        val scenario = Scenario(
             seed = root["seed"]?.let { scalar(it, "Int64").jsonPrimitive.long } ?: 426,
             step = step, ticks = root["ticks"]?.let { scalar(it, "Int64").jsonPrimitive.int } ?: 120,
-            populations = populations, world = world)
+            populations = populations, world = world, changes = changes)
         require(scenario.ticks > 0) { "ticks must be positive" }
         return expandScenario(scenario, Catalog(sources = ast.sources, templates = templates), program).copy(sources = sources)
     } catch (failure: Exception) { throw IllegalArgumentException("$file: ${failure.message}", failure) }

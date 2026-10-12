@@ -40,7 +40,7 @@ class LargeScaleSettlementTest {
 
     @Test
     fun testFull5000ScenarioManifestAndExecution() {
-        val scenarioPath = Path.of("../examples/physics/settlement-5000.json")
+        val scenarioPath = Path.of("../examples/physics/colony.settings")
         val prepared = prepareScenario(scenarioPath)
 
         val houses = prepared.manifest.instances.filter { it.kind == "House" }

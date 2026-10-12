@@ -6,8 +6,8 @@ import kotlin.test.*
 
 class ScenarioTest {
     @Test fun fiveThousandHousesPreserveTheFullWorldConfiguration() {
-        val base = prepareScenario(Path.of("../examples/physics/full.json"))
-        val large = prepareScenario(Path.of("../examples/physics/full-5000.json"))
+        val base = prepareScenario(Path.of("../examples/physics/full.settings"))
+        val large = prepareScenario(Path.of("../examples/physics/full-5000.settings"))
         assertEquals(5000, large.manifest.instances.count { it.kind == "House" })
         assertEquals(20028, large.manifest.instances.size)
         assertEquals(base.scenario.world, large.scenario.world)
@@ -19,7 +19,7 @@ class ScenarioTest {
     }
 
     @Test fun klyaksaScenariosUseLocalGroundThreats() {
-        for (name in listOf("ecosystem-small.json", "settlement-5000.json", "full.json", "full-5000.json", "cascade.json")) {
+        for (name in listOf("ecosystem-small.settings", "colony.settings", "full.settings", "full-5000.settings", "cascade.settings")) {
             val prepared = prepareScenario(Path.of("../examples/physics/$name"))
             assertTrue(prepared.manifest.instances.any { it.kind == "Predator" }, name)
             assertTrue(prepared.manifest.instances.all { it.kind in colony.semantics.SemanticEnvironment().kindContracts }, name)
@@ -28,12 +28,13 @@ class ScenarioTest {
 
     @Test fun aMonthAtOneSecondStepsPassesScenarioValidation() {
         val directory = java.nio.file.Files.createTempDirectory("colony-month-")
-        val scenario = directory.resolve("month.json")
+        val scenario = directory.resolve("month.settings")
         try {
-            val base = prepareScenario(Path.of("../examples/physics/full.json"))
-            val catalog = Path.of("../examples/physics/catalog.json").toAbsolutePath().normalize()
-            java.nio.file.Files.writeString(scenario, colony.compiler.colonyJson.encodeToString(
-                Scenario.serializer(), base.scenario.copy(catalog = catalog.toString(), ticks = 2_592_000)))
+            val catalog = Path.of("../examples/physics/catalog.settings").toAbsolutePath().normalize()
+            val text = java.nio.file.Files.readString(Path.of("../examples/physics/full.settings"))
+                .replace("include \"catalog.settings\";", "include \"${catalog.toString().replace('\\', '/')}\";")
+                .replace(Regex("ticks = [0-9]+"), "ticks = 2592000")
+            java.nio.file.Files.writeString(scenario, text)
             assertEquals(2_592_000, prepareScenario(scenario).scenario.ticks)
         } finally {
             java.nio.file.Files.deleteIfExists(scenario)
@@ -42,7 +43,7 @@ class ScenarioTest {
     }
 
     @Test fun catalogExpansionAndReplayHaveStableResults() {
-        val prepared = prepareScenario(Path.of("../examples/integration/small.json"))
+        val prepared = prepareScenario(Path.of("../examples/integration/small.settings"))
         assertEquals(9, prepared.manifest.instances.size)
         assertEquals(JsonPrimitive("home-1/heater"), prepared.manifest.instances.single { it.id == "home-1/house" }.params["heater"])
         val first = SimulationRun(prepared, "test")
@@ -57,7 +58,7 @@ class ScenarioTest {
     }
 
     @Test fun threeHundredHousesHaveOneVmForEveryObject() {
-        val prepared = prepareScenario(Path.of("../examples/integration/colony-300.json"))
+        val prepared = prepareScenario(Path.of("../examples/integration/colony-300.settings"))
         assertEquals(1208, prepared.manifest.instances.size)
         val run = SimulationRun(prepared)
         assertEquals(1208, run.step().entities.size)
@@ -65,7 +66,7 @@ class ScenarioTest {
     }
 
     @Test fun invalidReferencesAndParametersFailBeforeStarting() {
-        val prepared = prepareScenario(Path.of("../examples/integration/small.json"))
+        val prepared = prepareScenario(Path.of("../examples/integration/small.settings"))
         val badTemplate = Template(mapOf("house" to ObjectSpec("House", "HouseControl",
             params = buildJsonObject { put("heater", "missing") },
             view = buildJsonObject { put("occupants", 1); put("temperature", 16) })))
@@ -78,7 +79,7 @@ class ScenarioTest {
     }
 
     @Test fun aPowerOutageInTheDemoScenarioReachesTheHouseAndItsAppliances() {
-        val run = SimulationRun(prepareScenario(Path.of("../examples/integration/small.json")), "test")
+        val run = SimulationRun(prepareScenario(Path.of("../examples/integration/small.settings")), "test")
         val frames = (0..46).map { run.step() }
         fun power(tick: Int) = frames[tick].entities.single { it.id == "home-2/heater" }.metrics.getValue("power_consumption").jsonPrimitive.double
         fun stress(tick: Int) = frames[tick].entities.single { it.id == "home-2/resident" }.vmState.getValue("stress").jsonPrimitive.double

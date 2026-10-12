@@ -8,3 +8,4 @@ results/
 **/build/
 **/build-*/
 **/__pycache__/
+colony-dsl-parser/src/main/antlr/.antlr/

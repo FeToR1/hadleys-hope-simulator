@@ -35,7 +35,7 @@ class CompactObserverTest {
     }
 
     @Test fun deltasReconstructEveryEntityAndPreserveFactsAndLedgerAcrossReset() {
-        val prepared = prepareScenario(Path.of("../examples/physics/cascade.json"))
+        val prepared = prepareScenario(Path.of("../examples/physics/cascade.settings"))
         val encoder = CompactObserver()
         val restored = linkedMapOf<String, JsonObject>()
         SimulationRun(prepared, "same").use { run ->

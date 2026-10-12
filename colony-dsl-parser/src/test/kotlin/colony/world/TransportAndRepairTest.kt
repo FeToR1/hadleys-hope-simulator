@@ -7,7 +7,9 @@ import colony.runtime.RunManifest
 import colony.runtime.VmIntent
 import colony.runtime.prepareScenario
 import colony.compiler.colonyJson
-import colony.runtime.jsonEquivalent
+import colony.ast.SettingsBlock
+import colony.ast.SettingsNode
+import colony.parser.ColonyParserFacade
 import kotlinx.serialization.json.*
 import java.nio.file.Path
 import kotlin.math.ceil
@@ -37,7 +39,7 @@ class TransportAndRepairTest {
     )
 
     @Test fun aRepairJobIsNotVisibleUntilItsDispatchDelayHasElapsed() {
-        val prepared = prepareScenario(Path.of("../examples/physics/cascade.json"))
+        val prepared = prepareScenario(Path.of("../examples/physics/cascade.settings"))
         val run = SimulationRun(prepared, "repair-delay-test")
         val kernel = assertNotNull(run.kernel)
         var brokenTick: Long? = null
@@ -84,7 +86,7 @@ class TransportAndRepairTest {
         assertTrue(dropoffEvents.any { it.type == "ActionSucceeded" && it.fields["action"]?.jsonPrimitive?.content == "transport.alight" })
     }
     @Test fun marineScenarioContainsACompleteFivePersonSquad() {
-        val prepared = prepareScenario(Path.of("../examples/physics/cascade.json"))
+        val prepared = prepareScenario(Path.of("../examples/physics/cascade.settings"))
         val marines = prepared.manifest.instances.filter { it.kind == "Marine" }
         assertEquals(5, marines.size)
         assertEquals(1, marines.count { it.params["leader"]?.jsonPrimitive?.booleanOrNull == true })
@@ -179,11 +181,20 @@ class TransportAndRepairTest {
     }
 
     @Test fun fullConfigurationSpellsOutEveryWorldParameterAndRunsAllKinds() {
-        val path = Path.of("../examples/physics/full.json")
+        val path = Path.of("../examples/physics/full.settings")
         val p = prepareScenario(path)
-        val raw = colonyJson.parseToJsonElement(java.nio.file.Files.readString(path)).jsonObject.getValue("world")
+        val ast = ColonyParserFacade().parseSettings(java.nio.file.Files.readString(path))
+        val explicitWorld = ast.properties.single { it.name == "world" } as SettingsBlock
         val complete = Json { encodeDefaults = true }.encodeToJsonElement(p.scenario.world!!)
-        assertTrue(jsonEquivalent(complete, raw), "all default-valued fields must be explicit")
+        fun assertExplicit(expected: JsonObject, nodes: List<SettingsNode>, scope: String) {
+            val fields = nodes.associateBy { it.name }
+            assertEquals(expected.keys, fields.keys, "$scope: all default-valued fields must be explicit")
+            for ((name, value) in expected) if (value is JsonObject) {
+                val block = assertIs<SettingsBlock>(fields.getValue(name))
+                assertExplicit(value, block.properties, "$scope.$name")
+            }
+        }
+        assertExplicit(complete.jsonObject, explicitWorld.properties, "world")
         assertEquals(setOf("House", "Heater", "Kettle", "Human", "Rover", "Marine", "Predator"), p.manifest.instances.map { it.kind }.toSet())
         assertEquals(1228, p.manifest.instances.size)
         assertEquals(2, p.manifest.instances.count { it.behavior == "PassengerRover" })

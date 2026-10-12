@@ -328,6 +328,7 @@ private class BehaviorCompiler(
         is ConstantValue.Text -> Operand.ImmS(value.value)
         is ConstantValue.EnumValue -> Operand.ImmS(value.value)
         ConstantValue.None -> Operand.ImmNone
+        is ConstantValue.Record -> error("Settings record constants are not scalar VM operands")
     }
 
     /** The operand of an instruction that is only a read, or null when it has to be computed. */

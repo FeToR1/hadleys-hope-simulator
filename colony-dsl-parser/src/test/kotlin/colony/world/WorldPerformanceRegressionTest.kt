@@ -11,7 +11,7 @@ import java.nio.file.Path
 import kotlin.test.*
 
 class WorldPerformanceRegressionTest {
-    private fun prepared() = prepareScenario(Path.of("../examples/physics/cascade.json"))
+    private fun prepared() = prepareScenario(Path.of("../examples/physics/cascade.settings"))
 
     @Test fun lazyFieldsAreCachedAndUnresolvedFieldsCannotEscapeThePhase() {
         val prepared = prepared()

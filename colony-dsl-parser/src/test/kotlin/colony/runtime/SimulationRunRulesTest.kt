@@ -12,7 +12,7 @@ class SimulationRunRulesTest {
     private fun prepare(source: String, objects: Map<String, ObjectSpec>, ticks: Int): PreparedRun {
         val program = compileSource(source)
         val catalog = Catalog(sources = listOf("inline"), templates = mapOf("t" to Template(objects)))
-        val scenario = Scenario(catalog = "inline", ticks = ticks, populations = listOf(Population("t", 1, "g")))
+        val scenario = Scenario(ticks = ticks, populations = listOf(Population("t", 1, "g")))
         return expandScenario(scenario, catalog, program)
     }
 

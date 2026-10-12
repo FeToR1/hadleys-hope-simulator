@@ -54,7 +54,7 @@ class SimulationObservationsTest {
 
     private fun prepare(objects: Map<String, ObjectSpec> = this.objects, changes: List<ObservationChange> = emptyList(), ticks: Int = 4): PreparedRun =
         expandScenario(
-            Scenario(catalog = "inline", ticks = ticks, populations = listOf(Population("t", 1, "g")), changes = changes),
+            Scenario(ticks = ticks, populations = listOf(Population("t", 1, "g")), changes = changes),
             Catalog(sources = listOf("inline"), templates = mapOf("t" to Template(objects))), program)
 
     private fun TickSnapshot.state(id: String, name: String) = entities.single { it.id == id }.vmState.getValue(name)

@@ -14,7 +14,7 @@ import kotlin.test.*
  * lab asks for: a broken grid, a cooling house, a frozen pipe, a repair and the money it costs.
  */
 class WorldKernelTest {
-    private fun cascade() = prepareScenario(Path.of("../examples/physics/cascade.json"))
+    private fun cascade() = prepareScenario(Path.of("../examples/physics/cascade.settings"))
 
     @Test fun aContractObservationTheWorldCannotComputeStopsTheRunBeforeTheFirstTick() {
         // docs/simulation/calculations.md, section 1: a mismatch is a binding error, not a mid-tick crash.
@@ -143,7 +143,7 @@ class WorldKernelTest {
 
     @Test fun powerGoesToTheLowerClassFirstAndIsCutInProportion() {
         // Two heaters and two kettles on a grid that can only feed the heaters.
-        val prepared = prepareScenario(Path.of("../examples/physics/cascade.json")).let { base ->
+        val prepared = prepareScenario(Path.of("../examples/physics/cascade.settings")).let { base ->
             base.copy(scenario = base.scenario.copy(
                 ticks = 30,
                 world = base.scenario.world!!.copy(power = base.scenario.world!!.power.copy(
@@ -169,7 +169,7 @@ class WorldKernelTest {
     @Test fun anExhaustedUpsStopsBridgingAndTheHousesLosePower() {
         // docs/simulation/trigger-conditions.md, section 3: "ИБП разрядился после потери сети" is a PowerLost.
         // With both sources dead the battery bridges the bus, drains, and then the houses really lose power.
-        val prepared = prepareScenario(Path.of("../examples/physics/cascade.json")).let { base ->
+        val prepared = prepareScenario(Path.of("../examples/physics/cascade.settings")).let { base ->
             base.copy(scenario = base.scenario.copy(
                 ticks = 60,
                 world = base.scenario.world!!.copy(power = base.scenario.world!!.power.copy(
@@ -194,7 +194,7 @@ class WorldKernelTest {
     @Test fun theUpsChargesAsAClassZeroConsumerWhileHeatersWait() {
         // docs/simulation/calculations.md, section 4.3 and the section 11 resolution: charging is priority class 0,
         // so a starving grid fills the battery before it feeds the heaters.
-        val prepared = prepareScenario(Path.of("../examples/physics/cascade.json")).let { base ->
+        val prepared = prepareScenario(Path.of("../examples/physics/cascade.settings")).let { base ->
             base.copy(scenario = base.scenario.copy(
                 ticks = 10,
                 world = base.scenario.world!!.copy(power = base.scenario.world!!.power.copy(

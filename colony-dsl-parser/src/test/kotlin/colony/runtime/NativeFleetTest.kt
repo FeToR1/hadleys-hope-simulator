@@ -5,7 +5,7 @@ import kotlin.test.*
 
 class NativeFleetTest {
     @Test fun workerCountsProduceIdenticalCommittedWorlds() {
-        val prepared = prepareScenario(Path.of("../examples/physics/cascade.json"))
+        val prepared = prepareScenario(Path.of("../examples/physics/cascade.settings"))
         for (workers in listOf(2, 4, 8)) {
             SimulationRun(prepared, "same", NativeFleet(prepared, 1)).use { serial ->
                 SimulationRun(prepared, "same", NativeFleet(prepared, workers)).use { parallel ->
@@ -16,7 +16,7 @@ class NativeFleetTest {
     }
 
     @Test fun invalidWorkerCountAndUseAfterCloseAreRejected() {
-        val prepared = prepareScenario(Path.of("../examples/integration/small.json"))
+        val prepared = prepareScenario(Path.of("../examples/integration/small.settings"))
         assertFailsWith<IllegalArgumentException> { NativeFleet(prepared, 0) }
         val fleet = NativeFleet(prepared, 2)
         fleet.close()

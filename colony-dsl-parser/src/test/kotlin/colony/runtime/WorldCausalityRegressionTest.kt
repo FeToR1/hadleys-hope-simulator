@@ -16,7 +16,7 @@ class WorldCausalityRegressionTest {
     }
 
     private fun run(script: (Long, String, String) -> List<VmIntent>): SimulationRun {
-        val base = prepareScenario(Path.of("../examples/physics/cascade.json"))
+        val base = prepareScenario(Path.of("../examples/physics/cascade.settings"))
         val config = base.scenario.world!!
         val prepared = base.copy(scenario = base.scenario.copy(ticks = 8, world = config.copy(
             repair = config.repair.copy(duration = mapOf("pole" to 1.0, "pipe" to 1.0, "device" to 1.0),
