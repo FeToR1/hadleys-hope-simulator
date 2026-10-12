@@ -94,15 +94,16 @@ flowchart TD
         Forest["Лесной массив (З, С, Ю)"]
         Sea["Море (Восток)"]
         SeaCtrl["SeaController\n(Эрозия берега, Цикл тумана)"]
-        Sea --> SeaCtrl
+        Sea -->|"состояние и цикл"| SeaCtrl
     end
 
     subgraph DefenseAndThreatsSub ["Воздушное пространство"]
         CrocPool["CrocodilePool\n(Object Pool)"]
         Crocs["FlyingCrocodile\n(Шум Перлина / Бомбардировка)"]
         ADS["AirDefenseUnit\n(ПВО периметра и крыш)"]
-        Forest --> Crocs
-        CrocPool <--> Crocs
+        Forest -->|"источник вылетов"| Crocs
+        CrocPool -->|"выдача слота при спавне"| Crocs
+        Crocs -->|"возврат слота при деспавне"| CrocPool
         ADS -.->|"Сбитие / Отклонение"| Crocs
         SeaCtrl -.->|"Отключение туманом"| ADS
     end
@@ -111,7 +112,6 @@ flowchart TD
         Spatial["SpatialIndex\n(2D Spatial Hash Grid)"]
         Tasks["TaskQueue\n(Очередь ремонта строений и ПВО)"]
         Creatine["CreatineManager\n(Склад, Продажа, Исцеление)"]
-        CVM["Нативная C++ VM (hh-vm.exe)"]
     end
 
     subgraph Logistics ["Логистика и Население"]
@@ -124,9 +124,10 @@ flowchart TD
         Miners -->|"работают"| Mine
         Mine -->|"сырой креатин<br/>(грузовые cargo-*)"| Depot
         Depot -->|"очищенный креатин<br/>(грузовые cargo-*)"| MedCenter
-        MedCenter -->|"Исцеление"| Miners
+        MedCenter -.->|"Исцеление"| Miners
         Taxi -->|"доставка раненых"| MedCenter
-        Tasks --> Crews -->|"Ремонт"| ADS
+        Tasks -->|"задачи ремонта"| Crews
+        Crews -.->|"Ремонт"| ADS
     end
 
     subgraph UI ["Интерфейс мониторинга (React + Pixi.js)"]
@@ -134,10 +135,9 @@ flowchart TD
         Sidebar["Sidebar & SpendPanel\n(Метрики, Доход от креатина, Аттрактор)"]
     end
 
-    Spatial --- SimulationCore
-    SeaCtrl -->|"Урон домам"| Tasks
-    Crocs -->|"Бомбардировка"| Tasks
-    SimulationCore --> UI
+    SeaCtrl -.->|"эрозия ломает строения — задачи ремонта"| Tasks
+    Crocs -.->|"бомбардировка ломает строения — задачи ремонта"| Tasks
+    SimulationCore -->|"снимки тиков"| UI
 ```
 
 ### 2.3. Проверка исполнителя
