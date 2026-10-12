@@ -119,9 +119,13 @@ flowchart TD
         Mine["Шахта креатина"]
         Depot["Склад креатина"]
         MedCenter["Медицинский центр"]
-        Crews["Ремонтные бригады\n(Роверы)"]
-        Miners --> Mine --> Depot & MedCenter
+        Crews["Ремонтные бригады\n(роверы crew-*)"]
+        Taxi["Такси-роверы (transport-*)\nжители на работу/домой, раненые — в медцентр"]
+        Miners -->|"работают"| Mine
+        Mine -->|"сырой креатин<br/>(грузовые cargo-*)"| Depot
+        Depot -->|"очищенный креатин<br/>(грузовые cargo-*)"| MedCenter
         MedCenter -->|"Исцеление"| Miners
+        Taxi -->|"доставка раненых"| MedCenter
         Tasks --> Crews -->|"Ремонт"| ADS
     end
 
