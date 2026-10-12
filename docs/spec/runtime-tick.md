@@ -60,7 +60,7 @@ sequenceDiagram
 - Списки/записи живут в пределах шага; личное состояние — скаляры и их `Option`.
 
 Компиляция в CVM2: [Compilation.kt](../../colony-dsl-parser/src/main/kotlin/colony/compiler/Compilation.kt).
-Семантика исполнения: [hh-vm.kt](../../colony-dsl-parser/src/main/kotlin/colony/runtime/hh-vm.kt).
+Семантика исполнения: [vm.cpp](../../native/src/vm.cpp).
 Двоичный артефакт и протокол: [CVM v2](cvm-format.md).
 
 <a id="world"></a>
