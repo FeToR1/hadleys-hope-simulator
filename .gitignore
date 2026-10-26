@@ -1,5 +1,6 @@
 .obsidian
 frontend/node_modules
+tools/vscode-colony/node_modules
 frontend/dist
 results/
 .gradle/
@@ -7,3 +8,4 @@ results/
 **/build/
 **/build-*/
 **/__pycache__/
+colony-dsl-parser/src/main/antlr/.antlr/

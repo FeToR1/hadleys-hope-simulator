@@ -1,4 +1,4 @@
-// Instruction and operand encoding, mirroring colony.cvm.Op and colony.cvm.Codec (docs/cvm-v2.md, sections 4-5).
+// Instruction and operand encoding, mirroring colony.cvm.Op and colony.cvm.Codec (docs/spec/cvm-format.md, sections 4-5).
 #pragma once
 
 #include <cstdint>

@@ -13,11 +13,11 @@ describe('live causal chain', () => {
 
   it('walks the causation links from the latest break back to the attack, root first', () => {
     const chain = createLiveCausalChain([
-      event('e1', 'DamageApplied', 'home-1/heater', { actorId: 'alien-1/xenomorph', causationId: 'alien-1/xenomorph@2#0', fields: { amount: 60, reason: 'Bite' } }),
+      event('e1', 'DamageApplied', 'home-1/heater', { actorId: 'predator-1/predator', causationId: 'predator-1/predator@2#0', fields: { amount: 60, reason: 'Bite' } }),
       event('e2', 'ObjectBroken', 'home-1/heater', { causationId: 'e1', fields: { reason: 'Bite' } }),
     ]);
     expect(chain.map((step) => step.kind)).toEqual(['action', 'failure']);
-    expect(chain[0].title).toBe('alien-1/xenomorph атаковал home-1/heater');
+    expect(chain[0].title).toBe('predator-1/predator атаковал home-1/heater');
     expect(chain[0].detail).toContain('−60 hp (Bite)');
     expect(chain[1].title).toBe('Сломан home-1/heater');
     expect(chain.every((step) => step.focus === 'map' && step.focusEntityId === 'home-1/heater')).toBe(true);

@@ -1,89 +1,157 @@
 # Симулятор колонии
 
-Учебный проект: Colony → компилятор ANTLR4/Kotlin → стековая ВМ C++ → ядро мира → React-дашборд.
+Учебный проект ИТМО «Системная инженерия»: Colony → компилятор ANTLR4/Kotlin → стековая ВМ C++ → ядро мира → React-дашборд.
+Цель — посёлок на 5000 домов (более 20 000 контекстов поведения): экосистема Лес/Море, летающие крокодилы,
+ПВО и креатиновая экономика. Пространственный индекс сокращает поиск до посещаемых ячеек и кандидатов
+(стоимость зависит от радиуса и плотности); посёлок окружён зональным лесом (З, С, Ю) и морем (В).
+Ядро связывает угрозы, питание, конечные запасы защиты и служб, логистику креатина, ремонт и расходы.
+Проверенное покрытие и ограничения — в [отчёте аудита](docs/history/review-last-three-commits.md).
 
-**Новая цель — Клякса, 5000 домов.** Текущий мир LV-426 запускается на 5000 домах в общем JVM-процессе: сняты искусственные лимиты, добавлены рабочие потоки и индексы мира. Код моделирует тепло, электричество, воду, жителей, атаки, ремонт, транспорт и расходы. Общие нативные исполнители и новые угрозы ещё не реализованы.
+**Первое знакомство → [docs/onboarding.md](docs/onboarding.md)** — маршрут одного прохода (~20 минут).
 
-Документация:
+**Подсветка Colony в VS Code:** `./scripts/install-colony-vscode.ps1 -Install`, затем
+«Developer: Reload Window». Расширение автоматически распознаёт `.colony`;
+[подробности](tools/vscode-colony/README.md).
 
-- [ТЗ для Кляксы](docs/klyaksa-requirements.md) — требования, границы и риски.
-- [Технический справочник](docs/technical-reference.md) — язык, исполнение, API и проверки.
-- [CVM v2](docs/cvm-v2.md) — двоичный формат и текущий протокол нативной ВМ.
-- [Оптимизации и замеры 5000 домов](docs/optimization-5000.md) — потоки, узкие места и варианты нативного исполнения.
+## Документация
+
+| Документ | Когда читать |
+|---|---|
+| [Онбординг](docs/onboarding.md) | Первое знакомство: маршрут одного прохода |
+| [Архитектура](docs/architecture.md) | Как устроена система: подсистемы, диаграммы, структура кода, как расширять |
+| [ТЗ «Клякса»](docs/requirements.md) | Цели, требования, границы, критерии приёмки |
+| [Глоссарий](docs/glossary.md) | Термины: Клякса, тик, контекст поведения, ровер, креатин… |
+| Спеки: [язык Colony](docs/spec/colony-language.md) · [тик и мир](docs/spec/runtime-tick.md) · [формат .cvm](docs/spec/cvm-format.md) · [HTTP/SSE](docs/spec/http-api.md) | Перед изменениями в соответствующей области |
+| [ADR](docs/adr/README.md) | Почему устроено так, а не иначе |
+| [CHANGELOG](CHANGELOG.md), [история оптимизаций](docs/history/optimization-5000.md), [отчёт аудита слияний](docs/history/review-last-three-commits.md) | Что и когда менялось; замеры и проверки |
+| [AGENTS.md](AGENTS.md), [правила документации](docs/contribution/documentation-policy.md) | Работа LLM-агентов; ведение документации |
 
 ## Запуск
 
-5000 домов на Windows, из корня проекта:
+**VS Code — в один клик.** `Ctrl + Shift + B` → «1. Запуск симулятора (5000 домов + Экосистема)»:
+задачи [.vscode/tasks.json](.vscode/tasks.json) останавливают прежние процессы проекта, собирают и запускают всё.
+UI: <http://localhost:5173>, бэкенд: <http://localhost:8080>.
+
+**PowerShell.**
 
 ```powershell
-.\scripts\start-5000.ps1
+.\scripts\start-5000.ps1   # старт
+.\scripts\stop-5000.ps1    # остановка
 ```
 
-Скрипт собирает backend и запускает backend/UI в фоне на портах 8080/5173. Использует `full-5000.json`,
-4 рабочих потока поведения, компактный поток наблюдений, общий JVM-процесс с максимумом heap 2 ГиБ и скорость 2 тика/с.
-Мир содержит 20 028 контекстов; климат, мощности, службы, шаг 1 с и длительность суток сохранены из `full.json`.
-Логи и PID — `results/local-5000.json`, `results/*-5000*.log`. `-Workers N` меняет число рабочих потоков,
-`-Speed 10` задаёт целевые 10 тиков/с, `-BackendPort`/`-FrontendPort` меняют порты, `-SkipBuild` использует готовую сборку.
-На этой машине замер расчёта с компактным кодированием даёт около 3,35 тика/с: заданная скорость не гарантирует фактическую.
-Это эталонный режим `reference`; текущий `serve-native` всё ещё создаёт процесс на сущность.
+Собирает backend и C++ ВМ, запускает backend/UI в фоне на портах 8080/5173. Сценарий — из `-Scenario`
+(по умолчанию `examples/physics/colony.settings`); точное число контекстов зависит от состава служб сценария, шаг модели — 1 с.
+Параметры: `-Workers` (потоки), `-Speed`, `-BackendPort`, `-FrontendPort`, `-SkipBuild`, `-OpenBrowser`;
+`-Runtime native -Workers 1` включает общий нативный исполнитель (обычный запуск собирает его,
+`-SkipBuild` требует готовую ВМ). Для сборки выбирается Windows CMake из `PATH` или каталога
+компилятора; MSYS/Cygwin CMake пропускается, рабочая конфигурация компилятора сохраняется.
+Несовместимый кэш пересоздаётся через `--fresh` (для восстановления нужен CMake ≥ 3.24).
+Скрипт останавливает только процессы этого проекта и отказывается
+занимать порт с посторонним слушателем. Логи и PID — `results/local-5000.json`, `results/*-5000*.log`.
+
+`run-native` и `serve-native` используют общий пул нативных процессов: байт-код загружается один раз
+на процесс, каждый житель и прибор получает отдельный контекст. `HH_NATIVE_WORKERS` задаёт размер пула
+(1–32, по умолчанию 1); все режимы используют C++ исполнитель.
+Исторический замер `full-5000.settings` на объединённом `development` — около 6,22 тика/с (fast до 10,47)
+без HTTP и браузера; эти числа не измеряют новый сценарий экосистемы (2,85 тика/с, [отчёт](docs/history/optimization-5000.md#проверка-и-слияние-с-development)).
 Карта объединяет дома и жителей в группы издалека, при приближении рисует только видимую область.
 
-Для ручного запуска и замера после `installDist`:
-
-```powershell
-$env:JAVA_OPTS = '-Xms512m -Xmx2g'
-$env:HH_REFERENCE_WORKERS = '4'
-$env:HH_COMPACT_OBSERVER = '1'
-.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark examples/physics/full-5000.json 120
-.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-live examples/physics/full-5000.json 120
-.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat serve examples/physics/full-5000.json 8080
-```
-
-Без `HH_REFERENCE_WORKERS` эталонный исполнитель использует один рабочий поток. Ручной `serve` начинает
-прогон при подключении наблюдателя или `POST /control/resume`. Искусственные потолки 10 000 сущностей и
-1 000 000 тиков сняты; количества остаются положительными/неотрицательными `Int`, общий размер манифеста проверяется до переполнения.
-`HH_COMPACT_OBSERVER=1` отключает обязательное кодирование полных кадров на каждом шаге сервера.
-UI запрашивает `/stream?format=compact`; обычный `/stream` и JSONL сохраняют полный формат.
-
-Прежний нативный сценарий на 300 домах через Docker:
+**Docker.**
 
 ```sh
-docker compose up --build
+docker compose up --build        # остановка: docker compose down
 ```
 
-Интерфейс: <http://localhost:5173>, backend: <http://localhost:8080>. Остановка: `docker compose down`.
-По умолчанию запускается `examples/physics/full.json` с 300 домами; другой сценарий выбирается через `HH_SCENARIO`.
-Для компактного запуска задайте `HH_SCENARIO=examples/physics/cascade.json`.
+Backend по умолчанию — `serve-native examples/physics/full-5000.settings`; другой сценарий — через `HH_SCENARIO`
+(компактный: `HH_SCENARIO=examples/physics/cascade.settings`). Профиль `simulation` (`docker compose --profile simulation up`)
+делает разовый прогон `run-native` на 300 домах (`full.settings`) с записью JSONL в `./results`.
+UI: <http://localhost:5173>, backend: <http://localhost:8080>.
 
-Локально нужны JDK 17, CMake, компилятор C++20 и Node.js/npm, совместимые с [frontend/package.json](frontend/package.json). Команды для PowerShell из корня проекта:
+## Ручные напасти
+
+Кнопка **«Напасти»** рядом с вкладками карты открывает панель (закрытие — крестик или Escape).
+Можно взорвать реактор с выбранным радиусом и уроном, запустить стаю летающих крокодилов или впустить
+живых монстров сценария, задав количество и длительность окна атаки. Команды срабатывают на следующем
+шаге: на паузе нажмите «Один шаг» или продолжите симуляцию. `reset` очищает очередь и восстанавливает
+исходный мир. Протокол — [docs/spec/http-api.md](docs/spec/http-api.md); нужны обновлённые backend и UI.
+
+<details>
+<summary><b>Замеры, env-переменные и ручной запуск</b></summary>
+
+Требования: JDK 17, CMake, компилятор C++20 и Node.js/npm, совместимые с [frontend/package.json](frontend/package.json).
 
 ```powershell
-cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release
-cmake --build native/build --config Release
+# Ручной запуск и замеры (после installDist; на Windows пересборка требует остановки работающего сервера)
+$env:JAVA_OPTS = '-Xms512m -Xmx2g'
+$env:HH_NATIVE_WORKERS = '4'
+$env:HH_COMPACT_OBSERVER = '1'
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark examples/physics/full-5000.settings 120
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-live examples/physics/full-5000.settings 120
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat benchmark-fast examples/physics/full-5000.settings 120
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat serve examples/physics/full-5000.settings 8080
+
+# Расчёт без карты: все тики, полный снимок только в конце; с файлом — журнал фактов
+# (события и проводки каждого тика, промежуточные кадры full=false), без файла — JSON-итог с контрольной суммой
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat run-fast examples/physics/full-5000.settings
+
+# Сборка с нуля
+.\scripts\build-native.ps1
 .\colony-dsl-parser\gradlew.bat -p colony-dsl-parser installDist
-.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat serve-native examples/physics/cascade.json 8080
-```
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat serve-native examples/physics/cascade.settings 8080
 
-Во втором терминале:
-
-```powershell
 Set-Location frontend
 npm ci
 npm run dev
 ```
 
-На Linux/macOS используйте `./colony-dsl-parser/gradlew` и CLI без суффикса `.bat`.
-`run-native SCENARIO OUT.jsonl` сохраняет полный прогон; `serve` и `run` используют эталонный JVM-исполнитель.
+- Без `HH_NATIVE_WORKERS` используется один общий C++ процесс. Ручной `serve` начинает
+  прогон при подключении наблюдателя или `POST /control/resume`.
+- Искусственные потолки 10 000 сущностей и 1 000 000 тиков сняты; количества — положительные/неотрицательные
+  `Int`, общий размер манифеста проверяется до переполнения.
+- `HH_COMPACT_OBSERVER=1` отключает обязательное кодирование полных кадров на каждом шаге сервера;
+  UI запрашивает `/stream?format=compact`, обычный `/stream` и JSONL сохраняют полный формат.
+- `run-native SCENARIO OUT.jsonl` сохраняет полный прогон; `serve` и `run` используют
+  тот же общий пул C++ процессов.
+- Внутренний обмен ядро ↔ брокер ↔ C++ и конфигурация брокера используют двоичный формат; JSON остаётся
+  во внешнем API и журналах. [Описание протоколов](docs/spec/cvm-format.md#9-частный-протокол-ядро-jvm--jvm-брокер).
+- На Linux/macOS используйте `./colony-dsl-parser/gradlew` и CLI без суффикса `.bat`.
 
-## Примеры и проверки
+</details>
 
-| Путь | Назначение |
+## Примеры сценариев
+
+| Сценарий | Что показывает |
 |---|---|
-| [cascade.json](examples/physics/cascade.json) | Повреждение сети → остывание → замерзание труб → ремонт и расходы |
-| [full.json](examples/physics/full.json) | 300 домов, жители, роверы и отряды; все настройки мира заданы явно |
-| [full-5000.json](examples/physics/full-5000.json) | Те же настройки мира на 5000 домах, 20 028 контекстов; запускать через `serve` |
-| [settlement.colony](examples/physics/settlement.colony) | Работающие программы поведения |
-| [examples/drafts](colony-dsl-parser/examples/drafts) | Черновики для неподдерживаемых видов; не рабочие примеры |
+| [colony.settings](examples/physics/colony.settings) | Полная экосистема: 5000 домов, лес/море, крокодилы, ПВО, креатин |
+| [full-5000.settings](examples/physics/full-5000.settings) | Те же настройки мира на 5000 домов — 20 028 контекстов (замеры, conformance) |
+| [full.settings](examples/physics/full.settings) | 300 домов: компактный полный набор мира |
+| [cascade.settings](examples/physics/cascade.settings) | Каскад: повреждение сети → остывание → замерзание труб → ремонт и расходы |
+| [ecosystem-small.settings](examples/physics/ecosystem-small.settings) | 80 домов: короткие циклы угроз, уборка и лесная служба |
 
-Проверки: Gradle `test`, CTest для `native/build`, `npm test` и `npm run build` в `frontend`,
-`python conformance/run_vectors.py`. Подробности и источники контрактов — в [справочнике](docs/technical-reference.md).
+Программы поведения — [settlement.colony](examples/physics/settlement.colony); черновики неподдерживаемых
+видов (не рабочие примеры) — [colony-dsl-parser/examples/drafts](colony-dsl-parser/examples/drafts).
+
+## Проверки
+
+Gradle `test`, CTest для `native/build`, `npm test` и `npm run build` в `frontend`,
+`python conformance/run_vectors.py`. Полный список команд и переменных окружения — [AGENTS.md](AGENTS.md);
+предметный контракт языка — генерируемый [docs/generated/contract.json](docs/generated/contract.json).
+
+## Сценарий на языке Colony
+
+Основной сценарий Кляксы на 5000 домов — [examples/physics/colony.settings](examples/physics/colony.settings).
+Он использует существующий `settlement.colony`; `scripts/start-5000.ps1` выбирает его по умолчанию.
+Численность меняется в `let houses`, мощность обогревателя — в `let heaterPower` общей библиотеки [catalog.settings](examples/physics/catalog.settings).
+
+
+[examples/settings/colony.settings](examples/settings/colony.settings) задаёт мир, группы объектов и параметры
+поведений [behavior.colony](examples/settings/behavior.colony) без каталога JSON. В обоих файлах используются
+Colony, одинаковые выражения и единицы измерения; VS Code подсвечивает `.colony` и `.settings`.
+После сборки CLI и `hh-vm` можно проверить или запустить пример:
+
+```powershell
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat check examples/settings/colony.settings
+.\colony-dsl-parser\build\install\colony-dsl-parser\bin\colony-dsl-parser.bat serve examples/settings/colony.settings 8080
+```
+
+Синтаксис и ограничения — [спецификация](docs/spec/colony-language.md#colony-settings).

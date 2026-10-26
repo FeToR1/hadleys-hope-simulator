@@ -3,8 +3,8 @@ package colony.cvm
 import kotlinx.serialization.json.*
 
 /**
- * Host side of the protocol one VM process speaks (docs/cvm-v2.md, section 8). Values travel by their declared
- * type; JSON is only how this side names them, which keeps the host and the reference runtime comparable.
+ * Host side of the protocol one VM process speaks (docs/spec/cvm-format.md, section 8). Values travel by their declared
+ * type; JSON is only how this side names them, matching the host frame and result model.
  */
 object Protocol {
     const val VERSION = 1
@@ -14,6 +14,10 @@ object Protocol {
     const val RESULT = 4
     const val STOP = 5
     const val FAULT = 6
+    const val BATCH_INIT = 7
+    const val BATCH_READY = 8
+    const val BATCH_FRAME = 9
+    const val BATCH_RESULT = 10
 
     /** The v1 intrinsic each intent opcode stands for, so intents read the same on both sides. */
     fun intentName(opcode: Int): String = when (opcode) {
@@ -58,7 +62,7 @@ fun writeValue(out: Sink, program: Program, type: VType, value: JsonElement) {
     }
 }
 
-/** Reads a value of a declared type back into the JSON shape the reference runtime uses. */
+/** Reads a value of a declared type back into the JSON shape the host uses. */
 fun readValue(src: Source, program: Program, type: VType): JsonElement {
     if (type is VType.Opt) {
         if (src.u8() == 0) return JsonNull

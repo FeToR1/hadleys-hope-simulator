@@ -1,5 +1,6 @@
 package colony.runtime
 
+import colony.world.Disaster
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import kotlinx.serialization.json.JsonObject
@@ -78,6 +79,20 @@ class ObserverGateway(
                     queryParameter(exchange.requestURI, "value")?.toDoubleOrNull()
                         ?: throw IllegalArgumentException("speed needs ?value=<steps per second>"),
                 )
+                "disaster" -> {
+                    fun number(name: String) = queryParameter(exchange.requestURI, name)?.toDoubleOrNull()
+                        ?: throw IllegalArgumentException("Нужен параметр $name")
+                    fun count() = queryParameter(exchange.requestURI, "count")?.toIntOrNull()
+                        ?: throw IllegalArgumentException("Нужно целое количество существ")
+                    val disaster = when (queryParameter(exchange.requestURI, "kind")) {
+                        "reactor" -> Disaster.ReactorExplosion(number("radius"), number("damage"))
+                        "crocodiles" -> Disaster.Crocodiles(count())
+                        "monsters" -> Disaster.Monsters(count(), number("duration"))
+                        else -> throw IllegalArgumentException("Неизвестная напасть")
+                    }
+                    controller.queueDisaster(disaster, queryParameter(exchange.requestURI, "runId")
+                        ?: throw IllegalArgumentException("Нужен runId"))
+                }
                 else -> return respond(exchange, 404, errorBody("Unknown control action $action"))
             }
             respond(exchange, 200, controller.health())
@@ -176,7 +191,7 @@ private fun configuredAllowedHosts(): Set<String> =
         ?: emptySet()
 
 /** Entry point of the serve command: runs until the process is stopped. */
-fun serveReference(prepared: PreparedRun, port: Int, fleetFactory: (PreparedRun, String) -> VmFleet = { p, _ -> ReferenceFleet(p) }) {
+fun serveSimulation(prepared: PreparedRun, port: Int, fleetFactory: (PreparedRun, String) -> VmFleet = { p, _ -> NativeFleet(p) }) {
     require(port in 1..65535)
     val controller = RunController(prepared, fleetFactory = fleetFactory,
         compactLive = System.getenv("HH_COMPACT_OBSERVER") == "1")

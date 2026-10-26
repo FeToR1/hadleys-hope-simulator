@@ -4,10 +4,10 @@ import colony.ast.SourceSpan
 
 /**
  * Version of the kind, observation and kernel-event contract below. Every change of a schema is a new
- * version (docs/technical-reference.md#contract), and compiled artifacts record the version
+ * version (docs/spec/http-api.md#contract), and compiled artifacts record the version
  * they were built against so that a kernel or VM can refuse a mismatch.
  */
-const val CONTRACT_VERSION = 6
+const val CONTRACT_VERSION = 11
 
 /** Entity-kind contract supplied by runtime/simulation owners (Role #7). */
 data class KindContract(
@@ -73,7 +73,7 @@ class SemanticEnvironment(
 }
 
 /**
- * Kinds and observations of the MVP as specified in docs/technical-reference.md#contract.
+ * Kinds and observations of the MVP as specified in docs/spec/http-api.md#contract.
  * Simulation/runtime can replace or extend it without touching the parser. Kinds that the specification
  * lists but that need decisions about their commands (crews, reactor, UPS, pump, comms) are not here yet.
  */
@@ -119,6 +119,7 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
             // Where this resident lives and works; the settlement decides, not the program.
             "home" to Type.Kind("Position"),
             "workplace" to Type.Kind("Position"),
+            "medical_required" to Type.Bool,
             "meeting_point" to Type.Kind("Position"),
             "routine_slot" to Type.Int64,
             "day_minute" to Type.Int64,
@@ -151,7 +152,7 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
         viewFields = mapOf(
             "position" to Type.Kind("Position"),
             "health" to Type.Physical(PhysicalKind.HEALTH),
-            "visible_xenomorphs" to Type.List(Type.Kind("Target")),
+            "visible_predators" to Type.List(Type.Kind("Target")),
             "available_vehicles" to Type.List(Type.Kind("VehicleTarget")),
             "in_vehicle" to Type.Bool,
             "boarding_radius" to Type.Physical(PhysicalKind.DISTANCE),
@@ -164,13 +165,13 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
         capabilities = setOf(Capability.DAMAGE_REQUEST, Capability.MOTION_REQUEST),
     ),
     KindContract(
-        kind = "Xenomorph",
+        kind = "Predator",
         viewFields = mapOf(
             "position" to Type.Kind("Position"),
             "visible_infrastructure" to Type.List(Type.Kind("Target")),
             "visible_humans" to Type.List(Type.Kind("Target")),
+            "attack_active" to Type.Bool,
             "patrol_waypoint" to Type.Kind("Position"),
-            // Marines drove it off: until it is out and keeps away, the waypoint leads out of the settlement.
             "routed" to Type.Bool,
         ),
         capabilities = setOf(Capability.DAMAGE_REQUEST, Capability.MOTION_REQUEST),
@@ -178,7 +179,7 @@ fun defaultKindContracts(): Map<String, KindContract> = listOf(
 ).associateBy(KindContract::kind)
 
 /**
- * Events the world kernel sends to programs (docs/technical-reference.md#contract, section 3), with the payload
+ * Events the world kernel sends to programs (docs/spec/http-api.md#contract), with the payload
  * a program receives. A program subscribes by declaring an event of the same name; the compiler then requires
  * exactly this schema, so that a program cannot be linked against a kernel that means something else.
  * Events for journals only (EntityDied, MonthClosed) are not delivered to programs and are not listed.

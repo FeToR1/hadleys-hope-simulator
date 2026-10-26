@@ -1,0 +1,31 @@
+settings Settlement {
+    source "behavior.colony";
+    let houses = 80;
+    let heaterPower: Power = 2kW;
+    seed = 426;
+    step = 1s;
+    ticks = 120;
+
+    template household {
+        object house using Home {
+            param heater = "$instance/heater";
+            param target = 21degC;
+        }
+        object heater using Heating {
+            parent = "$instance/house";
+            x = 2m;
+            param demand = heaterPower;
+        }
+    }
+    population household as home {
+        count = houses;
+        columns = 10;
+        spacingX = 70m;
+        spacingY = 70m;
+    }
+    world {
+        climate { meanTemperature = 19degC; amplitude = 4degC; }
+        power { reactorPower = 1e3kW; }
+        sea { enabled = true; fogPeriodSeconds = 3min; }
+    }
+}

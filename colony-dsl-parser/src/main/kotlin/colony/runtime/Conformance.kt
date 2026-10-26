@@ -1,6 +1,6 @@
 package colony.runtime
 
-import colony.bytecode.*
+import colony.compiler.*
 import colony.semantics.CONTRACT_VERSION
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -10,11 +10,7 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
 
-/*
- * Cross-implementation test vectors for the stack VM (see docs/technical-reference.md#vectors). The reference VM produces them;
- * another VM, for example the native one, must reproduce every step exactly. Programs, frames and expected results
- * are data, so nothing here has to be ported.
- */
+/** Frozen CVM2 regression vectors. Their JSON envelope stores frames and expectations, not instructions. */
 
 @Serializable data class ConformanceEvent(val eventId: Int, val sender: String, val sequence: Long, val fields: JsonObject)
 @Serializable data class ConformanceIntent(val operation: String, val arguments: List<JsonElement>)
@@ -33,7 +29,7 @@ import kotlin.io.path.writeText
     val initialState: JsonObject, val steps: List<ConformanceStep>,
 )
 @Serializable data class ConformanceFile(
-    val conformance: Int, val contract: Int, val name: String, val source: String, val program: BytecodeProgram, val cases: List<ConformanceCase>,
+    val conformance: Int, val contract: Int, val name: String, val source: String, val artifact: String, val cases: List<ConformanceCase>,
 )
 
 @Serializable data class PrngVector(
@@ -55,7 +51,7 @@ internal fun prngVectors(): List<PrngVector> {
     val seeds = listOf(426L, 0L, -1L, Long.MAX_VALUE)
     val keys = listOf(
         Triple("home-1/heater", "HeaterControl", "apply"),
-        Triple("alien-3/xenomorph", "Xenomorph", "decide"),
+        Triple("predator-3/predator", "Predator", "decide"),
         Triple("дом-7/чайник", "ЧайникУправление", "нагрев"), // non-ASCII keys pin down UTF-8 and the length prefix
     )
     val sites = listOf("strike", "", "vandalism")
@@ -80,7 +76,7 @@ private data class CaseInput(
     val params: JsonObject = JsonObject(emptyMap()), val seed: Long = 426,
 )
 
-private class ProgramSpec(val name: String, val source: String, val cases: (BytecodeProgram) -> List<CaseInput>)
+private class ProgramSpec(val name: String, val source: String, val cases: (CompiledProgram) -> List<CaseInput>)
 
 private fun point(x: Number, y: Number) = buildJsonObject { put("x", x); put("y", y) }
 private fun target(id: String, kind: String, x: Number, y: Number, distance: Number, health: Number = 100) = buildJsonObject {
@@ -88,7 +84,7 @@ private fun target(id: String, kind: String, x: Number, y: Number, distance: Num
 }
 private fun frame(tick: Long, view: JsonObject, vararg events: DeliveredEvent) = VmFrame(tick, view, events.toList())
 private fun houseView(occupants: Int, temperature: Number = 20) = buildJsonObject { put("occupants", occupants); put("temperature", temperature) }
-private fun eventId(program: BytecodeProgram, name: String) = program.events.single { it.name == name }.id
+private fun eventId(program: CompiledProgram, name: String) = program.events.single { it.name == name }.id
 
 private val PROGRAMS: List<ProgramSpec> = listOf(
     ProgramSpec("heater", "colony-dsl-parser/examples/heater.colony") { program ->
@@ -126,7 +122,7 @@ private val PROGRAMS: List<ProgramSpec> = listOf(
         // Seed 1 vandalizes at step 60, seed 6 at step 120 and seed 2 never: both outcomes of the draw are covered.
         listOf(1L, 2L, 6L).map { seed -> CaseInput("resident-seed-$seed", "Resident", "home-1/resident", frames, seed = seed) }
     },
-    ProgramSpec("xenomorph", "colony-dsl-parser/examples/xenomorph.colony") { _ ->
+    ProgramSpec("predator", "colony-dsl-parser/examples/predator.colony") { _ ->
         val waypoint = point(400, 300)
         val frames = (0L until 30L).map { tick ->
             val list = when {
@@ -138,7 +134,7 @@ private val PROGRAMS: List<ProgramSpec> = listOf(
                 put("position", point(0, 0)); put("patrol_waypoint", waypoint); put("visible_infrastructure", buildJsonArray { list.forEach { add(it) } })
             })
         }
-        listOf(426L, 7L).map { seed -> CaseInput("hunt-and-patrol-seed-$seed", "Xenomorph", "alien-1/xenomorph", frames, seed = seed) }
+        listOf(426L, 7L).map { seed -> CaseInput("hunt-and-patrol-seed-$seed", "Predator", "predator-1/predator", frames, seed = seed) }
     },
     ProgramSpec("kettle", "examples/integration/devices.colony") { _ ->
         val kettleView = { water: Number, broken: Boolean, connected: Boolean ->
@@ -164,7 +160,7 @@ private val LANGUAGE = ProgramSpec("language", "conformance/programs/language.co
     listOf(
         CaseInput("numbers", "Numbers", "home-1/house", (0L..5L).map { frame(it, houseView(it.toInt())) }),
         CaseInput("short-circuit", "ShortCircuit", "home-1/house", (0L until 40L).map { frame(it, houseView(if (it % 3 == 0L) 0 else 1)) }),
-        CaseInput("branches", "Branches", "alien-1/xenomorph", listOf(
+        CaseInput("branches", "Branches", "predator-1/predator", listOf(
             frame(0, infrastructure(listOf(target("a", "Heater", 0, 0, 5)), 0)),
             frame(1, infrastructure(listOf(target("b", "Heater", 0, 0, 5)), 0)),
             frame(2, infrastructure(listOf(target("c", "Heater", 0, 0, 5)), 0)),
@@ -192,7 +188,7 @@ private val LANGUAGE = ProgramSpec("language", "conformance/programs/language.co
 
 private val ALL_PROGRAMS = PROGRAMS + LANGUAGE
 
-private fun expectationOf(vm: ReferenceVm, frame: VmFrame): ConformanceExpectation = try {
+private fun expectationOf(vm: NativeVm, frame: VmFrame): ConformanceExpectation = try {
     val result = vm.step(frame)
     ConformanceExpectation(false, result.intents.map { ConformanceIntent(it.operation.name, it.arguments) },
         result.events.map { ConformanceOutgoing(it.target, it.eventId, it.sequence, it.fields) }, result.state)
@@ -200,18 +196,19 @@ private fun expectationOf(vm: ReferenceVm, frame: VmFrame): ConformanceExpectati
     ConformanceExpectation(failure = true, state = vm.stateSnapshot()) // a failed step leaves everything as it was
 }
 
-/** Runs every case of one program on the reference VM and records what it does. */
+/** Runs every case of one program on the native VM and records what it does. */
 private fun buildConformance(root: Path, spec: ProgramSpec): ConformanceFile {
     val program = compileSources(listOf(SourceFile(spec.source, root.resolve(spec.source).readText())))
     val cases = spec.cases(program).map { input ->
-        val vm = ReferenceVm(input.entityId, program, input.behavior, input.params, input.seed)
-        val initial = vm.stateSnapshot()
-        val steps = input.frames.map { frame ->
-            ConformanceStep(frame.tick, frame.view, frame.events.map { ConformanceEvent(it.eventId, it.sender, it.sequence, it.fields) }, expectationOf(vm, frame))
+        NativeVm(input.entityId, program, input.behavior, input.params, input.seed).use { vm ->
+            val initial = vm.stateSnapshot()
+            val steps = input.frames.map { frame ->
+                ConformanceStep(frame.tick, frame.view, frame.events.map { ConformanceEvent(it.eventId, it.sender, it.sequence, it.fields) }, expectationOf(vm, frame))
+            }
+            ConformanceCase(input.name, input.behavior, input.entityId, input.seed, input.params, initial, steps)
         }
-        ConformanceCase(input.name, input.behavior, input.entityId, input.seed, input.params, initial, steps)
     }
-    return ConformanceFile(1, CONTRACT_VERSION, spec.name, spec.source, program, cases)
+    return ConformanceFile(2, CONTRACT_VERSION, spec.name, spec.source, java.util.Base64.getEncoder().encodeToString(colony.cvm.ArtifactWriter.write(program.nativeProgram)), cases)
 }
 
 private const val PRNG_DESCRIPTION =
@@ -223,8 +220,8 @@ private const val PRNG_DESCRIPTION =
 /** Files produced: one per program plus prng.json. Sources are read relative to the repository root. */
 fun writeConformance(root: Path, output: Path) {
     output.createDirectories()
-    for (spec in ALL_PROGRAMS) output.resolve("${spec.name}.json").writeText(bytecodeJson.encodeToString(buildConformance(root, spec)) + "\n")
-    output.resolve("prng.json").writeText(bytecodeJson.encodeToString(PrngFile(1, PRNG_DESCRIPTION, prngVectors())) + "\n")
+    for (spec in ALL_PROGRAMS) output.resolve("${spec.name}.json").writeText(colonyJson.encodeToString(buildConformance(root, spec)) + "\n")
+    output.resolve("prng.json").writeText(colonyJson.encodeToString(PrngFile(1, PRNG_DESCRIPTION, prngVectors())) + "\n")
 }
 
 /** Names of the vector files writeConformance produces. */
@@ -243,17 +240,18 @@ internal fun jsonEquivalent(a: JsonElement, b: JsonElement): Boolean = when {
     else -> false
 }
 
-/** Replays a vector file on the reference VM; one message per mismatch, none when the VM conforms. */
+/** Replays a vector file on the native VM; one message per mismatch, none when the VM conforms. */
 fun verifyConformance(file: ConformanceFile): List<String> {
     val problems = mutableListOf<String>()
     for (case in file.cases) {
-        val vm = ReferenceVm(case.entityId, file.program, case.behavior, case.params, case.seed)
-        if (!jsonEquivalent(vm.stateSnapshot(), case.initialState)) problems += "${file.name}/${case.name}: state after initialization differs"
-        for (step in case.steps) {
-            val frame = VmFrame(step.tick, step.view, step.events.map { DeliveredEvent(it.eventId, it.fields, it.sender, it.sequence) })
-            val actual = bytecodeJson.encodeToJsonElement(ConformanceExpectation.serializer(), expectationOf(vm, frame))
-            val expected = bytecodeJson.encodeToJsonElement(ConformanceExpectation.serializer(), step.expect)
-            if (!jsonEquivalent(actual, expected)) problems += "${file.name}/${case.name} tick ${step.tick}: expected $expected but got $actual"
+        NativeVm(case.entityId, colony.cvm.ArtifactReader.read(java.util.Base64.getDecoder().decode(file.artifact)), case.behavior, case.params, case.seed).use { vm ->
+            if (!jsonEquivalent(vm.stateSnapshot(), case.initialState)) problems += "${file.name}/${case.name}: state after initialization differs"
+            for (step in case.steps) {
+                val frame = VmFrame(step.tick, step.view, step.events.map { DeliveredEvent(it.eventId, it.fields, it.sender, it.sequence) })
+                val actual = colonyJson.encodeToJsonElement(ConformanceExpectation.serializer(), expectationOf(vm, frame))
+                val expected = colonyJson.encodeToJsonElement(ConformanceExpectation.serializer(), step.expect)
+                if (!jsonEquivalent(actual, expected)) problems += "${file.name}/${case.name} tick ${step.tick}: expected $expected but got $actual"
+            }
         }
     }
     return problems

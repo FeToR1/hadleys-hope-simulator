@@ -16,12 +16,20 @@ add_library(cvm STATIC
   src/disasm.cpp
   src/protocol.cpp)
 target_include_directories(cvm PUBLIC src)
-target_compile_options(cvm PRIVATE -Wall -Wextra -Wno-unused-parameter)
+if(MSVC)
+  target_compile_options(cvm PRIVATE /W4)
+else()
+  target_compile_options(cvm PRIVATE -Wall -Wextra -Wno-unused-parameter)
+endif()
 
 # One entity, one process: a small static binary so 1300 of them fit in memory.
 add_executable(hh-vm src/main.cpp)
 target_link_libraries(hh-vm PRIVATE cvm)
-target_compile_options(hh-vm PRIVATE -Wall -Wextra)
+if(MSVC)
+  target_compile_options(hh-vm PRIVATE /W4)
+else()
+  target_compile_options(hh-vm PRIVATE -Wall -Wextra)
+endif()
 if(MINGW)
   target_link_options(hh-vm PRIVATE -static -static-libgcc -static-libstdc++)
 endif()

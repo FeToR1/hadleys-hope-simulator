@@ -1,5 +1,5 @@
 // Verification of a behavior's code: every path is walked once and checked for operand ranges, types,
-// stack heights, definite assignment of locals, jump targets and capabilities (docs/cvm-v2.md, section 6).
+// stack heights, definite assignment of locals, jump targets and capabilities (docs/spec/cvm-format.md, section 6).
 // A program that passes cannot make the interpreter read out of bounds or work on a value of the wrong type.
 #include "cvm.hpp"
 #include "opcodes.hpp"

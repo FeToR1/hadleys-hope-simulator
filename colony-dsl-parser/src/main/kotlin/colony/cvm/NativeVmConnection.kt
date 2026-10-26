@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Drives one `hh-vm` process over the host protocol, the way the future broker will. Everything crossing the
- * pipe is binary; JSON appears only so a step can be compared with what the reference runtime produced.
+ * pipe is binary; JSON values are the host representation of typed frames and results.
  */
 class NativeVmConnection(
     executable: Path,
@@ -186,7 +186,12 @@ class NativeVmConnection(
         fun executable(): Path? {
             // HH_VM lets the same tests drive a sanitizer build, or any other build, without changing them.
             System.getenv("HH_VM")?.let { return File(it).toPath().toAbsolutePath() }
-            val candidates = listOf("native/build/hh-vm.exe", "native/build/hh-vm", "../native/build/hh-vm.exe", "../native/build/hh-vm")
+            val candidates = listOf(
+                "native/build/Release/hh-vm.exe", "native/build/Debug/hh-vm.exe",
+                "native/build/hh-vm.exe", "native/build/hh-vm",
+                "../native/build/Release/hh-vm.exe", "../native/build/Debug/hh-vm.exe",
+                "../native/build/hh-vm.exe", "../native/build/hh-vm"
+            )
             return candidates.map { File(it) }.firstOrNull { it.isFile }?.toPath()?.toAbsolutePath()
         }
     }

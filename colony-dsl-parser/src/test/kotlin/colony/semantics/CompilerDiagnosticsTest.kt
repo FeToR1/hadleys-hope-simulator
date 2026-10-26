@@ -1,6 +1,6 @@
 package colony.semantics
 
-import colony.bytecode.*
+import colony.compiler.*
 import colony.parser.ColonyParserFacade
 import kotlin.test.*
 
@@ -26,7 +26,7 @@ class CompilerDiagnosticsTest {
     }
 
     @Test fun hazardIsAllowedInAHandlerWhosePeriodEqualsAFractionalStep() {
-        val source = """behavior T for Xenomorph { every 100ms as strike { if hazard(0.4per_s, "s") { } } }"""
+        val source = """behavior T for Predator { every 100ms as strike { if hazard(0.4per_s, "s") { } } }"""
         assertEquals(emptyList(), codes(source, "100ms"))
         assertEquals(listOf("SEM_HAZARD_PERIOD"), codes(source.replace("100ms as", "200ms as"), "100ms"))
     }

@@ -1,5 +1,12 @@
 {
-    "contractVersion": 6,
+    "contractVersion": 11,
+    "sourceFormats": {
+        ".colony": "event and behavior declarations",
+        ".settings": "settings, include, source, let, template, object using, param binding, population, world, constant lists and records, at tick for target",
+        "scenarioInput": ".settings only; includes are declaration libraries",
+        "settingsExpressions": "Colony constant expressions with the same types and canonical units",
+        "executable": "CVM2"
+    },
     "units": {
         "degC": {
             "quantity": "Temperature",
@@ -137,6 +144,7 @@
                 "reachable_breakables": "List<Target>",
                 "home": "Position",
                 "workplace": "Position",
+                "medical_required": "Bool",
                 "meeting_point": "Position",
                 "routine_slot": "Int64",
                 "day_minute": "Int64",
@@ -165,7 +173,7 @@
             "view": {
                 "position": "Position",
                 "health": "Health",
-                "visible_xenomorphs": "List<Target>",
+                "visible_predators": "List<Target>",
                 "available_vehicles": "List<VehicleTarget>",
                 "in_vehicle": "Bool",
                 "boarding_radius": "Distance",
@@ -174,6 +182,20 @@
                 "squad_size": "Int64",
                 "squad_leader": "Bool",
                 "depot": "Position"
+            },
+            "capabilities": [
+                "DAMAGE_REQUEST",
+                "MOTION_REQUEST"
+            ]
+        },
+        "Predator": {
+            "view": {
+                "position": "Position",
+                "visible_infrastructure": "List<Target>",
+                "visible_humans": "List<Target>",
+                "attack_active": "Bool",
+                "patrol_waypoint": "Position",
+                "routed": "Bool"
             },
             "capabilities": [
                 "DAMAGE_REQUEST",
@@ -197,19 +219,6 @@
             "capabilities": [
                 "MOTION_REQUEST",
                 "REPAIR_REQUEST"
-            ]
-        },
-        "Xenomorph": {
-            "view": {
-                "position": "Position",
-                "visible_infrastructure": "List<Target>",
-                "visible_humans": "List<Target>",
-                "patrol_waypoint": "Position",
-                "routed": "Bool"
-            },
-            "capabilities": [
-                "DAMAGE_REQUEST",
-                "MOTION_REQUEST"
             ]
         }
     },

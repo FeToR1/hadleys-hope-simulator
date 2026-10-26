@@ -1,10 +1,44 @@
 grammar Colony;
 
-// Colony MVP grammar for the Hadley's Hope simulator.
+// Colony MVP grammar for the Klyaksa colony simulator.
 // The grammar defines the source syntax. Further processing happens after AST construction.
 
 program
     : topLevelDecl* EOF
+    ;
+
+// Same expressions, literals and units; a separate entry point for .settings.
+settingsProgram
+    : SETTINGS identifier? LBRACE settingsMember* RBRACE EOF
+    ;
+
+settingsMember
+    : SOURCE STRING SEMI
+    | INCLUDE STRING SEMI
+    | letStatement
+    | TEMPLATE identifier LBRACE settingsObject* RBRACE
+    | POPULATION identifier AS identifier LBRACE settingsNode* RBRACE
+    | AT expression FOR STRING LBRACE settingsNode* RBRACE
+    | settingsNode
+    ;
+
+settingsObject
+    : OBJECT identifier USING identifier LBRACE objectSetting* RBRACE
+    ;
+
+objectSetting
+    : PARAM identifier ASSIGN (expression | settingsList) SEMI
+    | settingsNode
+    ;
+
+settingsNode
+    : identifier ASSIGN expression SEMI
+    | identifier ASSIGN settingsList SEMI
+    | identifier LBRACE settingsNode* RBRACE
+    ;
+
+settingsList
+    : LBRACK (expression (COMMA expression)* COMMA?)? RBRACK
     ;
 
 topLevelDecl
@@ -219,10 +253,19 @@ typeName
     ;
 
 identifier
-    : IDENTIFIER
+    : IDENTIFIER | SETTINGS | SOURCE | TEMPLATE | POPULATION | OBJECT | USING | INCLUDE | AT
     ;
 
 // ---------- Lexer ----------
+
+SETTINGS       : 'settings';
+SOURCE         : 'source';
+TEMPLATE       : 'template';
+POPULATION     : 'population';
+OBJECT         : 'object';
+USING          : 'using';
+INCLUDE        : 'include';
+AT             : 'at';
 
 BEHAVIOR       : 'behavior';
 FOR            : 'for';

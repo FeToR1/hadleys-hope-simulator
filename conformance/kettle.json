@@ -1,327 +1,9 @@
 {
-    "conformance": 1,
-    "contract": 6,
+    "conformance": 2,
+    "contract": 11,
     "name": "kettle",
     "source": "examples/integration/devices.colony",
-    "program": {
-        "stepSeconds": "1",
-        "events": [],
-        "behaviors": [
-            {
-                "name": "KettleControl",
-                "kind": "Kettle",
-                "params": [],
-                "state": [],
-                "temporaryCount": 11,
-                "initialize": 0,
-                "handlers": [
-                    {
-                        "name": "heat",
-                        "entry": 1,
-                        "localCount": 0,
-                        "periodTicks": 1
-                    }
-                ],
-                "code": [
-                    {
-                        "op": "RETURN",
-                        "line": 1,
-                        "column": 1
-                    },
-                    {
-                        "op": "LOAD_VIEW",
-                        "text": "broken",
-                        "line": 3,
-                        "column": 17
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "line": 3,
-                        "column": 17
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "UNARY",
-                        "text": "NOT",
-                        "type": "Bool",
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 1,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 1,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "JUMP_IF_FALSE",
-                        "arg": 9,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 12,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Bool",
-                        "value": false,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 2,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 17,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "LOAD_VIEW",
-                        "text": "power_connected",
-                        "line": 3,
-                        "column": 32
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 3,
-                        "line": 3,
-                        "column": 32
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 3,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 2,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 17,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 2,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "JUMP_IF_FALSE",
-                        "arg": 20,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 23,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Bool",
-                        "value": false,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 4,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 34,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "LOAD_VIEW",
-                        "text": "water_temperature",
-                        "line": 3,
-                        "column": 56
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 5,
-                        "line": 3,
-                        "column": 56
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Temperature",
-                        "value": 95,
-                        "line": 3,
-                        "column": 77
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 6,
-                        "line": 3,
-                        "column": 77
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 5,
-                        "line": 3,
-                        "column": 52
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 6,
-                        "line": 3,
-                        "column": 52
-                    },
-                    {
-                        "op": "BINARY",
-                        "text": "LT",
-                        "type": "Bool",
-                        "line": 3,
-                        "column": 52
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 7,
-                        "line": 3,
-                        "column": 52
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 7,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 4,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 34,
-                        "line": 3,
-                        "column": 12
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 4,
-                        "line": 3,
-                        "column": 9
-                    },
-                    {
-                        "op": "JUMP_IF_FALSE",
-                        "arg": 42,
-                        "line": 3,
-                        "column": 9
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 37,
-                        "line": 3,
-                        "column": 9
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Power",
-                        "value": 1000,
-                        "line": 4,
-                        "column": 27
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 8,
-                        "line": 4,
-                        "column": 27
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 8,
-                        "line": 4,
-                        "column": 26
-                    },
-                    {
-                        "op": "POWER_REQUEST",
-                        "line": 4,
-                        "column": 26
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 47,
-                        "line": 3,
-                        "column": 84
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Power",
-                        "value": 0,
-                        "line": 6,
-                        "column": 27
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 10,
-                        "line": 6,
-                        "column": 27
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 10,
-                        "line": 6,
-                        "column": 26
-                    },
-                    {
-                        "op": "POWER_REQUEST",
-                        "line": 6,
-                        "column": 26
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 47,
-                        "line": 5,
-                        "column": 16
-                    },
-                    {
-                        "op": "RETURN",
-                        "line": 2,
-                        "column": 22
-                    }
-                ],
-                "observes": [
-                    "broken",
-                    "power_connected",
-                    "water_temperature"
-                ]
-            }
-        ],
-        "contract": 6
-    },
+    "artifact": "Q1ZNMgIACwAEAAAAAAAAAAGkAAAAFQExCFBvc2l0aW9uAXgBeQZUYXJnZXQCaWQEa2luZAhwb3NpdGlvbghkaXN0YW5jZQZoZWFsdGgNVmVoaWNsZVRhcmdldAZEZXZpY2UGYnJva2VuA0pvYgZvYmplY3QIcHJvZ3Jlc3MNS2V0dGxlQ29udHJvbAZLZXR0bGURd2F0ZXJfdGVtcGVyYXR1cmUPcG93ZXJfY29ubmVjdGVkBGhlYXQCOAAAAAUBAgIDAwMEBQUEBgQHBwAIAwkDCgUFBAYEBwcACAMJAwsDBQQGBAwBDQYFBA4EBgQHBwAIAw8DAwEAAAAABJgAAAAAARARAQAAAAAAAxIDDAETAQEUAQEBAAAAAgEBAAAAAAABRAAAADwqAFExADwAAAABIEAxcCoAAAABIUAxcR8AAABgRjxgIAAAAAAAQI9APCUCIVAgAAAAAADAV0AwFgAAAAEgUjANAAAADwABAQEDDAMDDAYDDAMDDAYDDAMDCQYGGgICFgEEGgoDVAEDNA0DDAUDDAMDDP8gAAAA8oqi/w96C12YsuBnsZ8xopTCb4SKT8ZK/nx0Y6d2ilg=",
     "cases": [
         {
             "name": "heats-until-boiling",
@@ -344,7 +26,7 @@
                             {
                                 "operation": "POWER_REQUEST",
                                 "arguments": [
-                                    1000
+                                    1000.0
                                 ]
                             }
                         ],
@@ -364,7 +46,7 @@
                             {
                                 "operation": "POWER_REQUEST",
                                 "arguments": [
-                                    1000
+                                    1000.0
                                 ]
                             }
                         ],
@@ -384,7 +66,7 @@
                             {
                                 "operation": "POWER_REQUEST",
                                 "arguments": [
-                                    1000
+                                    1000.0
                                 ]
                             }
                         ],
@@ -404,7 +86,7 @@
                             {
                                 "operation": "POWER_REQUEST",
                                 "arguments": [
-                                    0
+                                    0.0
                                 ]
                             }
                         ],
@@ -424,7 +106,7 @@
                             {
                                 "operation": "POWER_REQUEST",
                                 "arguments": [
-                                    0
+                                    0.0
                                 ]
                             }
                         ],
@@ -444,7 +126,7 @@
                             {
                                 "operation": "POWER_REQUEST",
                                 "arguments": [
-                                    0
+                                    0.0
                                 ]
                             }
                         ],
@@ -464,7 +146,7 @@
                             {
                                 "operation": "POWER_REQUEST",
                                 "arguments": [
-                                    0
+                                    0.0
                                 ]
                             }
                         ],

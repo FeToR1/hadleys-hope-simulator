@@ -1,7 +1,7 @@
 package colony.cvm
 
-import colony.bytecode.SourceFile
-import colony.bytecode.bytecodeJson
+import colony.compiler.SourceFile
+import colony.compiler.colonyJson
 import colony.runtime.ConformanceFile
 import colony.runtime.jsonEquivalent
 import kotlinx.serialization.decodeFromString
@@ -11,11 +11,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.*
 
-/**
- * The native VM against the reference: the same programs, the same frames, and every intent, message and state
- * value compared. The vectors come from the Kotlin runtime, so agreement here means two independent
- * implementations of the language, through two different back ends, do the same thing.
- */
+/** Compile maintained sources to CVM2 and replay the frozen expected state and effects. */
 class NativeConformanceTest {
     private val executable = NativeVmDriver.executable()
 
@@ -27,7 +23,7 @@ class NativeConformanceTest {
     }
 
     private fun vectors(name: String): ConformanceFile =
-        bytecodeJson.decodeFromString(File("../conformance/$name.json").readText())
+        colonyJson.decodeFromString(File("../conformance/$name.json").readText())
 
     /** Sessions land here so another build, for instance one with sanitizers, can replay the same bytes. */
     private val sessions = File("build/sessions").apply { mkdirs() }
@@ -102,9 +98,9 @@ class NativeConformanceTest {
         assertEquals(378, runFile("resident", source("examples/resident.colony")))
     }
 
-    @Test fun xenomorphWithHazardAndMovement() {
+    @Test fun predatorWithHazardAndMovement() {
         if (executable == null) return
-        assertEquals(60, runFile("xenomorph", source("examples/xenomorph.colony")))
+        assertEquals(60, runFile("predator", source("examples/predator.colony")))
     }
 
     @Test fun everyLanguageFeature() {

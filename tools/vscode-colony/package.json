@@ -1,0 +1,43 @@
+{
+  "name": "colony-language",
+  "displayName": "Colony Language",
+  "description": "Syntax highlighting and editing support for the Colony simulation language.",
+  "version": "0.3.0",
+  "publisher": "klyaksa",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "colony",
+        "aliases": [
+          "Colony",
+          "colony"
+        ],
+        "extensions": [
+          ".colony",
+          ".settings"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "colony",
+        "scopeName": "source.colony",
+        "path": "./syntaxes/colony.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "test": "node --test test/highlighting.test.cjs"
+  },
+  "devDependencies": {
+    "vscode-oniguruma": "2.0.1",
+    "vscode-textmate": "9.3.2"
+  }
+}

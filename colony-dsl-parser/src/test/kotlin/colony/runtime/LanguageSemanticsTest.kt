@@ -1,19 +1,19 @@
 package colony.runtime
 
-import colony.bytecode.*
+import colony.compiler.*
 import kotlinx.serialization.json.*
 import kotlin.test.*
 
-/** End-to-end language semantics: compile DSL, execute on ReferenceVm, compare with the meaning written in the source. */
+/** End-to-end language semantics: compile DSL, execute on NativeVm, compare with the meaning written in the source. */
 class LanguageSemanticsTest {
     private fun obj(vararg fields: Pair<String, JsonElement>) = JsonObject(fields.toMap())
     private val pos = { x: Int, y: Int -> obj("x" to JsonPrimitive(x), "y" to JsonPrimitive(y)) }
     private fun target(id: String, distance: Int) =
-        obj("id" to JsonPrimitive(id), "position" to pos(0, 0), "distance" to JsonPrimitive(distance))
+        obj("id" to JsonPrimitive(id), "position" to pos(0, 0), "distance" to JsonPrimitive(distance), "kind" to JsonPrimitive("Heater"), "health" to JsonPrimitive(100))
 
     @Test fun ifLetElseChainWithNestedShortCircuit() {
         val code = compileSource("""
-            behavior T for Xenomorph {
+            behavior T for Predator {
                 state out: Int64 = 0;
                 every 1s as go {
                     if let t = nearest(view.visible_infrastructure) {
@@ -25,7 +25,7 @@ class LanguageSemanticsTest {
             }
         """)
         fun run(list: List<JsonElement>, x: Int): Int {
-            val vm = ReferenceVm("t", code, "T")
+            val vm = NativeVm("t", code, "T")
             val view = obj("position" to pos(x, 0), "visible_infrastructure" to JsonArray(list), "patrol_waypoint" to pos(0, 0))
             return vm.step(VmFrame(0, view)).state.getValue("out").jsonPrimitive.int
         }
@@ -55,7 +55,7 @@ class LanguageSemanticsTest {
                 }
             }
         """)
-        val state = ReferenceVm("t", code, "T").step(VmFrame(0, JsonObject(emptyMap()))).state
+        val state = NativeVm("t", code, "T").step(VmFrame(0, JsonObject(emptyMap()))).state
         assertEquals(3.0, state.getValue("b").jsonPrimitive.double)
         assertEquals(1.5, state.getValue("c").jsonPrimitive.double)
         assertEquals(1, state.getValue("d").jsonPrimitive.int)
@@ -81,8 +81,8 @@ class LanguageSemanticsTest {
                 }
             }
         """)
-        val sender = ReferenceVm("s", code, "Sender", obj("peer" to JsonPrimitive("r")))
-        val receiver = ReferenceVm("r", code, "Receiver")
+        val sender = NativeVm("s", code, "Sender", obj("peer" to JsonPrimitive("r")))
+        val receiver = NativeVm("r", code, "Receiver")
         val out = sender.step(VmFrame(0, JsonObject(emptyMap())))
         assertEquals(2, out.events.size)
         val state = receiver.step(VmFrame(1, JsonObject(emptyMap()),
@@ -100,7 +100,7 @@ class LanguageSemanticsTest {
                 every 1min as b { slow = slow + 1; }
             }
         """)
-        val vm = ReferenceVm("t", code, "T")
+        val vm = NativeVm("t", code, "T")
         var state = JsonObject(emptyMap())
         for (tick in 0L until 121L) state = vm.step(VmFrame(tick, JsonObject(emptyMap()))).state
         assertEquals(61, state.getValue("fast").jsonPrimitive.int)   // ticks 0,2,...,120
@@ -117,7 +117,7 @@ class LanguageSemanticsTest {
                 }
             }
         """)
-        val vm = ReferenceVm("t", code, "T")
+        val vm = NativeVm("t", code, "T")
         var state = JsonObject(emptyMap())
         for (tick in 0L until 35L) state = vm.step(VmFrame(tick, JsonObject(emptyMap()))).state
         assertEquals(4, state.getValue("fired").jsonPrimitive.int) // 0,10,20,30
@@ -133,7 +133,7 @@ class LanguageSemanticsTest {
                 every 1s as tick { trace = trace * 10 + 3; }
             }
         """)
-        val vm = ReferenceVm("t", code, "T")
+        val vm = NativeVm("t", code, "T")
         val ping = code.events.single { it.name == "Ping" }.id
         val state = vm.step(VmFrame(0, JsonObject(emptyMap()), listOf(DeliveredEvent(ping, JsonObject(emptyMap()))))).state
         assertEquals(123, state.getValue("trace").jsonPrimitive.int)
@@ -150,7 +150,7 @@ class LanguageSemanticsTest {
                 state m: Money = 5;
             }
         """)
-        val state = ReferenceVm("t", code, "T").stateSnapshot()
+        val state = NativeVm("t", code, "T").stateSnapshot()
         assertEquals(-5.0, state.getValue("t").jsonPrimitive.double)
         assertEquals(-2000.0, state.getValue("p").jsonPrimitive.double)
         assertEquals(-3, state.getValue("n").jsonPrimitive.int)
@@ -158,7 +158,7 @@ class LanguageSemanticsTest {
 
     @Test fun scientificNotationLiteral() {
         val code = compileSource("behavior T for House { state a: Real64 = 1e3; state b: Real64 = 2.5e-1; }")
-        val state = ReferenceVm("t", code, "T").stateSnapshot()
+        val state = NativeVm("t", code, "T").stateSnapshot()
         assertEquals(1000.0, state.getValue("a").jsonPrimitive.double)
         assertEquals(0.25, state.getValue("b").jsonPrimitive.double)
     }
@@ -179,7 +179,7 @@ class LanguageSemanticsTest {
                 }
             }
         """)
-        fun run(occ: Int) = ReferenceVm("t", code, "T")
+        fun run(occ: Int) = NativeVm("t", code, "T")
             .step(VmFrame(0, obj("occupants" to JsonPrimitive(occ), "temperature" to JsonPrimitive(20)))).state
             .getValue("out").jsonPrimitive.double
         assertEquals(4.0, run(1))

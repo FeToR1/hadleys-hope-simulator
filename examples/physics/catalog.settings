@@ -1,0 +1,87 @@
+// Общие программы поведения и шаблоны экземпляров Colony.
+settings PhysicsCatalog {
+    source "settlement.colony";
+    let heaterPower: Power = 8kW;
+    template household {
+        object house using HouseControl {
+            param heater = "$instance/heater";
+        }
+        object heater using HeaterControl {
+            param rating = heaterPower;
+            parent = "$instance/house";
+            x = 6m;
+            y = 6m;
+        }
+        object kettle using KettleControl {
+            parent = "$instance/house";
+            x = 12m;
+            y = 6m;
+        }
+        object resident using Resident {
+            parent = "$instance/house";
+            x = 8m;
+            y = 14m;
+        }
+    }
+    template crew {
+        object rover using RepairCrew {
+        }
+    }
+    template cleanup {
+        object rover using CleanupRover {
+        }
+    }
+    template forester {
+        object rover using Forester {
+        }
+    }
+    template transport {
+        object rover using PassengerRover {
+        }
+    }
+    template resource {
+        object rover using CargoRover {
+        }
+    }
+    template predator {
+        object predator using GroundPredator {
+        }
+    }
+    template marine_squad {
+        object marine1 using MarineSquad {
+            param squad = "$instance";
+            param leader = true;
+            param success_probability = 0.05;
+            x = 0m;
+            y = 0m;
+        }
+        object marine2 using MarineSquad {
+            param squad = "$instance";
+            param leader = false;
+            param success_probability = 0.05;
+            x = 3m;
+            y = 0m;
+        }
+        object marine3 using MarineSquad {
+            param squad = "$instance";
+            param leader = false;
+            param success_probability = 0.05;
+            x = 0m;
+            y = 3m;
+        }
+        object marine4 using MarineSquad {
+            param squad = "$instance";
+            param leader = false;
+            param success_probability = 0.05;
+            x = 3m;
+            y = 3m;
+        }
+        object marine5 using MarineSquad {
+            param squad = "$instance";
+            param leader = false;
+            param success_probability = 0.05;
+            x = 6m;
+            y = 1m;
+        }
+    }
+}

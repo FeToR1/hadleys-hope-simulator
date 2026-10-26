@@ -1,7 +1,7 @@
 package colony.runtime
 
+import colony.world.Disaster
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -11,19 +11,19 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 /**
- * Drives a [ReferenceRun] at a controllable pace (docs/simulation, section 7 of the interaction overview).
+ * Drives a [SimulationRun] at a controllable pace (docs/simulation, section 7 of the interaction overview).
  * Pause, single steps and speed only decide when steps happen, never what a step computes,
  * and a pause never interrupts a step that has begun. Nothing here knows about HTTP, so the whole
  * lifecycle can be tested with a plain loop.
  */
 class RunController(
     private val prepared: PreparedRun,
-    private val fleetFactory: (PreparedRun, String) -> VmFleet = { p, _ -> ReferenceFleet(p) },
+    private val fleetFactory: (PreparedRun, String) -> VmFleet = { p, _ -> NativeFleet(p) },
     private val replayCapacity: Int = 256,
     private val compactLive: Boolean = false,
     private val newRunId: () -> String = { UUID.randomUUID().toString() },
 ) : AutoCloseable {
-    private fun createRun(): ReferenceRun { val id = newRunId(); return ReferenceRun(prepared, id, fleetFactory(prepared, id)) }
+    private fun createRun(): SimulationRun { val id = newRunId(); return SimulationRun(prepared, id, fleetFactory(prepared, id)) }
     enum class Status { WAITING, RUNNING, PAUSED, COMPLETED, FAILED }
 
     /** One committed step exactly as observers receive it. */
@@ -95,6 +95,14 @@ class RunController(
         changed()
     }
 
+    fun queueDisaster(disaster: Disaster, expectedRunId: String) = lock.withLock {
+        require(expectedRunId == run.runId) { "Симуляция была перезапущена; повторите команду" }
+        require(status in setOf(Status.WAITING, Status.RUNNING, Status.PAUSED)) { "Прогон завершён; начните заново" }
+        val world = requireNotNull(run.kernel) { "В этом сценарии нет физического мира" }
+        world.queueDisaster(disaster)
+        changed()
+    }
+
     /** Called by the pacing loop: performs one step when the run is running. */
     fun tick(): Boolean = lock.withLock {
         if (status != Status.RUNNING) return@withLock false
@@ -128,6 +136,7 @@ class RunController(
             put("behaviorWorkers", run.behaviorWorkers); put("nativeProcesses", run.nativeProcesses)
             put("lastStepMs", run.lastTimings.let { it.observeMs + it.behaviorMs + it.worldMs + it.snapshotMs })
             put("observationMode", if (compactLive) "compact" else "full")
+            run.kernel?.let { put("disasters", it.disasterOptions()) }
             failure?.let { put("error", it) }
         }
     }
@@ -192,8 +201,6 @@ class RunController(
     }
 }
 
-private val observerJson = Json { encodeDefaults = true }
-
 /** Background thread that calls [RunController.tick] at the configured speed. */
 class RunPacer(private val controller: RunController) : AutoCloseable {
     @Volatile private var stopped = false
@@ -209,7 +216,7 @@ class RunPacer(private val controller: RunController) : AutoCloseable {
                 return@Thread
             }
         }
-    }, "reference-run-pacer").apply { isDaemon = true }
+    }, "simulation-run-pacer").apply { isDaemon = true }
 
     fun start() = thread.start()
 

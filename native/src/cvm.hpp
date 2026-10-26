@@ -1,5 +1,5 @@
 // Colony stack VM: values, program image and the pieces the interpreter needs.
-// The format is docs/cvm-v2.md; the Kotlin compiler in colony-dsl-parser writes what this loads.
+// The format is docs/spec/cvm-format.md; the Kotlin compiler in colony-dsl-parser writes what this loads.
 #pragma once
 
 #include <array>
@@ -102,7 +102,9 @@ public:
         while (current_ < chunks_.size() && count > chunks_[current_].capacity - chunks_[current_].used) ++current_;
         if (current_ == chunks_.size()) {
             if (count > capacity_ - reserved_) throw StepError("value arena exhausted");
-            const size_t size = std::min(capacity_ - reserved_, std::max(size_t(256), count));
+            // Shared-process contexts keep one frame arena each. A modest first chunk avoids reserving 256 Values
+            // for thousands of contexts that only decode scalar frames; larger allocations still grow on demand.
+            const size_t size = std::min(capacity_ - reserved_, std::max(size_t(32), count));
             chunks_.push_back({std::make_unique<Value[]>(size), size, 0});
             reserved_ += size;
         }
@@ -237,7 +239,7 @@ double randomDraw(int64_t seed, std::string_view entity, std::string_view behavi
 // Execution
 // ---------------------------------------------------------------------------
 
-/** Limits of one step (docs/cvm-v2.md, section 7). */
+/** Limits of one step (docs/spec/cvm-format.md, section 7). */
 struct Limits {
     uint64_t instructions = 100000;
     uint32_t stack = 4096;

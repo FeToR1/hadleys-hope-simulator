@@ -1,1272 +1,9 @@
 {
-    "conformance": 1,
-    "contract": 6,
+    "conformance": 2,
+    "contract": 11,
     "name": "resident",
     "source": "colony-dsl-parser/examples/resident.colony",
-    "program": {
-        "stepSeconds": "1",
-        "events": [
-            {
-                "id": 0,
-                "name": "PowerLost",
-                "fields": []
-            }
-        ],
-        "behaviors": [
-            {
-                "name": "Resident",
-                "kind": "Human",
-                "params": [],
-                "state": [
-                    {
-                        "name": "mood",
-                        "type": "Resident.Mood"
-                    },
-                    {
-                        "name": "stress",
-                        "type": "Real64"
-                    },
-                    {
-                        "name": "next_attempt",
-                        "type": "Duration"
-                    }
-                ],
-                "temporaryCount": 53,
-                "initialize": 0,
-                "handlers": [
-                    {
-                        "name": "react_to_outage",
-                        "entry": 13,
-                        "localCount": 0,
-                        "eventId": 0
-                    },
-                    {
-                        "name": "reconsider",
-                        "entry": 33,
-                        "localCount": 1,
-                        "periodTicks": 60
-                    }
-                ],
-                "code": [
-                    {
-                        "op": "CONST",
-                        "type": "Resident.Mood",
-                        "value": "Calm",
-                        "line": 7,
-                        "column": 24
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "line": 7,
-                        "column": 24
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "line": 7,
-                        "column": 5
-                    },
-                    {
-                        "op": "STORE_STATE",
-                        "line": 7,
-                        "column": 5
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Real64",
-                        "value": 0.2,
-                        "line": 8,
-                        "column": 28
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 1,
-                        "line": 8,
-                        "column": 28
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 1,
-                        "line": 8,
-                        "column": 5
-                    },
-                    {
-                        "op": "STORE_STATE",
-                        "arg": 1,
-                        "line": 8,
-                        "column": 5
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Duration",
-                        "value": 0,
-                        "line": 9,
-                        "column": 36
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 2,
-                        "line": 9,
-                        "column": 36
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 2,
-                        "line": 9,
-                        "column": 5
-                    },
-                    {
-                        "op": "STORE_STATE",
-                        "arg": 2,
-                        "line": 9,
-                        "column": 5
-                    },
-                    {
-                        "op": "RETURN",
-                        "line": 3,
-                        "column": 1
-                    },
-                    {
-                        "op": "LOAD_STATE",
-                        "arg": 1,
-                        "line": 12,
-                        "column": 24
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 3,
-                        "line": 12,
-                        "column": 24
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Real64",
-                        "value": 0.15,
-                        "line": 12,
-                        "column": 33
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 4,
-                        "line": 12,
-                        "column": 33
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 3,
-                        "line": 12,
-                        "column": 24
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 4,
-                        "line": 12,
-                        "column": 24
-                    },
-                    {
-                        "op": "BINARY",
-                        "text": "ADD",
-                        "type": "Real64",
-                        "line": 12,
-                        "column": 24
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 5,
-                        "line": 12,
-                        "column": 24
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Real64",
-                        "value": 0.0,
-                        "line": 12,
-                        "column": 39
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 6,
-                        "line": 12,
-                        "column": 39
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Real64",
-                        "value": 1.0,
-                        "line": 12,
-                        "column": 44
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 7,
-                        "line": 12,
-                        "column": 44
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 5,
-                        "line": 12,
-                        "column": 23
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 6,
-                        "line": 12,
-                        "column": 23
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 7,
-                        "line": 12,
-                        "column": 23
-                    },
-                    {
-                        "op": "CLAMP",
-                        "line": 12,
-                        "column": 23
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 8,
-                        "line": 12,
-                        "column": 23
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 8,
-                        "line": 12,
-                        "column": 9
-                    },
-                    {
-                        "op": "STORE_STATE",
-                        "arg": 1,
-                        "line": 12,
-                        "column": 9
-                    },
-                    {
-                        "op": "RETURN",
-                        "line": 11,
-                        "column": 46
-                    },
-                    {
-                        "op": "LOAD_VIEW",
-                        "text": "cold",
-                        "line": 16,
-                        "column": 16
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 9,
-                        "line": 16,
-                        "column": 16
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 9,
-                        "line": 16,
-                        "column": 9
-                    },
-                    {
-                        "op": "JUMP_IF_FALSE",
-                        "arg": 58,
-                        "line": 16,
-                        "column": 9
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 38,
-                        "line": 16,
-                        "column": 9
-                    },
-                    {
-                        "op": "LOAD_STATE",
-                        "arg": 1,
-                        "line": 17,
-                        "column": 28
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 10,
-                        "line": 17,
-                        "column": 28
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Real64",
-                        "value": 0.04,
-                        "line": 17,
-                        "column": 37
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 11,
-                        "line": 17,
-                        "column": 37
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 10,
-                        "line": 17,
-                        "column": 28
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 11,
-                        "line": 17,
-                        "column": 28
-                    },
-                    {
-                        "op": "BINARY",
-                        "text": "ADD",
-                        "type": "Real64",
-                        "line": 17,
-                        "column": 28
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 12,
-                        "line": 17,
-                        "column": 28
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Real64",
-                        "value": 0.0,
-                        "line": 17,
-                        "column": 43
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 13,
-                        "line": 17,
-                        "column": 43
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Real64",
-                        "value": 1.0,
-                        "line": 17,
-                        "column": 48
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 14,
-                        "line": 17,
-                        "column": 48
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 12,
-                        "line": 17,
-                        "column": 27
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 13,
-                        "line": 17,
-                        "column": 27
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 14,
-                        "line": 17,
-                        "column": 27
-                    },
-                    {
-                        "op": "CLAMP",
-                        "line": 17,
-                        "column": 27
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 15,
-                        "line": 17,
-                        "column": 27
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 15,
-                        "line": 17,
-                        "column": 13
-                    },
-                    {
-                        "op": "STORE_STATE",
-                        "arg": 1,
-                        "line": 17,
-                        "column": 13
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 78,
-                        "line": 16,
-                        "column": 22
-                    },
-                    {
-                        "op": "LOAD_STATE",
-                        "arg": 1,
-                        "line": 19,
-                        "column": 28
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 16,
-                        "line": 19,
-                        "column": 28
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Real64",
-                        "value": 0.02,
-                        "line": 19,
-                        "column": 37
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 17,
-                        "line": 19,
-                        "column": 37
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 16,
-                        "line": 19,
-                        "column": 28
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 17,
-                        "line": 19,
-                        "column": 28
-                    },
-                    {
-                        "op": "BINARY",
-                        "text": "SUB",
-                        "type": "Real64",
-                        "line": 19,
-                        "column": 28
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 18,
-                        "line": 19,
-                        "column": 28
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Real64",
-                        "value": 0.0,
-                        "line": 19,
-                        "column": 43
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 19,
-                        "line": 19,
-                        "column": 43
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Real64",
-                        "value": 1.0,
-                        "line": 19,
-                        "column": 48
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 20,
-                        "line": 19,
-                        "column": 48
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 18,
-                        "line": 19,
-                        "column": 27
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 19,
-                        "line": 19,
-                        "column": 27
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 20,
-                        "line": 19,
-                        "column": 27
-                    },
-                    {
-                        "op": "CLAMP",
-                        "line": 19,
-                        "column": 27
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 21,
-                        "line": 19,
-                        "column": 27
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 21,
-                        "line": 19,
-                        "column": 13
-                    },
-                    {
-                        "op": "STORE_STATE",
-                        "arg": 1,
-                        "line": 19,
-                        "column": 13
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 78,
-                        "line": 18,
-                        "column": 16
-                    },
-                    {
-                        "op": "LOAD_STATE",
-                        "arg": 1,
-                        "line": 22,
-                        "column": 12
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 22,
-                        "line": 22,
-                        "column": 12
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Real64",
-                        "value": 0.8,
-                        "line": 22,
-                        "column": 21
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 23,
-                        "line": 22,
-                        "column": 21
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 22,
-                        "line": 22,
-                        "column": 12
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 23,
-                        "line": 22,
-                        "column": 12
-                    },
-                    {
-                        "op": "BINARY",
-                        "text": "GT",
-                        "type": "Bool",
-                        "line": 22,
-                        "column": 12
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 24,
-                        "line": 22,
-                        "column": 12
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 24,
-                        "line": 22,
-                        "column": 9
-                    },
-                    {
-                        "op": "JUMP_IF_FALSE",
-                        "arg": 94,
-                        "line": 22,
-                        "column": 9
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 89,
-                        "line": 22,
-                        "column": 9
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Resident.Mood",
-                        "value": "Agitated",
-                        "line": 23,
-                        "column": 20
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 25,
-                        "line": 23,
-                        "column": 20
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 25,
-                        "line": 23,
-                        "column": 13
-                    },
-                    {
-                        "op": "STORE_STATE",
-                        "line": 23,
-                        "column": 13
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 112,
-                        "line": 22,
-                        "column": 25
-                    },
-                    {
-                        "op": "LOAD_STATE",
-                        "arg": 1,
-                        "line": 24,
-                        "column": 19
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 26,
-                        "line": 24,
-                        "column": 19
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Real64",
-                        "value": 0.4,
-                        "line": 24,
-                        "column": 28
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 27,
-                        "line": 24,
-                        "column": 28
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 26,
-                        "line": 24,
-                        "column": 19
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 27,
-                        "line": 24,
-                        "column": 19
-                    },
-                    {
-                        "op": "BINARY",
-                        "text": "LT",
-                        "type": "Bool",
-                        "line": 24,
-                        "column": 19
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 28,
-                        "line": 24,
-                        "column": 19
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 28,
-                        "line": 24,
-                        "column": 16
-                    },
-                    {
-                        "op": "JUMP_IF_FALSE",
-                        "arg": 110,
-                        "line": 24,
-                        "column": 16
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 105,
-                        "line": 24,
-                        "column": 16
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Resident.Mood",
-                        "value": "Calm",
-                        "line": 25,
-                        "column": 20
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 29,
-                        "line": 25,
-                        "column": 20
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 29,
-                        "line": 25,
-                        "column": 13
-                    },
-                    {
-                        "op": "STORE_STATE",
-                        "line": 25,
-                        "column": 13
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 111,
-                        "line": 24,
-                        "column": 32
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 111,
-                        "line": 24,
-                        "column": 16
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 112,
-                        "line": 24,
-                        "column": 11
-                    },
-                    {
-                        "op": "LOAD_STATE",
-                        "line": 28,
-                        "column": 12
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 30,
-                        "line": 28,
-                        "column": 12
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Resident.Mood",
-                        "value": "Agitated",
-                        "line": 28,
-                        "column": 20
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 31,
-                        "line": 28,
-                        "column": 20
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 30,
-                        "line": 28,
-                        "column": 12
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 31,
-                        "line": 28,
-                        "column": 12
-                    },
-                    {
-                        "op": "BINARY",
-                        "text": "EQ",
-                        "type": "Bool",
-                        "line": 28,
-                        "column": 12
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 32,
-                        "line": 28,
-                        "column": 12
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 32,
-                        "line": 28,
-                        "column": 12
-                    },
-                    {
-                        "op": "JUMP_IF_FALSE",
-                        "arg": 123,
-                        "line": 28,
-                        "column": 12
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 126,
-                        "line": 28,
-                        "column": 12
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Bool",
-                        "value": false,
-                        "line": 28,
-                        "column": 12
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 33,
-                        "line": 28,
-                        "column": 12
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 137,
-                        "line": 28,
-                        "column": 12
-                    },
-                    {
-                        "op": "LOAD_TIME",
-                        "line": 28,
-                        "column": 32
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 34,
-                        "line": 28,
-                        "column": 32
-                    },
-                    {
-                        "op": "LOAD_STATE",
-                        "arg": 2,
-                        "line": 28,
-                        "column": 40
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 35,
-                        "line": 28,
-                        "column": 40
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 34,
-                        "line": 28,
-                        "column": 32
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 35,
-                        "line": 28,
-                        "column": 32
-                    },
-                    {
-                        "op": "BINARY",
-                        "text": "GE",
-                        "type": "Bool",
-                        "line": 28,
-                        "column": 32
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 36,
-                        "line": 28,
-                        "column": 32
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 36,
-                        "line": 28,
-                        "column": 12
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 33,
-                        "line": 28,
-                        "column": 12
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 137,
-                        "line": 28,
-                        "column": 12
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 33,
-                        "line": 28,
-                        "column": 9
-                    },
-                    {
-                        "op": "JUMP_IF_FALSE",
-                        "arg": 198,
-                        "line": 28,
-                        "column": 9
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 140,
-                        "line": 28,
-                        "column": 9
-                    },
-                    {
-                        "op": "LOAD_VIEW",
-                        "text": "reachable_breakables",
-                        "line": 29,
-                        "column": 41
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 37,
-                        "line": 29,
-                        "column": 41
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 37,
-                        "line": 29,
-                        "column": 36
-                    },
-                    {
-                        "op": "NEAREST",
-                        "line": 29,
-                        "column": 36
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 38,
-                        "line": 29,
-                        "column": 36
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 38,
-                        "line": 29,
-                        "column": 16
-                    },
-                    {
-                        "op": "IS_SOME",
-                        "line": 29,
-                        "column": 16
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 39,
-                        "line": 29,
-                        "column": 16
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 39,
-                        "line": 29,
-                        "column": 13
-                    },
-                    {
-                        "op": "JUMP_IF_FALSE",
-                        "arg": 196,
-                        "line": 29,
-                        "column": 13
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 151,
-                        "line": 29,
-                        "column": 13
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 38,
-                        "line": 29,
-                        "column": 16
-                    },
-                    {
-                        "op": "UNWRAP",
-                        "line": 29,
-                        "column": 16
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 40,
-                        "line": 29,
-                        "column": 16
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 40,
-                        "line": 29,
-                        "column": 16
-                    },
-                    {
-                        "op": "STORE_LOCAL",
-                        "line": 29,
-                        "column": 16
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Real64",
-                        "value": 0.15,
-                        "line": 30,
-                        "column": 27
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 41,
-                        "line": 30,
-                        "column": 27
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "String",
-                        "value": "vandalism",
-                        "line": 30,
-                        "column": 33
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 42,
-                        "line": 30,
-                        "column": 33
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 41,
-                        "line": 30,
-                        "column": 27
-                    },
-                    {
-                        "op": "CONVERT",
-                        "type": "Probability",
-                        "line": 30,
-                        "column": 27
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 43,
-                        "line": 30,
-                        "column": 27
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 43,
-                        "line": 30,
-                        "column": 26
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 42,
-                        "line": 30,
-                        "column": 26
-                    },
-                    {
-                        "op": "CHANCE",
-                        "line": 30,
-                        "column": 26
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 44,
-                        "line": 30,
-                        "column": 26
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 44,
-                        "line": 30,
-                        "column": 17
-                    },
-                    {
-                        "op": "JUMP_IF_FALSE",
-                        "arg": 194,
-                        "line": 30,
-                        "column": 17
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 170,
-                        "line": 30,
-                        "column": 17
-                    },
-                    {
-                        "op": "LOAD_LOCAL",
-                        "line": 31,
-                        "column": 36
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 45,
-                        "line": 31,
-                        "column": 36
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 45,
-                        "line": 31,
-                        "column": 42
-                    },
-                    {
-                        "op": "GET_FIELD",
-                        "text": "id",
-                        "line": 31,
-                        "column": 42
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 46,
-                        "line": 31,
-                        "column": 42
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Health",
-                        "value": 20,
-                        "line": 31,
-                        "column": 47
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 47,
-                        "line": 31,
-                        "column": 47
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Resident.DamageCause",
-                        "value": "Vandalism",
-                        "line": 31,
-                        "column": 53
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 48,
-                        "line": 31,
-                        "column": 53
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 46,
-                        "line": 31,
-                        "column": 35
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 47,
-                        "line": 31,
-                        "column": 35
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 48,
-                        "line": 31,
-                        "column": 35
-                    },
-                    {
-                        "op": "DAMAGE_REQUEST",
-                        "line": 31,
-                        "column": 35
-                    },
-                    {
-                        "op": "LOAD_TIME",
-                        "line": 32,
-                        "column": 36
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 50,
-                        "line": 32,
-                        "column": 36
-                    },
-                    {
-                        "op": "CONST",
-                        "type": "Duration",
-                        "value": 600,
-                        "line": 32,
-                        "column": 43
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 51,
-                        "line": 32,
-                        "column": 43
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 50,
-                        "line": 32,
-                        "column": 36
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 51,
-                        "line": 32,
-                        "column": 36
-                    },
-                    {
-                        "op": "BINARY",
-                        "text": "ADD",
-                        "type": "Duration",
-                        "line": 32,
-                        "column": 36
-                    },
-                    {
-                        "op": "STORE_TEMP",
-                        "arg": 52,
-                        "line": 32,
-                        "column": 36
-                    },
-                    {
-                        "op": "LOAD_TEMP",
-                        "arg": 52,
-                        "line": 32,
-                        "column": 21
-                    },
-                    {
-                        "op": "STORE_STATE",
-                        "arg": 2,
-                        "line": 32,
-                        "column": 21
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 195,
-                        "line": 30,
-                        "column": 46
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 195,
-                        "line": 30,
-                        "column": 17
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 197,
-                        "line": 29,
-                        "column": 64
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 197,
-                        "line": 29,
-                        "column": 13
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 199,
-                        "line": 28,
-                        "column": 53
-                    },
-                    {
-                        "op": "JUMP",
-                        "arg": 199,
-                        "line": 28,
-                        "column": 9
-                    },
-                    {
-                        "op": "RETURN",
-                        "line": 15,
-                        "column": 30
-                    }
-                ],
-                "observes": [
-                    "cold",
-                    "reachable_breakables"
-                ]
-            }
-        ],
-        "contract": 6
-    },
+    "artifact": "Q1ZNMgIACwAEAAAAAAAAAAHxAAAAHgRDYWxtCEFnaXRhdGVkCXZhbmRhbGlzbQlWYW5kYWxpc20BMQhQb3NpdGlvbgF4AXkGVGFyZ2V0AmlkBGtpbmQIcG9zaXRpb24IZGlzdGFuY2UGaGVhbHRoDVZlaGljbGVUYXJnZXQGRGV2aWNlBmJyb2tlbgNKb2IGb2JqZWN0CHByb2dyZXNzCVBvd2VyTG9zdAhSZXNpZGVudAVIdW1hbgRtb29kBnN0cmVzcwxuZXh0X2F0dGVtcHQEY29sZBRyZWFjaGFibGVfYnJlYWthYmxlcw9yZWFjdF90b19vdXRhZ2UKcmVjb25zaWRlcgI6AAAABgUCBgMHAwgFCQQKBAsHAAwDDQMOBQkECgQLBwAMAw0DDwMJBAoEEAERBgkEEgQKBAsHAAwDEwMUAAMEAAAAAQAUBQSrAQAABAEVFgIAAAAAAxcEGAMZAwIaARsGBwECHAAAEwAAAAIDAx0BPCgAAAAIBwEDAwEFBwEBAwMAAAAAAADtAAAAARAwAAERIJqZmZmZmck/ARJGPBggYSAzMzMzMzPDPx8hcEZHARFxPDFQ1AAAABkhYSB7FK5H4XqUPx8icUZHARFyNARhIJqZmZmZmek/ywAAADQCYSCamZmZmZnZP8IAAAA2AGAwAbgAAAABI0Axc3YAAAA8PEUkUTsgdHUAAAAwhwAAADw8UCUgMzMzMzMzwz8wAjF1nQAAADw8PGKgACAAAAAAAAA0QDADGBLAIAAAAAAAwIJAPCUFI8BiMG4AAAABEDAAMGIAAAABEDABMGIAAAAYJmEgexSuR+F6pD8fJ3ZGRwERdzBCAAAAKgAHBQQIBQsJBQMDAQEMGAwMFwUMCQMLLgEQCQYTHAwTGwUTDQMWCRAYEBAcDAkcDAMcCQYcCQEPHgEdJAMdDQcdDQUdDQEcNQEeGg0eEQYeEQEeEQEdQAEfIw4gJAweLgEcIAUcDAUZDQQYIAUXDQQWGQURHAwRGwURDQMQFv8gAAAAIqe3p99S695hj0sXSQ5r+iGDprPP/mpyQAnnZFMFacM=",
     "cases": [
         {
             "name": "resident-seed-1",
@@ -1277,7 +14,7 @@
             "initialState": {
                 "mood": "Calm",
                 "stress": 0.2,
-                "next_attempt": 0
+                "next_attempt": 0.0
             },
             "steps": [
                 {
@@ -1302,7 +39,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.24000000000000002,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1335,7 +72,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.39,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1368,7 +105,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.54,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1401,7 +138,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.6900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1434,7 +171,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.8400000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1467,7 +204,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1493,7 +230,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1519,7 +256,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1545,7 +282,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1571,7 +308,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1597,7 +334,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1623,7 +360,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1649,7 +386,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1675,7 +412,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1701,7 +438,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1727,7 +464,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1753,7 +490,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1779,7 +516,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1805,7 +542,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1831,7 +568,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1857,7 +594,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1883,7 +620,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1909,7 +646,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1935,7 +672,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1961,7 +698,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -1987,7 +724,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2013,7 +750,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2039,7 +776,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2065,7 +802,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2091,7 +828,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2117,7 +854,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2143,7 +880,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2169,7 +906,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2195,7 +932,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2221,7 +958,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2247,7 +984,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2273,7 +1010,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2299,7 +1036,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2325,7 +1062,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2351,7 +1088,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2377,7 +1114,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2403,7 +1140,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2429,7 +1166,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2455,7 +1192,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2481,7 +1218,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2507,7 +1244,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2533,7 +1270,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2559,7 +1296,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2585,7 +1322,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2611,7 +1348,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2637,7 +1374,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2663,7 +1400,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2689,7 +1426,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2715,7 +1452,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2741,7 +1478,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2767,7 +1504,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2793,7 +1530,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2819,7 +1556,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2845,7 +1582,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2871,7 +1608,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -2899,7 +1636,7 @@
                                 "operation": "DAMAGE_REQUEST",
                                 "arguments": [
                                     "home-1/heater",
-                                    20,
+                                    20.0,
                                     "Vandalism"
                                 ]
                             }
@@ -4612,7 +3349,7 @@
             "initialState": {
                 "mood": "Calm",
                 "stress": 0.2,
-                "next_attempt": 0
+                "next_attempt": 0.0
             },
             "steps": [
                 {
@@ -4637,7 +3374,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.24000000000000002,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -4670,7 +3407,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.39,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -4703,7 +3440,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.54,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -4736,7 +3473,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.6900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -4769,7 +3506,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.8400000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -4802,7 +3539,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -4828,7 +3565,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -4854,7 +3591,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -4880,7 +3617,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -4906,7 +3643,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -4932,7 +3669,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -4958,7 +3695,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -4984,7 +3721,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5010,7 +3747,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5036,7 +3773,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5062,7 +3799,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5088,7 +3825,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5114,7 +3851,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5140,7 +3877,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5166,7 +3903,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5192,7 +3929,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5218,7 +3955,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5244,7 +3981,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5270,7 +4007,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5296,7 +4033,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5322,7 +4059,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5348,7 +4085,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5374,7 +4111,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5400,7 +4137,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5426,7 +4163,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5452,7 +4189,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5478,7 +4215,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5504,7 +4241,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5530,7 +4267,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5556,7 +4293,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5582,7 +4319,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5608,7 +4345,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5634,7 +4371,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5660,7 +4397,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5686,7 +4423,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5712,7 +4449,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5738,7 +4475,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5764,7 +4501,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5790,7 +4527,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5816,7 +4553,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5842,7 +4579,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5868,7 +4605,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5894,7 +4631,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5920,7 +4657,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5946,7 +4683,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5972,7 +4709,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -5998,7 +4735,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6024,7 +4761,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6050,7 +4787,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6076,7 +4813,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6102,7 +4839,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6128,7 +4865,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6154,7 +4891,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6180,7 +4917,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6206,7 +4943,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6232,7 +4969,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6258,7 +4995,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6284,7 +5021,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6310,7 +5047,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6336,7 +5073,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6362,7 +5099,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6388,7 +5125,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6414,7 +5151,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6440,7 +5177,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6466,7 +5203,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6492,7 +5229,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6518,7 +5255,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6544,7 +5281,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6570,7 +5307,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6596,7 +5333,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6622,7 +5359,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6648,7 +5385,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6674,7 +5411,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6700,7 +5437,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6726,7 +5463,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6752,7 +5489,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6778,7 +5515,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6804,7 +5541,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6830,7 +5567,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6856,7 +5593,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6882,7 +5619,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6908,7 +5645,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6934,7 +5671,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6960,7 +5697,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -6986,7 +5723,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7012,7 +5749,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7038,7 +5775,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7064,7 +5801,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7090,7 +5827,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7116,7 +5853,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7142,7 +5879,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7168,7 +5905,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7194,7 +5931,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7220,7 +5957,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7246,7 +5983,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7272,7 +6009,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7298,7 +6035,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7324,7 +6061,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7350,7 +6087,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7376,7 +6113,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7402,7 +6139,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7428,7 +6165,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7454,7 +6191,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7480,7 +6217,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7506,7 +6243,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7532,7 +6269,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7558,7 +6295,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7584,7 +6321,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7610,7 +6347,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7636,7 +6373,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7662,7 +6399,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7688,7 +6425,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7714,7 +6451,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7740,7 +6477,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7766,7 +6503,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7792,7 +6529,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 1.0,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7818,7 +6555,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 1.0,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7844,7 +6581,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 1.0,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7870,7 +6607,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 1.0,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7896,7 +6633,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 1.0,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7922,7 +6659,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 1.0,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 }
@@ -7937,7 +6674,7 @@
             "initialState": {
                 "mood": "Calm",
                 "stress": 0.2,
-                "next_attempt": 0
+                "next_attempt": 0.0
             },
             "steps": [
                 {
@@ -7962,7 +6699,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.24000000000000002,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -7995,7 +6732,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.39,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8028,7 +6765,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.54,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8061,7 +6798,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.6900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8094,7 +6831,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.8400000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8127,7 +6864,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8153,7 +6890,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8179,7 +6916,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8205,7 +6942,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8231,7 +6968,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8257,7 +6994,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8283,7 +7020,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8309,7 +7046,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8335,7 +7072,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8361,7 +7098,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8387,7 +7124,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8413,7 +7150,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8439,7 +7176,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8465,7 +7202,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8491,7 +7228,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8517,7 +7254,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8543,7 +7280,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8569,7 +7306,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8595,7 +7332,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8621,7 +7358,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8647,7 +7384,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8673,7 +7410,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8699,7 +7436,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8725,7 +7462,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8751,7 +7488,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8777,7 +7514,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8803,7 +7540,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8829,7 +7566,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8855,7 +7592,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8881,7 +7618,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8907,7 +7644,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8933,7 +7670,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8959,7 +7696,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -8985,7 +7722,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9011,7 +7748,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9037,7 +7774,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9063,7 +7800,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9089,7 +7826,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9115,7 +7852,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9141,7 +7878,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9167,7 +7904,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9193,7 +7930,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9219,7 +7956,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9245,7 +7982,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9271,7 +8008,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9297,7 +8034,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9323,7 +8060,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9349,7 +8086,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9375,7 +8112,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9401,7 +8138,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9427,7 +8164,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9453,7 +8190,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9479,7 +8216,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9505,7 +8242,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9531,7 +8268,7 @@
                         "state": {
                             "mood": "Calm",
                             "stress": 0.9900000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9557,7 +8294,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9583,7 +8320,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9609,7 +8346,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9635,7 +8372,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9661,7 +8398,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9687,7 +8424,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9713,7 +8450,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9739,7 +8476,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9765,7 +8502,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9791,7 +8528,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9817,7 +8554,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9843,7 +8580,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9869,7 +8606,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9895,7 +8632,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9921,7 +8658,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9947,7 +8684,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9973,7 +8710,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -9999,7 +8736,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10025,7 +8762,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10051,7 +8788,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10077,7 +8814,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10103,7 +8840,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10129,7 +8866,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10155,7 +8892,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10181,7 +8918,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10207,7 +8944,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10233,7 +8970,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10259,7 +8996,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10285,7 +9022,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10311,7 +9048,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10337,7 +9074,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10363,7 +9100,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10389,7 +9126,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10415,7 +9152,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10441,7 +9178,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10467,7 +9204,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10493,7 +9230,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10519,7 +9256,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10545,7 +9282,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10571,7 +9308,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10597,7 +9334,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10623,7 +9360,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10649,7 +9386,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10675,7 +9412,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10701,7 +9438,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10727,7 +9464,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10753,7 +9490,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10779,7 +9516,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10805,7 +9542,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10831,7 +9568,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10857,7 +9594,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10883,7 +9620,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10909,7 +9646,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10935,7 +9672,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10961,7 +9698,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -10987,7 +9724,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -11013,7 +9750,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -11039,7 +9776,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -11065,7 +9802,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -11091,7 +9828,7 @@
                         "state": {
                             "mood": "Agitated",
                             "stress": 0.9700000000000001,
-                            "next_attempt": 0
+                            "next_attempt": 0.0
                         }
                     }
                 },
@@ -11119,7 +9856,7 @@
                                 "operation": "DAMAGE_REQUEST",
                                 "arguments": [
                                     "home-1/heater",
-                                    20,
+                                    20.0,
                                     "Vandalism"
                                 ]
                             }

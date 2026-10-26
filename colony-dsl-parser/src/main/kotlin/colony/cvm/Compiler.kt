@@ -3,7 +3,7 @@ package colony.cvm
 import colony.ir.*
 import colony.semantics.*
 
-/** Maps a language type onto the value types the VM knows (docs/cvm-v2.md, section 2). */
+/** Maps a language type onto the value types the VM knows (docs/spec/cvm-format.md, section 2). */
 fun vtypeOf(type: Type): VType = when (type) {
     Type.Bool -> VType.Bool
     Type.Int64, Type.Money -> VType.I64
@@ -328,6 +328,7 @@ private class BehaviorCompiler(
         is ConstantValue.Text -> Operand.ImmS(value.value)
         is ConstantValue.EnumValue -> Operand.ImmS(value.value)
         ConstantValue.None -> Operand.ImmNone
+        is ConstantValue.Record -> error("Settings record constants are not scalar VM operands")
     }
 
     /** The operand of an instruction that is only a read, or null when it has to be computed. */

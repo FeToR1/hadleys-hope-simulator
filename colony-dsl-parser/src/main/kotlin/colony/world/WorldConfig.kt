@@ -2,11 +2,93 @@ package colony.world
 
 import kotlinx.serialization.Serializable
 
+private fun requireFinite(vararg values: Double) = require(values.all(Double::isFinite)) { "World parameters must be finite" }
+
 /**
- * Parameters of the physical models (docs/technical-reference.md#world). Every value is in SI units: watts,
+ * Parameters of the physical models (docs/spec/runtime-tick.md#world). Every value is in SI units: watts,
  * seconds, metres, joules, degrees Celsius, cubic metres, hit points, and money in minimal units.
  * The defaults describe the settlement of the lab; a scenario overrides what it needs.
  */
+@Serializable
+data class SeaConfig(
+    val enabled: Boolean = false,
+    val coastalZoneWidth: Double = 120.0,
+    val erosionDamageRate: Double = 1.2, // HP per second for coastal buildings
+    val fogPeriodSeconds: Double = 180.0, // Fog cycle period
+    val fogDurationSeconds: Double = 75.0,  // How long fog stays active
+    val fogMaxPenetration: Double = 350.0, // How deep fog penetrates inland from coast
+    val fogAdvanceSpeed: Double = 8.0,     // Metres per second fog front moves inland
+    val fogSuffocationDamageRate: Double = 4.0, // Damage per second for humans in fog without respirator
+    val cloudWidth: Double = 1200.0,       // Width of localized fog bank (meters, ~100 houses)
+    val cloudHeight: Double = 1400.0,      // Height of localized fog bank (meters, ~100 houses)
+    val initialRespirators: Int = 0,
+    val respiratorRestockPerSecond: Double = 0.0
+) {
+    fun validate() {
+        requireFinite(coastalZoneWidth, erosionDamageRate, fogPeriodSeconds, fogDurationSeconds, fogMaxPenetration,
+            fogAdvanceSpeed, fogSuffocationDamageRate, cloudWidth, cloudHeight, respiratorRestockPerSecond)
+        require(coastalZoneWidth >= 0.0 && erosionDamageRate >= 0.0 && fogPeriodSeconds > 0.0 &&
+            fogDurationSeconds in 0.0..fogPeriodSeconds && fogMaxPenetration >= 0.0 && fogAdvanceSpeed >= 0.0 &&
+            fogSuffocationDamageRate >= 0.0 && cloudWidth > 0.0 && cloudHeight > 0.0 &&
+            initialRespirators >= 0 && respiratorRestockPerSecond >= 0.0) { "Bad sea config" }
+    }
+}
+
+@Serializable
+data class DefenseConfig(
+    val enabled: Boolean = false,
+    val initialAmmoPerUnit: Int = 0,
+    val powerPerUnit: Double = 0.0,
+    val ammoCostPerRound: Long = 150_000L,
+    /** Ammunition units restored per second, capped at initialAmmoPerUnit. Cost is charged when fired. */
+    val ammoRestockPerSecond: Double = 0.0,
+) {
+    fun validate() {
+        requireFinite(powerPerUnit, ammoRestockPerSecond)
+        require(powerPerUnit >= 0.0 && initialAmmoPerUnit >= 0 && ammoCostPerRound >= 0 && ammoRestockPerSecond >= 0.0) { "Bad defense config" }
+    }
+}
+
+/** Optional scenario coordinates and perimeter openings. Null locations preserve generated legacy geometry. */
+@Serializable
+data class GeometryConfig(
+    val coastX: Double? = null,
+    val mine: Point? = null,
+    val depository: Point? = null,
+    val medicalCenter: Point? = null,
+    /** Centers of openings on the generated perimeter. */
+    val gates: List<Point> = emptyList(),
+    val gateWidth: Double = 12.0,
+) {
+    fun validate() {
+        coastX?.let { require(it.isFinite()) { "coastX must be finite" } }
+        listOfNotNull(mine, depository, medicalCenter).forEach { require(it.x.isFinite() && it.y.isFinite()) { "Geometry points must be finite" } }
+        require(gateWidth.isFinite() && gateWidth > 0.0) { "gateWidth must be positive and finite" }
+        require(gates.all { it.x.isFinite() && it.y.isFinite() }) { "Gate points must be finite" }
+        require(gates.distinct().size == gates.size) { "Gate points must be unique" }
+    }
+}
+
+@Serializable
+data class CreatineEconomyConfig(
+    val enabled: Boolean = false,
+    val pricePerUnit: Long = 1_200L,        // Minimal money units earned per sold creatine unit
+    val sellFraction: Double = 0.45,        // Fraction sold for settlement revenue (rest stored for healing)
+    val healCost: Double = 2.0,             // Units of creatine needed to fully heal a human
+    val lowHealthThreshold: Double = 50.0,  // Health below which humans seek medical treatment
+    val yieldPerWorkerHour: Double = 4.0,   // Base yield of creatine per hour of miner work
+    val initialDepotStock: Double = 50.0,
+    val initialMedicalStock: Double = 50.0
+) {
+    fun validate() {
+        requireFinite(pricePerUnit.toDouble(), sellFraction, healCost, lowHealthThreshold, yieldPerWorkerHour, initialDepotStock, initialMedicalStock)
+        require(pricePerUnit >= 0 && sellFraction.isFinite() && sellFraction in 0.0..1.0 && healCost.isFinite() &&
+            healCost >= 0.0 && lowHealthThreshold.isFinite() && lowHealthThreshold in 0.0..100.0 &&
+            yieldPerWorkerHour.isFinite() && yieldPerWorkerHour >= 0.0 && initialDepotStock.isFinite() &&
+            initialDepotStock >= 0.0 && initialMedicalStock.isFinite() && initialMedicalStock >= 0.0) { "Bad creatine config" }
+    }
+}
+
 @Serializable
 data class WorldConfig(
     val version: Int = 1,
@@ -21,11 +103,17 @@ data class WorldConfig(
     val tariffs: Tariffs = Tariffs(),
     val sight: SightConfig = SightConfig(),
     val fence: FenceConfig = FenceConfig(),
+    val sea: SeaConfig = SeaConfig(),
+    val creatine: CreatineEconomyConfig = CreatineEconomyConfig(),
+    val defense: DefenseConfig = DefenseConfig(),
+    val ecosystem: EcosystemConfig = EcosystemConfig(),
+    val geometry: GeometryConfig = GeometryConfig(),
 ) {
     fun validate() {
         require(version == 1) { "Unsupported world version $version" }
         climate.validate(); power.validate(); water.validate(); house.validate()
         human.validate(); marine.validate(); transport.validate(); repair.validate(); tariffs.validate(); sight.validate(); fence.validate()
+        sea.validate(); creatine.validate(); defense.validate(); ecosystem.validate(); geometry.validate()
     }
 }
 
@@ -43,6 +131,7 @@ data class Climate(
     val weatherFactor: Double = 0.8,
 ) {
     fun validate() {
+        requireFinite(meanTemperature, amplitude, dayLengthSeconds, sunriseSeconds, sunsetSeconds, weatherFactor)
         require(dayLengthSeconds > 0 && amplitude >= 0) { "Bad climate profile" }
         require(sunriseSeconds in 0.0..dayLengthSeconds && sunsetSeconds in sunriseSeconds..dayLengthSeconds) { "Bad daylight hours" }
         require(weatherFactor in 0.0..1.0) { "Weather factor is a fraction" }
@@ -68,15 +157,19 @@ data class PowerConfig(
     val solarPeak: Double = 600_000.0,
     /** Energy the uninterruptible supply holds, in joules. */
     val upsCapacity: Double = 1.8e9,
+    /** Charge the battery starts the run with, in joules; a scenario drains or empties it to test blackouts. */
+    val upsInitialCharge: Double = upsCapacity,
     val upsMaxPower: Double = 300_000.0,
     val upsEfficiency: Double = 0.95,
     val housesPerPole: Int = 20,
     val poleHealth: Double = 100.0,
     /** Lower class is served first; the class that runs out of power is cut proportionally. */
-    val priorities: Map<String, Int> = mapOf("Pump" to 0, "Heater" to 1, "Kettle" to 2),
+    val priorities: Map<String, Int> = mapOf("Pump" to 0, "Ups" to 0, "Heater" to 1, "Kettle" to 2),
 ) {
     fun validate() {
+        requireFinite(reactorPower, solarPeak, upsCapacity, upsInitialCharge, upsMaxPower, upsEfficiency, poleHealth)
         require(reactorPower >= 0 && solarPeak >= 0 && upsCapacity >= 0 && upsMaxPower >= 0) { "Power cannot be negative" }
+        require(upsInitialCharge in 0.0..upsCapacity) { "The initial battery charge must fit the capacity" }
         require(upsEfficiency in 0.1..1.0) { "Efficiency is a fraction" }
         require(housesPerPole >= 1 && poleHealth > 0) { "Bad grid layout" }
     }
@@ -93,6 +186,7 @@ data class WaterConfig(
     val houseDemand: Double = 6.0e-6,
 ) {
     fun validate() {
+        requireFinite(pumpPower, freezeThresholdIndoor, houseDemand)
         require(pumpPower >= 0 && freezeThresholdIndoor > 0 && houseDemand >= 0) { "Bad water parameters" }
     }
 }
@@ -112,6 +206,7 @@ data class HouseConfig(
     val kettleHeatLoss: Double = 3.0,
 ) {
     fun validate() {
+        requireFinite(conductance, capacity, heaterEfficiency, initialTemperature, coldThreshold, kettleVolume, kettleHeatLoss)
         require(conductance > 0 && capacity > 0 && kettleVolume > 0) { "Bad thermal parameters" }
         require(heaterEfficiency in 0.0..1.0) { "Efficiency is a fraction" }
     }
@@ -124,13 +219,14 @@ data class HouseConfig(
 data class HumanConfig(
     /** Local time at the start of the residents' daily routine, in minutes after midnight. */
     val startMinute: Int = 480,
-    /** A resident starts losing health below this temperature. */
+    /** A resident starts losing health below this temperature. Comfortable Earth atmosphere. */
     val harmThreshold: Double = 5.0,
     /** Hit points per kelvin per hour of exposure. */
     val harmPerKelvinHour: Double = 0.5,
     val vandalRadius: Double = 12.0,
 ) {
     fun validate() {
+        requireFinite(harmThreshold, harmPerKelvinHour, vandalRadius)
         require(startMinute in 0..1439) { "Human startMinute must be in 0..1439" }
         require(harmPerKelvinHour >= 0 && vandalRadius >= 0) { "Bad exposure parameters" }
     }
@@ -140,17 +236,18 @@ data class HumanConfig(
 
 @Serializable
 data class MarineConfig(
-    /** Initial response delay in seconds; the manifest's xenomorphs are present from time zero. */
+    /** Initial response delay in seconds; the manifest's predators are present from time zero. */
     val responseDelaySeconds: Double = 300.0,
-    /** Marines must gather within this radius of the selected xenomorph before the leader attacks. */
+    /** Marines must gather within this radius of the selected predator before the leader attacks. */
     val assaultRadius: Double = 4.0,
     /** A squad is expected to contain four or five living members. */
     val minSquadSize: Int = 4,
     val maxSquadSize: Int = 5,
-    /** How long a xenomorph that a squad drove off keeps away once it is out of the settlement. */
+    /** How long a predator that a squad drove off keeps away once it is out of the settlement. */
     val routSeconds: Double = 600.0,
 ) {
     fun validate() {
+        requireFinite(responseDelaySeconds, assaultRadius, routSeconds)
         require(responseDelaySeconds >= 0.0) { "Marine response delay cannot be negative" }
         require(assaultRadius > 0.0) { "Marine assault radius must be positive" }
         require(routSeconds >= 0.0) { "Rout time cannot be negative" }
@@ -171,6 +268,7 @@ data class TransportConfig(
     val boardingWaitSeconds: Double = 90.0,
 ) {
     fun validate() {
+        requireFinite(boardRadius, walkRadius, boardingWaitSeconds)
         require(boardRadius > 0.0) { "Transport board radius must be positive" }
         require(passengerCapacity in 1..32) { "Bad transport passenger capacity" }
         require(walkRadius >= 0.0 && boardingWaitSeconds >= 0.0) { "Bad boarding parameters" }
@@ -191,10 +289,15 @@ data class RepairConfig(
     val materials: Int = 24,
     /** How fast a crew drives, in metres per second. */
     val roverSpeed: Double = 9.0,
+    val initialDepotMaterials: Int = 0,
+    val depotRestockPerSecond: Double = 0.0,
+    val materialCost: Long = 40_000L,
 ) {
     fun validate() {
+        requireFinite(workRadius, dispatchDelaySeconds, roverSpeed, depotRestockPerSecond)
         require(duration.values.all { it > 0 } && parts.values.all { it >= 0 }) { "Bad repair parameters" }
-        require(hourlyRate >= 0 && workRadius > 0 && dispatchDelaySeconds >= 0 && materials >= 0 && roverSpeed > 0) { "Bad crew parameters" }
+        require(hourlyRate >= 0 && workRadius > 0 && dispatchDelaySeconds >= 0 && materials >= 0 && roverSpeed > 0 &&
+            initialDepotMaterials >= 0 && depotRestockPerSecond.isFinite() && depotRestockPerSecond >= 0.0 && materialCost >= 0) { "Bad crew parameters" }
     }
 
     fun durationOf(kind: String): Double = duration[kind] ?: 300.0
@@ -218,21 +321,22 @@ data class Tariffs(
 
 @Serializable
 data class SightConfig(
-    /** How far marines detect xenomorphs and how far the other observation lists reach. */
+    /** How far marines detect predators and how far the other observation lists reach. */
     val sightRadius: Double = 260.0,
     /** Most objects an observation list may hold. */
     val listLimit: Int = 16,
     val attackRadius: Double = 3.0,
-    /** How far a xenomorph sees infrastructure and people; a short sight spreads the hunters over the map. */
-    val xenomorphRadius: Double = 260.0,
+    /** How far a predator sees infrastructure and people; a short sight spreads the hunters over the map. */
+    val predatorRadius: Double = 260.0,
 ) {
     fun validate() {
-        require(sightRadius >= 0 && listLimit in 1..4096 && attackRadius >= 0 && xenomorphRadius >= 0) { "Bad observation limits" }
+        requireFinite(sightRadius, attackRadius, predatorRadius)
+        require(sightRadius >= 0 && listLimit in 1..4096 && attackRadius >= 0 && predatorRadius >= 0) { "Bad observation limits" }
     }
 }
 
 /**
- * A perimeter fence around everything the colony uses. It stops xenomorphs only: a closed segment has to be
+ * A perimeter fence around everything the colony uses. It stops predators only: a closed segment has to be
  * broken before one can pass, and a broken segment becomes a repair job like a pole.
  */
 @Serializable
@@ -242,10 +346,11 @@ data class FenceConfig(
     val margin: Double = 40.0,
     val segmentLength: Double = 60.0,
     val health: Double = 400.0,
-    /** How far outside the fence the xenomorphs roam and where they appear. */
+    /** How far outside the fence the predators roam and where they appear. */
     val roamingDistance: Double = 60.0,
 ) {
     fun validate() {
+        requireFinite(margin, segmentLength, health, roamingDistance)
         require(margin >= 0 && segmentLength > 0 && health > 0 && roamingDistance > 0) { "Bad fence parameters" }
     }
 }

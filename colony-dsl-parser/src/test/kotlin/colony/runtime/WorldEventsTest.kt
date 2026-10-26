@@ -1,10 +1,10 @@
 package colony.runtime
 
-import colony.bytecode.compileSource
+import colony.compiler.compileSource
 import kotlinx.serialization.json.*
 import kotlin.test.*
 
-/** Events the world establishes (docs/technical-reference.md#contract, section 3) and how programs receive them. */
+/** Events the world establishes (docs/spec/http-api.md#contract) and how programs receive them. */
 class WorldEventsTest {
     private val program = compileSource("""
         event ActionSucceeded { action: String; }
@@ -37,7 +37,7 @@ class WorldEventsTest {
             state power_lost: Int64 = 0;
             on PowerLost(m) as dark { power_lost = power_lost + 1; }
         }
-        behavior Biter for Xenomorph {
+        behavior Biter for Predator {
             param dmg: Health;
             enum Cause { Bite }
             state confirmed: Int64 = 0;
@@ -53,7 +53,7 @@ class WorldEventsTest {
 
     private fun ref(id: String) = buildJsonObject { put("id", "\$instance/$id") }
     private fun point(x: Int, y: Int) = buildJsonObject { put("x", x); put("y", y) }
-    private fun alien(targets: List<String>, damage: Int, x: Double) = ObjectSpec("Xenomorph", "Biter",
+    private fun predator(targets: List<String>, damage: Int, x: Double) = ObjectSpec("Predator", "Biter",
         params = buildJsonObject { put("dmg", damage) }, x = x, view = buildJsonObject {
             put("patrol_waypoint", point(0, 0))
             put("visible_infrastructure", buildJsonArray { add(ref("house")) })
@@ -65,10 +65,10 @@ class WorldEventsTest {
         put("cold", false); put("reachable_breakables", buildJsonArray { })
     })
 
-    private fun run(objects: Map<String, ObjectSpec>, ticks: Int = 8, changes: List<ObservationChange> = emptyList()): ReferenceRun {
-        val scenario = Scenario(catalog = "inline", ticks = ticks, populations = listOf(Population("t", 1, "g")), changes = changes)
+    private fun run(objects: Map<String, ObjectSpec>, ticks: Int = 8, changes: List<ObservationChange> = emptyList()): SimulationRun {
+        val scenario = Scenario(ticks = ticks, populations = listOf(Population("t", 1, "g")), changes = changes)
         val catalog = Catalog(sources = listOf("inline"), templates = mapOf("t" to Template(objects)))
-        return ReferenceRun(expandScenario(scenario, catalog, program), "test")
+        return SimulationRun(expandScenario(scenario, catalog, program), "test")
     }
 
     private fun TickSnapshot.state(id: String, name: String) = entities.single { it.id == id }.vmState.getValue(name).jsonPrimitive
@@ -76,7 +76,7 @@ class WorldEventsTest {
 
     @Test fun damageProducesAChainOfEventsThatEndsInABrokenObject() {
         // 60 hp per bite: the heater survives the first bite and is destroyed by the second.
-        val run = run(mapOf("house" to house, "heater" to heater, "biter" to alien(listOf("heater"), 60, 100.0)))
+        val run = run(mapOf("house" to house, "heater" to heater, "biter" to predator(listOf("heater"), 60, 100.0)))
         val first = run.step()
         assertEquals(listOf("ActionSucceeded", "DamageApplied"), first.events.map { it.type })
         val applied = first.eventsOf("DamageApplied").single()
@@ -93,7 +93,7 @@ class WorldEventsTest {
     }
 
     @Test fun programsReceiveWorldEventsInTheNextFrameOnlyIfTheyDeclaredThem() {
-        val run = run(mapOf("house" to house, "heater" to heater, "biter" to alien(listOf("heater"), 60, 100.0)))
+        val run = run(mapOf("house" to house, "heater" to heater, "biter" to predator(listOf("heater"), 60, 100.0)))
         val first = run.step()
         assertEquals(0, first.state("g-1/house", "hits").int, "events of step 0 are not visible in step 0")
         assertEquals(0, first.state("g-1/biter", "confirmed").int)
@@ -110,9 +110,9 @@ class WorldEventsTest {
         // Y destroys X in step 0; X, alive in S_0, still hits Z. From step 1 X is dead and its bites are rejected.
         val run = run(mapOf(
             "house" to house,
-            "x" to alien(listOf("z"), 30, 100.0),
-            "y" to alien(listOf("x"), 100, 200.0),
-            "z" to alien(emptyList(), 30, 300.0),
+            "x" to predator(listOf("z"), 30, 100.0),
+            "y" to predator(listOf("x"), 100, 200.0),
+            "z" to predator(emptyList(), 30, 300.0),
         ))
         val first = run.step()
         assertEquals("dead", first.entities.single { it.id == "g-1/x" }.status)
@@ -130,20 +130,21 @@ class WorldEventsTest {
     private fun change(tick: Long, target: String, name: String, value: Boolean) =
         ObservationChange(tick, "g-1/$target", buildJsonObject { put(name, value) })
 
-    @Test fun aLostHousePowerConnectionReachesTheHouseItsApplianceAndItsResidentsWithTheNewObservation() {
+    @Test fun aLostHousePowerConnectionReachesTheHouseAndItsAppliancesWithTheNewObservation() {
         val run = run(mapOf("house" to house, "heater" to heater, "resident" to resident), ticks = 8, changes = listOf(
             change(3, "house", "power_connected", false), change(6, "house", "power_connected", true)))
         val snapshots = (0 until 8).map { run.step() }
 
         val lost = snapshots[3].eventsOf("PowerLost").single()
         assertEquals("g-1/house", lost.entityId)
-        assertEquals(setOf("g-1/house", "g-1/heater", "g-1/resident"), lost.recipients.toSet())
+        assertEquals(setOf("g-1/house", "g-1/heater"), lost.recipients.toSet())
         assertNull(lost.causationId, "a scenario input has no cause inside the world")
         assertEquals(0, snapshots[2].state("g-1/house", "power_lost").int)
         // The transition is into this snapshot: the event and the observation arrive in the same frame.
         assertEquals(1, snapshots[3].state("g-1/house", "power_lost").int)
         assertEquals(1, snapshots[3].state("g-1/heater", "power_lost").int)
-        assertEquals(1, snapshots[3].state("g-1/resident", "power_lost").int)
+        // docs/simulation/trigger-conditions.md, section 3: residents are not recipients of a house power event.
+        assertEquals(0, snapshots[3].state("g-1/resident", "power_lost").int)
         assertEquals(false, snapshots[3].state("g-1/heater", "connected").boolean, "an appliance follows its house")
         assertEquals(true, snapshots[2].state("g-1/heater", "connected").boolean)
 

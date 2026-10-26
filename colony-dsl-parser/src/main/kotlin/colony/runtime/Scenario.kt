@@ -1,15 +1,14 @@
 package colony.runtime
 
-import colony.bytecode.*
+import colony.compiler.*
 import colony.semantics.CONTRACT_VERSION
 import colony.semantics.SemanticEnvironment
 import colony.semantics.render
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.nio.file.Path
-import kotlin.io.path.readText
 
-@Serializable data class Catalog(val version: Int = 1, val sources: List<String>, val templates: Map<String, Template>)
+data class Catalog(val sources: List<String>, val templates: Map<String, Template>)
 @Serializable data class Template(val objects: Map<String, ObjectSpec>)
 @Serializable data class ObjectSpec(
     val kind: String, val behavior: String,
@@ -18,10 +17,12 @@ import kotlin.io.path.readText
     val parent: String? = null,
     val x: Double = 0.0, val y: Double = 0.0,
 )
-@Serializable data class Population(val template: String, val count: Int, val prefix: String)
+@Serializable data class GridLayout(val columns: Int = 20, val spacingX: Double = 70.0, val spacingY: Double = 70.0,
+    val originX: Double = 0.0, val originY: Double = 0.0)
+@Serializable data class Population(val template: String, val count: Int, val prefix: String, val grid: GridLayout? = null)
 @Serializable data class ObservationChange(val tick: Long, val target: String, val view: JsonObject)
 @Serializable data class Scenario(
-    val version: Int = 1, val catalog: String, val seed: Long = 426, val step: String = "1s",
+    val seed: Long = 426, val step: String = "1s",
     val ticks: Int = 120, val populations: List<Population>,
     val changes: List<ObservationChange> = emptyList(),
     /**
@@ -35,23 +36,14 @@ import kotlin.io.path.readText
     val view: JsonObject, val parent: String?, val x: Double, val y: Double,
 )
 @Serializable data class RunManifest(val version: Int = 1, val seed: Long, val stepSeconds: String, val instances: List<Instance>)
-data class PreparedRun(val scenario: Scenario, val program: BytecodeProgram, val manifest: RunManifest, val sources: List<SourceFile> = emptyList())
+data class PreparedRun(val scenario: Scenario, val program: CompiledProgram, val manifest: RunManifest, val sources: List<SourceFile> = emptyList())
 
 fun prepareScenario(path: Path): PreparedRun {
-    val absolute = path.toAbsolutePath().normalize()
-    val scenario = bytecodeJson.decodeFromString<Scenario>(absolute.readText())
-    val catalogPath = absolute.parent.resolve(scenario.catalog).normalize()
-    val catalog = bytecodeJson.decodeFromString<Catalog>(catalogPath.readText())
-    require(scenario.version == 1 && catalog.version == 1) { "Unsupported scenario/catalog version" }
-    require(scenario.ticks > 0) { "ticks must be positive" }
-    require(catalog.sources.isNotEmpty() && catalog.sources.distinct().size == catalog.sources.size) { "Sources must be nonempty and unique" }
-    // The sources form one compilation package; diagnostics are mapped back to the individual file names.
-    val sources = catalog.sources.map { SourceFile(it, catalogPath.parent.resolve(it).readText()) }
-    val program = compileSources(sources, scenario.step)
-    return expandScenario(scenario, catalog, program).copy(sources = sources)
+    require(path.fileName.toString().endsWith(".settings")) { "Scenario input must be .settings; JSON scenarios are no longer supported: $path" }
+    return prepareSettings(path)
 }
 
-fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgram): PreparedRun {
+fun expandScenario(scenario: Scenario, catalog: Catalog, program: CompiledProgram): PreparedRun {
     require(program.contract == CONTRACT_VERSION) {
         "The program was compiled against contract ${program.contract}; this runtime implements contract $CONTRACT_VERSION"
     }
@@ -61,6 +53,8 @@ fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgra
     var groupIndex = 0
     for (population in scenario.populations) {
         require(population.count >= 0 && identifier.matches(population.prefix)) { "Invalid population count/prefix" }
+        population.grid?.let { require(it.columns > 0 && it.spacingX > 0 && it.spacingY > 0 &&
+            listOf(it.spacingX, it.spacingY, it.originX, it.originY).all(Double::isFinite)) { "Invalid population grid" } }
         val template = catalog.templates[population.template] ?: error("Unknown template ${population.template}")
         require(template.objects.isNotEmpty()) { "Empty template ${population.template}" }
         require(instances.size.toLong() + population.count.toLong() * template.objects.size <= Int.MAX_VALUE) { "Instance count exceeds JVM collection capacity" }
@@ -78,7 +72,8 @@ fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgra
                 require(spec.x.isFinite() && spec.y.isFinite()) { "Nonfinite coordinates" }
                 instances += Instance("$group/$role", spec.kind, spec.behavior, resolve(spec.params).jsonObject,
                     resolve(spec.view).jsonObject, spec.parent?.replace("\$instance", group),
-                    (groupIndex % 20) * 70.0 + spec.x, (groupIndex / 20) * 70.0 + spec.y)
+                    population.grid?.let { it.originX + (index % it.columns) * it.spacingX + spec.x } ?: ((groupIndex % 20) * 70.0 + spec.x),
+                    population.grid?.let { it.originY + (index / it.columns) * it.spacingY + spec.y } ?: ((groupIndex / 20) * 70.0 + spec.y))
             }
             groupIndex++
         }
@@ -122,7 +117,7 @@ fun expandScenario(scenario: Scenario, catalog: Catalog, program: BytecodeProgra
 }
 
 /**
- * The reference run stands in for the world kernel. It computes some observations itself every step
+ * The observation harness stands in for the world kernel. It computes some observations itself every step
  * (computed), overwrites others from state it owns (derived: position from motion, occupants from the house)
  * and takes the rest as scenario inputs, some of which may be omitted (defaults).
  */
@@ -137,9 +132,10 @@ internal object HarnessObservations {
         "House" to mapOf("power_connected" to JsonPrimitive(true), "water_available" to JsonPrimitive(true)),
         "Heater" to mapOf("broken" to JsonPrimitive(false), "power_connected" to JsonPrimitive(true)),
         "Kettle" to mapOf("broken" to JsonPrimitive(false), "power_connected" to JsonPrimitive(true)),
-        "Xenomorph" to mapOf("visible_humans" to JsonArray(emptyList()), "routed" to JsonPrimitive(false)),
+        "Predator" to mapOf("visible_humans" to JsonArray(emptyList()), "routed" to JsonPrimitive(false), "attack_active" to JsonPrimitive(true)),
         "Human" to mapOf(
             "routine_slot" to JsonPrimitive(0), "day_minute" to JsonPrimitive(480),
+            "medical_required" to JsonPrimitive(false),
             "available_vehicles" to JsonArray(emptyList()), "in_vehicle" to JsonPrimitive(false),
             "boarding_radius" to JsonPrimitive(6.0),
         ),
@@ -149,7 +145,7 @@ internal object HarnessObservations {
             "work_radius" to JsonPrimitive(6.0),
         ),
         "Marine" to mapOf(
-            "visible_xenomorphs" to JsonArray(emptyList()), "available_vehicles" to JsonArray(emptyList()),
+            "visible_predators" to JsonArray(emptyList()), "available_vehicles" to JsonArray(emptyList()),
             "in_vehicle" to JsonPrimitive(false), "dispatch_ready" to JsonPrimitive(false),
             "squad_ready" to JsonPrimitive(false), "squad_size" to JsonPrimitive(0),
             "squad_leader" to JsonPrimitive(false),
@@ -162,7 +158,7 @@ internal object HarnessObservations {
 
     /** Observations a catalog may omit: the run overwrites them every step or supplies a default. */
     fun derived(instance: Instance): Set<String> = buildSet {
-        if (instance.kind == "Human" || instance.kind == "Xenomorph" || instance.kind == "Rover" || instance.kind == "Marine") add("position")
+        if (instance.kind == "Human" || instance.kind == "Predator" || instance.kind == "Rover" || instance.kind == "Marine") add("position")
         // Places the settlement decides: the harness puts them where the manifest does.
         addAll(listOf("home", "workplace", "meeting_point", "depot", "transport_target").filter { it in fieldsOf(instance.kind) })
         if ((instance.kind == "Heater" || instance.kind == "Kettle") && instance.parent != null) add("home_occupants")
@@ -207,6 +203,6 @@ internal fun validateValue(value: JsonElement, type: String, instances: Map<Stri
             if (type == "Probability" && number !in 0.0..1.0) fail()
             if (type in setOf("Rate", "Duration", "Power", "Energy", "Volume", "Distance", "Speed", "Health") && number < 0) fail()
         }
-        else -> error("$location: unsupported JSON parameter type $type; enum parameters need a versioned enum schema")
+        else -> error("$location: unsupported parameter type $type; enum parameters need a versioned enum schema")
     }
 }

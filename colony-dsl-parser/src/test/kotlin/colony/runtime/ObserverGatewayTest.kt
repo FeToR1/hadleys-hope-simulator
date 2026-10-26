@@ -11,7 +11,7 @@ import kotlin.test.*
 
 class ObserverGatewayTest {
     @Test @Timeout(15) fun compactStreamStartsWithBaselineThenSendsAChainedDelta() {
-        val prepared = prepareScenario(Path.of("../examples/integration/small.json"))
+        val prepared = prepareScenario(Path.of("../examples/integration/small.settings"))
         RunController(prepared, compactLive = true).use { controller ->
             ObserverGateway(controller, 0).start().use { gateway ->
                 controller.stepOnce()
@@ -49,7 +49,7 @@ class ObserverGatewayTest {
     }
 
     @Test @Timeout(15) fun reconnectReplaysBurstAndPushesControlStatusWithoutPolling() {
-        val prepared = prepareScenario(Path.of("../examples/integration/small.json"))
+        val prepared = prepareScenario(Path.of("../examples/integration/small.settings"))
         RunController(prepared.copy(scenario = prepared.scenario.copy(ticks = 6))).use { controller ->
             ObserverGateway(controller, 0).start().use { gateway ->
                 val client = HttpClient.newHttpClient()
@@ -100,7 +100,7 @@ class ObserverGatewayTest {
     }
 
     @Test fun controlsAndStreamWorkOverRealHttp() {
-        val prepared = prepareScenario(Path.of("../examples/integration/small.json"))
+        val prepared = prepareScenario(Path.of("../examples/integration/small.settings"))
         val controller = RunController(prepared.copy(scenario = prepared.scenario.copy(ticks = 6))) { "http-run" }
         ObserverGateway(controller, 0).start().use { gateway ->
             val base = "http://127.0.0.1:${gateway.port}"

@@ -1,4 +1,4 @@
-// Host protocol: length-prefixed messages and the value encoding they carry (docs/cvm-v2.md, section 8).
+// Host protocol: length-prefixed messages and the value encoding they carry (docs/spec/cvm-format.md, section 8).
 #include "protocol.hpp"
 
 #include "opcodes.hpp"

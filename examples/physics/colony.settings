@@ -1,0 +1,190 @@
+// Параметры запуска на языке Colony.
+settings Klyaksa {
+    include "catalog.settings";
+    let houses: Int64 = 5000;
+    seed = 426; step = 1s; ticks = 86400;
+    population forester as forester { count = 12; }
+    population predator as predator { count = 12; }
+    population cleanup as cleanup { count = 50; }
+    population crew as crew { count = 50; }
+    population resource as cargo { count = 50; }
+    population transport as transport { count = 50; }
+    population household as home { count = houses; }
+    world {
+        version = 1;
+        climate {
+            meanTemperature = 19.0degC;
+            amplitude = 4.0degC;
+            dayLengthSeconds = 86400.0s;
+            sunriseSeconds = 21600.0s;
+            sunsetSeconds = 64800.0s;
+            weatherFactor = 0.8;
+        }
+        power {
+            reactorPower = 35000000.0W;
+            solarPeak = 10000000.0W;
+            upsCapacity = 30000000000.0J;
+            upsMaxPower = 5000000.0W;
+            upsEfficiency = 0.95;
+            housesPerPole = 20;
+            poleHealth = 100.0hp;
+            priorities {
+                Pump = 0;
+                Heater = 1;
+                Kettle = 2;
+            }
+        }
+        water {
+            pumpPower = 600000.0W;
+            freezeThresholdIndoor = 5400.0s;
+            houseDemand = 6e-06;
+        }
+        house {
+            conductance = 200.0;
+            capacity = 10000000.0;
+            heaterEfficiency = 1.0;
+            initialTemperature = 20.0degC;
+            coldThreshold = 10.0degC;
+            kettleVolume = 1.7L;
+            kettleHeatLoss = 3.0;
+        }
+        human {
+            startMinute = 480;
+            harmThreshold = 5.0degC;
+            harmPerKelvinHour = 0.5;
+            vandalRadius = 12.0m;
+        }
+        marine {
+            responseDelaySeconds = 300.0s;
+            assaultRadius = 4.0m;
+            minSquadSize = 4;
+            maxSquadSize = 5;
+            routSeconds = 600.0s;
+        }
+        transport {
+            boardRadius = 6.0m;
+            passengerCapacity = 5;
+            walkRadius = 120.0m;
+            boardingWaitSeconds = 90.0s;
+        }
+        repair {
+            duration {
+                pole = 60.0s;
+                pipe = 80.0s;
+                device = 25.0s;
+                fence = 40.0s;
+            }
+            parts {
+                pole = 120000;
+                pipe = 80000;
+                device = 40000;
+                fence = 30000;
+            }
+            hourlyRate = 150000;
+            workRadius = 6.0m;
+            dispatchDelaySeconds = 5.0s;
+            materials = 24;
+            roverSpeed = 18.0mps;
+        }
+        tariffs {
+            electricityPerKwh = 900;
+            waterPerCubicMetre = 4500;
+            billingIntervalSeconds = 3600s;
+            monthSeconds = 2592000s;
+        }
+        sight {
+            sightRadius = 2000.0m;
+            listLimit = 16;
+            attackRadius = 3.0m;
+            predatorRadius = 150.0m;
+        }
+        fence {
+            enabled = true;
+            margin = 40.0m;
+            segmentLength = 60.0m;
+            health = 400.0hp;
+            roamingDistance = 120.0m;
+        }
+        sea {
+            enabled = true;
+            coastalZoneWidth = 120.0m;
+            erosionDamageRate = 0.15;
+            fogPeriodSeconds = 180.0s;
+            fogDurationSeconds = 75.0s;
+            fogMaxPenetration = 350.0m;
+            fogAdvanceSpeed = 8.0mps;
+            fogSuffocationDamageRate = 4.0;
+            initialRespirators = 25000;
+            respiratorRestockPerSecond = 0;
+        }
+        creatine {
+            enabled = true;
+            pricePerUnit = 1200;
+            sellFraction = 0.45;
+            healCost = 2.0;
+            lowHealthThreshold = 50.0hp;
+            yieldPerWorkerHour = 4.0;
+        }
+        defense {
+            enabled = true;
+            initialAmmoPerUnit = 240;
+            powerPerUnit = 1800.0W;
+            ammoRestockPerSecond = 0.0002;
+        }
+        ecosystem {
+            enabled = true;
+            zoneSize = 140.0m;
+            crocodileManurePerSecond = 0.15;
+            forest {
+                enabled = true;
+                initialBiomassPerZone = 100.0;
+                regrowthPerSecond = 0.5;
+                clearingPerSecond = 2.0;
+            }
+            predator {
+                enabled = true;
+                mutations = ["armored", "swift", "venomous", "pack"];
+            }
+            cleanup {
+                enabled = true;
+                loadCapacity = 600.0;
+                cleanPerSecond = 2.0;
+                unloadAt {
+                    x = 0.0m;
+                    y = 0.0m;
+                }
+                unloadRadius = 12.0m;
+                costPerUnit = 2;
+                initialFuel = 100000.0;
+                fuelPerUnit = 0.04;
+                fuelPerMetre = 0.1;
+                fuelPricePerUnit = 100;
+            }
+            plankton {
+                enabled = true;
+                coastalWidth = 120.0m;
+                wavePeriodSeconds = 3600.0s;
+                initialBiomassPerCoastalZone = 500.0;
+                regrowthPerSecond = 0.05;
+                damagePerSecond = 0.04;
+                burningPerSecond = 5.0;
+                burnFuelPerBiomass = 0.2;
+                burnPowerPerSecond = 4000.0W;
+                initialBurnFuel = 10000.0;
+                fuelCostPerUnit = 3;
+            }
+            humanFactors {
+                enabled = true;
+                availabilityCycleSeconds = 1800.0s;
+                unavailableSeconds = 120.0s;
+                boredomSeconds = 180.0s;
+                vandalPeriodSeconds = 2400.0s;
+                vandalDamage = 5.0hp;
+                vandalChancePercent = 8;
+                alcoholPeriodSeconds = 3600.0s;
+                alcoholDurationSeconds = 180.0s;
+                vandalRadius = 12.0m;
+            }
+        }
+    }
+}

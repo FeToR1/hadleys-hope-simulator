@@ -95,6 +95,7 @@ sealed interface ConstantValue {
     data object None : ConstantValue
     data class Decimal(val value: BigDecimal) : ConstantValue
     data class EnumValue(val enumType: Type.Enum, val value: kotlin.String) : ConstantValue
+    data class Record(val fields: Map<kotlin.String, TypedConstant>) : ConstantValue
 }
 
 fun Type.render(): String = when (this) {

@@ -1,0 +1,19 @@
+event HeatingDemand { enabled: Bool; }
+
+behavior Home for House {
+    param heater: Ref<Heater>;
+    param target: Temperature;
+    every 1s as regulate {
+        send HeatingDemand { enabled: view.temperature < target } to heater;
+    }
+}
+
+behavior Heating for Heater {
+    param demand: Power;
+    state enabled: Bool = false;
+    on HeatingDemand(message) as receive { enabled = message.enabled; }
+    every 1s as heat {
+        if enabled && !view.broken && view.power_connected { power.request(demand); }
+        else { power.request(0W); }
+    }
+}

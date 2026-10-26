@@ -1,0 +1,2423 @@
+{
+    "conformance": 2,
+    "contract": 11,
+    "name": "predator",
+    "source": "colony-dsl-parser/examples/predator.colony",
+    "artifact": "Q1ZNMgIACwAEAAAAAAAAAAHOAAAAGgZQYXRyb2wGQXR0YWNrBnN0cmlrZQ5QcmVkYXRvckF0dGFjawVDaGFzZQExCFBvc2l0aW9uAXgBeQZUYXJnZXQCaWQEa2luZAhwb3NpdGlvbghkaXN0YW5jZQZoZWFsdGgNVmVoaWNsZVRhcmdldAZEZXZpY2UGYnJva2VuA0pvYgZvYmplY3QIcHJvZ3Jlc3MIUHJlZGF0b3IEbW9kZRZ2aXNpYmxlX2luZnJhc3RydWN0dXJlD3BhdHJvbF93YXlwb2ludAZkZWNpZGUCOAAAAAUGAgcDCAMJBQoECwQMBwANAw4DDwUKBAsEDAcADQMOAxADCgQLBBEBEgYKBBMECwQMBwANAxQDAwEAAAAABN0AAAAFARUVBgAAAAABFgQCFwYHARgHAAEZAQEFAAAAAwcBBQcBAQAAAAAAAHAAAAABEDAAPEUhUDsgcRQAAAAwJAAAAAEQMABhUSAAAAAAAAAAQDw0BKADIAAAAAAAAABAXwAAAAEQMAFRIiCamZmZmZnZPzACMXJQAAAAPDw8PGKgACAAAAAAAIBBQDADPAEQMARhoAIgAAAAAAAAFEA8FQAEBQQBAQEHIAMHCQcHCQUSDQQTGwsGGAEIDREMEQQNGg0NEQYNEQENEQELFAEHPgEOIw4NLwEJEQQKHwwIJf8gAAAA0B39IhkVpusxyQKcqUHrmvLqfazt54OLgaRAn8Q4nwE=",
+    "cases": [
+        {
+            "name": "hunt-and-patrol-seed-426",
+            "behavior": "Predator",
+            "entityId": "predator-1/predator",
+            "seed": 426,
+            "params": {},
+            "initialState": {
+                "mode": "Patrol"
+            },
+            "steps": [
+                {
+                    "tick": 0,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 1,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 2,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 3,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 4,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 5,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 6,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 7,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 8,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 9,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 10,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "DAMAGE_REQUEST",
+                                "arguments": [
+                                    "home-1/heater",
+                                    35.0,
+                                    "PredatorAttack"
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 11,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 12,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "DAMAGE_REQUEST",
+                                "arguments": [
+                                    "home-1/heater",
+                                    35.0,
+                                    "PredatorAttack"
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 13,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "DAMAGE_REQUEST",
+                                "arguments": [
+                                    "home-1/heater",
+                                    35.0,
+                                    "PredatorAttack"
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 14,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 15,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 16,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 17,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "DAMAGE_REQUEST",
+                                "arguments": [
+                                    "home-1/heater",
+                                    35.0,
+                                    "PredatorAttack"
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 18,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 19,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "DAMAGE_REQUEST",
+                                "arguments": [
+                                    "home-1/heater",
+                                    35.0,
+                                    "PredatorAttack"
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 20,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 21,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 22,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 23,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 24,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 25,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 26,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 27,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 28,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 29,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "hunt-and-patrol-seed-7",
+            "behavior": "Predator",
+            "entityId": "predator-1/predator",
+            "seed": 7,
+            "params": {},
+            "initialState": {
+                "mode": "Patrol"
+            },
+            "steps": [
+                {
+                    "tick": 0,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 1,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 2,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 3,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 4,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 5,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 6,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 7,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 8,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 9,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 10,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 10.0,
+                                        "y": 10.0
+                                    },
+                                    5.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Chase"
+                        }
+                    }
+                },
+                {
+                    "tick": 10,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 11,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 12,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 13,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 14,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 15,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 16,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "DAMAGE_REQUEST",
+                                "arguments": [
+                                    "home-1/heater",
+                                    35.0,
+                                    "PredatorAttack"
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 17,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 18,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "DAMAGE_REQUEST",
+                                "arguments": [
+                                    "home-1/heater",
+                                    35.0,
+                                    "PredatorAttack"
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 19,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": [
+                            {
+                                "id": "home-1/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 10,
+                                    "y": 10
+                                },
+                                "distance": 1.5,
+                                "health": 100
+                            },
+                            {
+                                "id": "home-2/heater",
+                                "kind": "Heater",
+                                "position": {
+                                    "x": 80,
+                                    "y": 10
+                                },
+                                "distance": 70,
+                                "health": 100
+                            }
+                        ]
+                    },
+                    "events": [],
+                    "expect": {
+                        "state": {
+                            "mode": "Attack"
+                        }
+                    }
+                },
+                {
+                    "tick": 20,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 21,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 22,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 23,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 24,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 25,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 26,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 27,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 28,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                },
+                {
+                    "tick": 29,
+                    "view": {
+                        "position": {
+                            "x": 0,
+                            "y": 0
+                        },
+                        "patrol_waypoint": {
+                            "x": 400,
+                            "y": 300
+                        },
+                        "visible_infrastructure": []
+                    },
+                    "events": [],
+                    "expect": {
+                        "intents": [
+                            {
+                                "operation": "MOTION_REQUEST",
+                                "arguments": [
+                                    {
+                                        "x": 400.0,
+                                        "y": 300.0
+                                    },
+                                    2.0
+                                ]
+                            }
+                        ],
+                        "state": {
+                            "mode": "Patrol"
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}

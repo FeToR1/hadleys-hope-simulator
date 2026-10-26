@@ -3,7 +3,7 @@ import { StateManager } from './stateManager';
 import type { TickBatch } from './types';
 
 const initial = (): TickBatch => ({
-  runId: 'r1', runtimeMode: 'reference', seed: '426', full: true, tickId: 0, timestamp: 1000,
+  runId: 'r1', runtimeMode: 'process', seed: '426', full: true, tickId: 0, timestamp: 1000,
   entities: ['house-1', 'house-2'].map((id) => ({ id, pid: null, type: 'house', status: 'nominal',
     metrics: { temperature: 20 }, connectedTo: [], coordinates: { x: 0, y: 0 } })),
 });
@@ -43,6 +43,44 @@ describe('StateManager', () => {
     expect(manager.snapshot().entities.size).toBe(2);
     expect(manager.snapshot().tickId).toBe(0);
   });
+
+  it('keeps creatine sales as income instead of charging them as spend', () => {
+    const manager = new StateManager();
+    manager.ingest({ ...initial(), postings: [
+      { tick: 0, owner: 'home-1', kind: 'electricity', amount: 100 },
+      { tick: 0, owner: 'colony', kind: 'creatine_sale', amount: 250 },
+    ] });
+    expect(manager.snapshot().spendByOwner.get('home-1')).toBe(100);
+    expect(manager.snapshot().spendByOwner.has('colony')).toBe(false);
+    expect(manager.snapshot().incomeByOwner?.get('colony')).toBe(250);
+    expect(manager.snapshot().attractorHistory.at(-1)?.z).toBe(150);
+  });
+
+  it('keeps the phase balance after ledger eviction and resets it for a new run', () => {
+    const manager = new StateManager();
+    manager.ingest({ ...initial(), postings: Array.from({ length: 600 }, () => ({ tick: 0, owner: 'colony', kind: 'repair', amount: 10 })) });
+    expect(manager.snapshot().postings).toHaveLength(500);
+    expect(manager.snapshot().attractorHistory.at(-1)?.z).toBe(-6000);
+    manager.ingest({ ...initial(), tickId: 1, postings: [{ tick: 1, owner: 'colony', kind: 'creatine_sale', amount: 100 }] });
+    expect(manager.snapshot().attractorHistory.at(-1)?.z).toBe(-5900);
+    manager.ingest({ ...initial(), runId: 'r2' });
+    expect(manager.snapshot().attractorHistory.at(-1)?.z).toBe(0);
+  });
+
+  it('marks the exact explosion tick and immediately classifies the physical transition', () => {
+    const manager = new StateManager();
+    const powered = initial().entities.map((entity) => ({ ...entity, metrics: { temperature: 20, power_consumption: 3128000 } }));
+    for (let tickId = 0; tickId < 10; tickId++) manager.ingest({ ...initial(), tickId, entities: powered });
+    expect(manager.snapshot().attractorMode).toBe('stationary');
+    manager.ingest({ ...initial(), tickId: 11, events: [{ id: 'explosion', type: 'ReactorExploded', entityId: 'grid/reactor', tick: 11, fields: {}, recipients: [] }] });
+    const point = manager.snapshot().attractorHistory.at(-1)!;
+    expect(point.reactorExplosion).toBe(true);
+    expect(point.y).toBe(0);
+    expect(manager.snapshot().attractorMode).toBe('transient');
+    manager.ingest({ ...initial(), tickId: 12 });
+    expect(manager.snapshot().attractorHistory.at(-1)?.reactorExplosion).toBeUndefined();
+    expect(manager.snapshot().attractorHistory.at(-2)?.reactorExplosion).toBe(true);
+  });
 });
 
 describe('observed run log', () => {
@@ -51,15 +89,15 @@ describe('observed run log', () => {
     connectedTo: [], coordinates: { x: 0, y: 0 }, vmState: { demand: true },
   });
   const tick = (tickId: number, status: 'nominal' | 'dead', events: NonNullable<TickBatch['events']> = []): TickBatch => ({
-    version: 1, runId: 'r1', runtimeMode: 'reference', seed: '426', full: true, tickId, timestamp: (tickId + 1) * 1000,
+    version: 1, runId: 'r1', runtimeMode: 'process', seed: '426', full: true, tickId, timestamp: (tickId + 1) * 1000,
     entities: [entity(status)], events,
   });
-  const attack = { id: 'e1', type: 'DamageApplied', tick: 1, entityId: 'home-1/heater', actorId: 'alien-1/xenomorph', causationId: 'alien-1/xenomorph@1#0',
-    fields: { target: 'home-1/heater', amount: 100, reason: 'XenomorphAttack' }, recipients: [] };
+  const attack = { id: 'e1', type: 'DamageApplied', tick: 1, entityId: 'home-1/heater', actorId: 'predator-1/predator', causationId: 'predator-1/predator@1#0',
+    fields: { target: 'home-1/heater', amount: 100, reason: 'PredatorAttack' }, recipients: [] };
   const broken = { id: 'e2', type: 'ObjectBroken', tick: 1, entityId: 'home-1/heater', causationId: 'e1',
-    fields: { object: 'home-1/heater', reason: 'XenomorphAttack' }, recipients: [] };
+    fields: { object: 'home-1/heater', reason: 'PredatorAttack' }, recipients: [] };
 
-  it('logs the events of a reference run once per tick and keeps them as history', () => {
+  it('logs the events of a native run once per tick and keeps them as history', () => {
     const manager = new StateManager();
     manager.ingest(tick(0, 'nominal'));
     expect(manager.snapshot().logs).toHaveLength(0);

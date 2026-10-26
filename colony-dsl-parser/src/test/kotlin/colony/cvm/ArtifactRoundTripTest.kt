@@ -13,7 +13,7 @@ class ArtifactRoundTripTest {
         return CvmCompiler().compile(IRBuilder(model).build(ast))
     }
 
-    private val all = listOf("examples/heater.colony", "examples/resident.colony", "examples/xenomorph.colony",
+    private val all = listOf("examples/heater.colony", "examples/resident.colony", "examples/predator.colony",
         "../examples/integration/devices.colony", "../conformance/programs/language.colony")
         .joinToString("\n") { File(it).readText() }
 

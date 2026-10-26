@@ -1,6 +1,6 @@
 package colony.cvm
 
-/** Value types of the VM (docs/cvm-v2.md, section 2). */
+/** Value types of the VM (docs/spec/cvm-format.md, section 2). */
 sealed interface VType {
     data object Bool : VType
     data object I64 : VType
@@ -24,7 +24,7 @@ sealed interface VType {
 data class SchemaField(val name: String, val type: VType)
 data class Schema(val name: String, val fields: kotlin.collections.List<SchemaField>)
 
-/** Source operand, destination and their addressing modes (docs/cvm-v2.md, section 4). */
+/** Source operand, destination and their addressing modes (docs/spec/cvm-format.md, section 4). */
 sealed interface Operand {
     data object Stack : Operand
     data class ImmI(val value: Long) : Operand

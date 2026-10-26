@@ -1,0 +1,22 @@
+// Параметры запуска на языке Colony.
+settings small {
+    include "catalog.settings";
+    seed = 426; step = 1s; ticks = 120;
+    population household as home { count = 2; }
+    population predator as predator { count = 1; }
+    at 5 for "home-1/house" {
+        occupants = 0;
+    }
+    at 10 for "home-1/house" {
+        occupants = 1;
+    }
+    at 15 for "home-2/kettle" {
+        water_temperature = 96degC;
+    }
+    at 20 for "home-2/house" {
+        power_connected = false;
+    }
+    at 45 for "home-2/house" {
+        power_connected = true;
+    }
+}

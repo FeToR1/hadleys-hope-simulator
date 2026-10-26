@@ -1,6 +1,6 @@
 package colony.runtime
 
-import colony.bytecode.compileSource
+import colony.compiler.compileSource
 import kotlinx.serialization.json.*
 import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
@@ -36,7 +36,7 @@ class RunControllerTest {
         }
     }
     private fun small(ticks: Int): PreparedRun {
-        val prepared = prepareScenario(Path.of("../examples/integration/small.json"))
+        val prepared = prepareScenario(Path.of("../examples/integration/small.settings"))
         return prepared.copy(scenario = prepared.scenario.copy(ticks = ticks))
     }
 
@@ -111,7 +111,7 @@ class RunControllerTest {
     @Test fun aFailingStepStopsTheRunAndResetRecovers() {
         val program = compileSource("behavior Bad for House { every 1s as boom { let x = 10 / view.occupants; } }")
         val house = ObjectSpec("House", "Bad", view = buildJsonObject { put("occupants", 1); put("temperature", 20) })
-        val scenario = Scenario(catalog = "inline", ticks = 10, populations = listOf(Population("t", 1, "g")),
+        val scenario = Scenario(ticks = 10, populations = listOf(Population("t", 1, "g")),
             changes = listOf(ObservationChange(2, "g-1/house", buildJsonObject { put("occupants", 0) })))
         val catalog = Catalog(sources = listOf("inline"), templates = mapOf("t" to Template(mapOf("house" to house))))
         val run = controller(expandScenario(scenario, catalog, program))
@@ -123,7 +123,7 @@ class RunControllerTest {
         val failure = run.awaitUpdate(beforeFailure.frames.last().eventId, beforeFailure.revision, 0)!!
         assertTrue(failure.frames.isEmpty())
         assertEquals("failed", failure.health.getValue("status").jsonPrimitive.content)
-        assertContains(run.field("error").jsonPrimitive.content, "Division by zero")
+        assertContains(run.field("error").jsonPrimitive.content.lowercase(), "division by zero")
         assertFalse(run.tick())
         run.reset()
         assertEquals("paused", run.status())
